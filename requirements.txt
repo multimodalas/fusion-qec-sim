@@ -1,0 +1,9 @@
+numpy
+scipy
+matplotlib
+networkx
+pandas
+qutip
+pytest
+flake8
+plotly
