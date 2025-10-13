@@ -4,7 +4,7 @@
 
 Creative quantum error correction, DNA analysis, 3D cube visualization, and **AI-powered IRC bot**—open, modular, and minimal.
 
-## New: AI-Powered IRC Bot
+## New: AI-Powered IRC Bot with Info-Mass-Gravity Module
 
 The fusion-qec-sim project now includes a fully-featured IRC bot that combines:
 
@@ -12,6 +12,7 @@ The fusion-qec-sim project now includes a fully-featured IRC bot that combines:
 - **MIDI Export**: Convert simulation data to music (error rates → tempo, eigenvalues → velocities, logical errors → e-minor arpeggios)
 - **LLM Integration**: Conversational AI for code generation, simulation explanation, and chat moderation
 - **IRC Protocol**: Real-time Q&A and code review in IRC channels
+- **Info-Mass-Gravity Module**: Physics-inspired metrics for quantum information (entropy, information mass, entanglement forces, information geometry)
 
 ### Quick Start
 
@@ -48,6 +49,7 @@ python examples/qec_demo_full.py
 python src/qec_steane.py        # QEC simulations
 python src/midi_export.py       # MIDI export
 python src/llm_integration.py   # LLM features
+python src/info_mass_gravity.py # Info-mass-gravity metrics
 ```
 
 ---

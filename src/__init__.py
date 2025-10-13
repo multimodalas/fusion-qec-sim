@@ -7,6 +7,7 @@ Components:
 - irc_bot: IRC bot implementation
 - llm_integration: LLM-powered conversational AI
 - integrated_bot: Full integration of all components
+- info_mass_gravity: Information-theoretic and physics-inspired metrics
 """
 
 __version__ = '1.0.0'
@@ -16,6 +17,7 @@ from .midi_export import MIDIConverter
 from .irc_bot import IRCBot, QECIRCBot
 from .llm_integration import LLMChatBot, MockLLMProvider
 from .integrated_bot import IntegratedQECBot
+from .info_mass_gravity import InfoMassGravity
 
 __all__ = [
     'SteaneCode',
@@ -27,4 +29,5 @@ __all__ = [
     'LLMChatBot',
     'MockLLMProvider',
     'IntegratedQECBot',
+    'InfoMassGravity',
 ]
