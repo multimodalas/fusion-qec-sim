@@ -1,58 +1,111 @@
 #!/usr/bin/env python3
 """
-E8 Triality Sonification → MIDI export
-Maps logical error probabilities to three MIDI tracks:
-Signal (+1), Loss (−2), Coherence (+1)
+E8 Triality Sonification — Fusion-QEC Data Audio Renderer
+---------------------------------------------------------
+
+Maps Quantum Error Correction benchmark data into sound,
+following the E8 Triality relation:
+
+    Φ = π / 2  SCL DIAG + [1, −2, 1]
+
+Each QEC column becomes a harmonic voice:
+  - Steane → root tone (stability)
+  - Surface → mid layer (coherence)
+  - Reed-Muller → modulation (fault tolerance)
+  - Fusion-QEC (Photonic) → brightness / amplitude
+
+If playback fails, automatically exports to e8_triality.wav.
 """
 
-import pandas as pd
 import math
-from mido import Message, MidiFile, MidiTrack, bpm2tempo
+import numpy as np
+import pandas as pd
+import wave
+import sys
+from pathlib import Path
 
-# Load data
-df = pd.read_csv("qec_output.csv")
+# Optional audio backend
+try:
+    import simpleaudio as sa
+    AUDIO_BACKEND = True
+except ImportError:
+    AUDIO_BACKEND = False
 
-# MIDI setup
-mid = MidiFile()
-tempo = bpm2tempo(90)  # Φ = π/2 → 90 BPM baseline
-ticks_per_beat = mid.ticks_per_beat
-note_length = ticks_per_beat // 2
+# Load dataset
+csv_path = Path("qec_data_prepared.csv")
+if not csv_path.exists():
+    sys.exit("❌ Missing qec_data_prepared.csv — run extraction first.")
 
-# Channel mapping
-voices = {
-    "Signal": {"mult": 1, "channel": 0},
-    "Loss": {"mult": -2, "channel": 1},
-    "Coherence": {"mult": 1, "channel": 2},
-}
+df = pd.read_csv(csv_path)
+cols = [c for c in df.columns if c != "error_rate"]
 
-# Base pitch and scaling
-base_pitch = 60  # Middle C
-pitch_scale = 30  # how much pitch changes with log(error)
+# Parameters
+sample_rate = 44100
+duration = 0.5  # seconds per frame
+phase_shift = math.pi / 2  # Φ = π/2
+ternary = [1, -2, 1]  # [Signal, Loss, Coherence]
+base_freq = 220.0  # Hz
+amplitude = 0.3
 
-def prob_to_pitch(p):
-    if p <= 0:
-        return base_pitch
-    return int(base_pitch + pitch_scale * -math.log10(p + 1e-12)) % 127
+# Normalize helper
+def normalize(arr):
+    arr = np.array(arr, dtype=float)
+    if arr.ptp() == 0:
+        return np.zeros_like(arr)
+    return (arr - arr.min()) / arr.ptp()
 
-def prob_to_velocity(p):
-    return int(max(20, min(120, 127 * (1 - math.log10(p + 1e-12) / 10))))
+# Generate tone
+def make_tone(freq, amp=0.3, phase=0):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    tone = np.sin(2 * np.pi * freq * t + phase)
+    return (tone * (amp * 32767)).astype(np.int16)
 
-for voice_name, props in voices.items():
-    track = MidiTrack()
-    track.append(Message("program_change", program=0, channel=props["channel"], time=0))
-    for _, row in df.iterrows():
-        err, lx, lz, ly = row
-        probs = [lx, lz, ly]
-        avg_p = sum(probs) / 3
-        pitch = prob_to_pitch(avg_p * abs(props["mult"]))
-        vel = prob_to_velocity(err)
-        # Note on / off pair
-        track.append(Message("note_on", note=pitch, velocity=vel,
-                             channel=props["channel"], time=0))
-        track.append(Message("note_off", note=pitch, velocity=0,
-                             channel=props["channel"], time=note_length))
-    mid.tracks.append(track)
+# Prepare frequency bands
+freq_map = {}
+for col, factor in zip(cols, [1.0, 1.5, 2.0, 2.5]):
+    freq_map[col] = base_freq * factor
 
-# Write output
-mid.save("e8_triality_demo.mid")
-print("💾 Wrote MIDI file: e8_triality_demo.mid (Signal/Loss/Coherence tracks)")
+# Build sound frames
+audio_frames = []
+for i, row in df.iterrows():
+    error_rate = row["error_rate"]
+    freqs = []
+    amps = []
+    for j, col in enumerate(cols):
+        value = float(row[col])
+        freq = freq_map[col] * (1 + abs(math.log10(value + 1e-12)))
+        amp = amplitude * abs(ternary[j % len(ternary)])
+        freqs.append(freq)
+        amps.append(amp)
+
+    # Sum and normalize mixed frame
+    tone_mix = sum(make_tone(f, a, phase_shift) for f, a in zip(freqs, amps))
+    tone_mix = np.clip(tone_mix / len(freqs), -32767, 32767).astype(np.int16)
+    audio_frames.append(tone_mix)
+
+# Concatenate all frames
+audio_data = np.concatenate(audio_frames)
+
+# Fallback writer
+def write_wav(filename, data):
+    with wave.open(filename, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(data.tobytes())
+    print(f"💾 Wrote fallback audio to {filename}")
+
+# Playback or export
+try:
+    if AUDIO_BACKEND:
+        print("🔊 Playing E8 Triality sonification...")
+        play_obj = sa.play_buffer(audio_data, 1, 2, sample_rate)
+        play_obj.wait_done()
+    else:
+        raise RuntimeError("Audio backend not available")
+except Exception as e:
+    print(f"⚠️  Playback failed ({e}). Exporting to WAV instead.")
+    write_wav("e8_triality.wav", audio_data)
+    sys.exit(0)
+
+print("✅ Sonification complete.")
