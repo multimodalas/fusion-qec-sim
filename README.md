@@ -1,59 +1,36 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/multimodalas/fusion-qec-sim/blob/main/notebooks/qec_demo_global.ipynb)
-Based on my theory 
-of everything "E8 Triality, Phi=Pi/2 SCL DIAG Plus [1,-2,1] Ternary Logic"
+fusion-qec-sim
 
-# fusion-qec-sim
+Creative quantum error correction, DNA analysis, 3D lattice visualization, and AI-powered IRC orchestration.
 
-Creative quantum error correction, DNA analysis, 3D cube visualization, and **AI-powered IRC bot**—open, modular, and minimal.
+⚛ Conceptual Basis
 
-## New: AI-Powered IRC Bot
+This project extends the E8 Triality framework — connecting symmetry, information, and computation — under the condition
 
-The fusion-qec-sim project now includes a fully-featured IRC bot that combines:
+Φ=π2,SCL DIAG+[1,−2,1]
+Φ=
+2
+π
+	​
 
-- **QuTiP-based Steane Code Simulations**: [[7,1,3]] code with depolarizing noise, pseudo-threshold calculations (η_thr ≈ 9.3×10^{-5})
-- **MIDI Export**: Convert simulation data to music (error rates → tempo, eigenvalues → velocities, logical errors → e-minor arpeggios)
-- **LLM Integration**: Conversational AI for code generation, simulation explanation, and chat moderation
-- **IRC Protocol**: Real-time Q&A and code review in IRC channels
+,SCL DIAG+[1,−2,1]
 
-### Quick Start
+representing ternary logic balance within a quantum-classical boundary.
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+In practice, that translates into:
 
-# Run in demo mode (no IRC connection)
-python run_bot.py --demo
+Fusion-QEC (Photonic) — modular, loss-tolerant QEC inspired by MBQC fusion gates.
 
-# Connect to IRC server
-export IRC_SERVER=irc.libera.chat
-export IRC_CHANNEL=#qec-sim
-python run_bot.py
-```
+Information Entropy → Signal Mapping — bridging quantum noise models and musical structure.
 
-### Available Commands
+Triality Framework — viewing computation, geometry, and perception as three projections of one invariant system.
 
-- `!runsim [error_rate]` - Run Steane code simulation
-- `!threshold` - Display pseudo-threshold
-- `!ai <question>` - Ask AI about QEC concepts
-- `!export [type]` - Export simulation to MIDI
-- `!note <note>` - Play MIDI note (C3-G5)
+💬 AI-Powered IRC Bot
 
-See [docs/IRC_BOT_GUIDE.md](docs/IRC_BOT_GUIDE.md) for complete documentation.
+An integrated assistant that links simulation, music, and chat:
 
-### Examples
-
-```bash
-# Run complete demo
-python examples/qec_demo_full.py
-
-# Run individual modules
-python src/qec_steane.py        # QEC simulations
-python src/midi_export.py       # MIDI export
-python src/llm_integration.py   # LLM features
-```
-
----
-
-## Original Features
-
-...
+Feature	Description
+QuTiP-based Steane Code	[[7, 1, 3]] simulation with depolarizing noise and pseudo-threshold (ηₜₕᵣ ≈ 9.3×10⁻⁵)
+MIDI Export	Translates error metrics → tempo, eigenvalues → velocity, logical errors → E-minor arpeggios
+LLM Integration	Conversational AI for code generation, analysis, and live moderation
+IRC Protocol	Real-time Q&A, simulation control, and music triggers via chat
