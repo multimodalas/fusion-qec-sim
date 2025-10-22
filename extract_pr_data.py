@@ -1,33 +1,26 @@
-import re
-import csv
+#!/usr/bin/env python3
+import re, csv
 from pathlib import Path
 
-# Target file(s)
-markdown_files = list(Path(".").rglob("*.md"))
+target = Path("IMPLEMENTATION_SUMMARY.md")
+text = target.read_text()
 
-# Regex to match markdown table rows with scientific notation
-row_pattern = re.compile(r"^\s*\|?\s*([0-9.eE+-]+)\s*\|([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|?", re.M)
+# This matches any line with 5 numbers separated by |, flexible spacing
+pattern = re.compile(r"\|\s*([\deE\.\-\+]+)\s*\|\s*([\deE\.\-\+]+)\s*\|\s*([\deE\.\-\+]+)\s*\|\s*([\deE\.\-\+]+)\s*\|\s*([\deE\.\-\+]+)\s*\|")
 
-rows = []
-for md_file in markdown_files:
-    text = md_file.read_text()
-    matches = row_pattern.findall(text)
+matches = pattern.findall(text)
+
+if not matches:
+    print("⚠️  No numeric rows found — try showing me one example line from the markdown.")
+else:
+    print(f"Found {len(matches)} numeric rows:")
     for m in matches:
-        try:
-            row = [float(x.replace("−", "-")) if re.match(r"[0-9.eE+-]+", x.strip()) else None for x in m]
-            rows.append(row)
-        except Exception:
-            pass
+        print("  ", m)
 
-# Deduplicate and sort by first column (error_rate)
-rows = sorted(set(tuple(r) for r in rows), key=lambda x: x[0] if x[0] is not None else 0)
-
-# Write out CSV
-if rows:
+    rows = [tuple(float(x.replace("−", "-")) for x in m) for m in matches]
+    rows = sorted(set(rows), key=lambda x: x[0])
     with open("pr_data_sample.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["error_rate", "steane", "surface", "reed_muller", "fusion_qec_photonic"])
         writer.writerows(rows)
     print(f"✅ Extracted {len(rows)} rows to pr_data_sample.csv")
-else:
-    print("⚠️  No numeric tables found in markdown files.")
