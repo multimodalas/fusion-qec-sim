@@ -20,11 +20,13 @@ try:
     from .qec_steane import ThresholdSimulation, SurfaceLattice, create_steane_code
     from .midi_export import MIDIConverter
     from .llm_integration import LLMChatBot, MockLLMProvider
+    from .info_mass_gravity import InfoMassGravity
 except ImportError:
     from irc_bot import QECIRCBot
     from qec_steane import ThresholdSimulation, SurfaceLattice, create_steane_code
     from midi_export import MIDIConverter
     from llm_integration import LLMChatBot, MockLLMProvider
+    from info_mass_gravity import InfoMassGravity
 
 
 class IntegratedQECBot(QECIRCBot):
@@ -58,6 +60,10 @@ class IntegratedQECBot(QECIRCBot):
         # Initialize LLM chatbot
         print("Initializing LLM chatbot...")
         self.llm_bot = LLMChatBot(MockLLMProvider())
+        
+        # Initialize info-mass-gravity module
+        print("Initializing info-mass-gravity module...")
+        self.img = InfoMassGravity()
         
         # Override/add commands
         self.register_command('ai', self.cmd_ai)
@@ -226,6 +232,85 @@ class IntegratedQECBot(QECIRCBot):
             
         except Exception as e:
             return f"Error generating surface syndromes: {str(e)}"
+    
+    def cmd_entropy(self, msg_data: Dict, args: str) -> str:
+        """
+        Calculate von Neumann entropy of a quantum state.
+        
+        Usage: !entropy [error_rate]
+        """
+        try:
+            error_rate = float(args) if args else 0.01
+            
+            # Create state with noise
+            state = self.steane_code.encode_logical_zero()
+            noisy_state = self.steane_code.apply_depolarizing_noise(state, error_rate)
+            
+            # Calculate entropy and other metrics
+            entropy = self.img.von_neumann_entropy(noisy_state)
+            purity = self.img.purity(noisy_state)
+            
+            return (f"State entropy: S={entropy:.4f} bits | "
+                   f"Purity: P={purity:.4f} | "
+                   f"Error rate: p={error_rate}")
+            
+        except Exception as e:
+            return f"Error calculating entropy: {str(e)}"
+    
+    def cmd_fidelity(self, msg_data: Dict, args: str) -> str:
+        """
+        Calculate fidelity between two states.
+        
+        Usage: !fidelity <rate1> <rate2>
+        """
+        try:
+            parts = args.split() if args else []
+            rate1 = float(parts[0]) if len(parts) > 0 else 0.0
+            rate2 = float(parts[1]) if len(parts) > 1 else 0.01
+            
+            # Create two states with different error rates
+            state1 = self.steane_code.encode_logical_zero()
+            if rate1 > 0:
+                state1 = self.steane_code.apply_depolarizing_noise(state1, rate1)
+            
+            state2 = self.steane_code.encode_logical_zero()
+            if rate2 > 0:
+                state2 = self.steane_code.apply_depolarizing_noise(state2, rate2)
+            
+            # Calculate fidelity and distances
+            fidelity = self.img.fidelity(state1, state2)
+            bures = self.img.bures_distance(state1, state2)
+            
+            return (f"Fidelity: F={fidelity:.4f} | "
+                   f"Bures distance: D_B={bures:.4f} | "
+                   f"States: p₁={rate1}, p₂={rate2}")
+            
+        except Exception as e:
+            return f"Error calculating fidelity: {str(e)}"
+    
+    def cmd_infomass(self, msg_data: Dict, args: str) -> str:
+        """
+        Calculate information mass and related metrics.
+        
+        Usage: !infomass [error_rate]
+        """
+        try:
+            error_rate = float(args) if args else 0.01
+            
+            # Create state with noise
+            state = self.steane_code.encode_logical_zero()
+            noisy_state = self.steane_code.apply_depolarizing_noise(state, error_rate)
+            
+            # Get information profile
+            profile = self.img.information_profile(noisy_state)
+            
+            return (f"Info metrics (p={error_rate}): "
+                   f"Mass={profile['mass']:.4f} | "
+                   f"Entropy={profile['entropy']:.4f} | "
+                   f"Purity={profile['purity']:.4f}")
+            
+        except Exception as e:
+            return f"Error calculating info mass: {str(e)}"
     
     def cmd_threshold(self, msg_data: Dict, args: str) -> str:
         """Display threshold information."""

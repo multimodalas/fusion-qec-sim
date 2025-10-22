@@ -1,12 +1,13 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/multimodalas/fusion-qec-sim/blob/main/notebooks/qec_demo_global.ipynb)
+Quantum Error Correction — fusion-qec-sim
 
-# fusion-qec-sim
+Creative quantum error correction, DNA analysis, 3D lattice visualization, and AI-powered IRC orchestration.
 
-Creative quantum error correction, DNA analysis, 3D cube visualization, and **AI-powered IRC bot**—open, modular, and minimal.
+⚛ Conceptual Basis
 
 ## New: AI-Powered IRC Bot with Dual Backend Support
 
-The fusion-qec-sim project now includes a fully-featured IRC bot that combines:
+<pre> Φ = π / 2  SCL DIAG + [1, −2, 1] </pre>
 
 - **Dual Backend Support**: Choose between QuTiP or Qiskit for quantum simulations
 - **Steane Code [[7,1,3]]**: Depolarizing noise, pseudo-threshold calculations (η_thr ≈ 9.3×10^{-5})
@@ -14,14 +15,13 @@ The fusion-qec-sim project now includes a fully-featured IRC bot that combines:
 - **LLM Integration**: Conversational AI for code generation, simulation explanation, and chat moderation
 - **IRC Protocol**: Real-time Q&A and code review in IRC channels
 
-### Quick Start
+In practical terms:
 
 ```bash
 # Install dependencies (includes both QuTiP and Qiskit)
 pip install -r requirements.txt
 
-# Run in demo mode (no IRC connection)
-python run_bot.py --demo
+Information Entropy → Signal Mapping — translating quantum noise dynamics into musical structure.
 
 # Connect to IRC server with QuTiP backend (default)
 export IRC_SERVER=irc.libera.chat
@@ -33,7 +33,7 @@ export QEC_BACKEND=qiskit
 python run_bot.py
 ```
 
-### Available Commands
+💬 AI-Powered IRC Bot
 
 - `!runsim [error_rate]` - Run Steane code simulation
 - `!threshold` - Display pseudo-threshold
