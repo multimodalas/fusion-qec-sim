@@ -1,21 +1,18 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/multimodalas/fusion-qec-sim/blob/main/notebooks/qec_demo_global.ipynb)
+Quantum Error Correction
 fusion-qec-sim
 
 Creative quantum error correction, DNA analysis, 3D lattice visualization, and AI-powered IRC orchestration.
 
-⚛ Conceptual Basis
+## ⚛ Conceptual Basis  
 
-This project extends the E8 Triality framework — connecting symmetry, information, and computation — under the condition
+This project extends the **E8 Triality** framework — connecting symmetry, information, and computation — under the condition:
 
-Φ=π2,SCL DIAG+[1,−2,1]
-Φ=
-2
-π
-	​
+<pre>
+Φ = π / 2 , SCL DIAG + [1, −2, 1]
+</pre>
 
-,SCL DIAG+[1,−2,1]
-
-representing ternary logic balance within a quantum-classical boundary.
+This expression represents the ternary logic balance within a quantum–classical boundary.
 
 In practice, that translates into:
 
