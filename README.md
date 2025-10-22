@@ -1,4 +1,6 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/multimodalas/fusion-qec-sim/blob/main/notebooks/qec_demo_global.ipynb)
+Based on my theory 
+of everything "E8 Triality, Phi=Pi/2 SCL DIAG Plus [1,-2,1] Ternary Logic"
 
 # fusion-qec-sim
 
