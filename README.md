@@ -88,5 +88,5 @@ python sonify_triality.py
 For more complex experiments, see QEC_Benchmark_Report.pdf
 or remix the exported audio in your preferred DAW.
 
-© 2025 QSOLKCB / EmergentMonk. All rights reserved.
+© 2025 QSOLKCB / Trent Slade. All rights reserved.
 Open collaboration welcome under MIT License.
