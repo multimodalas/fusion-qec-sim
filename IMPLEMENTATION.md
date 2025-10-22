@@ -1,5 +1,5 @@
 # Implementation
-This document provides a comprehensive implementation steps for the Quantum Error Correction (QEC) project, including cloning the repository, installing dependencies, running simulations, parsing MIDI output, and integrating IonQ's Fusion-QEC insights.
+This document provides comprehensive implementation steps for the Quantum Error Correction (QEC) project, including cloning the repository, installing dependencies, running simulations, parsing MIDI output, and integrating IonQ's Fusion-QEC insights.
 
 ## Cloning the Repository
 Clone the QEC repository from GitHub:
