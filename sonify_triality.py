@@ -59,10 +59,9 @@ def make_tone(freq, amp=0.3, phase=0):
     return (tone * (amp * 32767)).astype(np.int16)
 
 # Prepare frequency bands
-freq_map = {}
-for col, factor in zip(cols, [1.0, 1.5, 2.0, 2.5]):
-    freq_map[col] = base_freq * factor
-
+freq_map = {
+    col: base_freq * factor for col, factor in zip(cols, [1.0, 1.5, 2.0, 2.5])
+}
 # Build sound frames
 audio_frames = []
 for i, row in df.iterrows():
