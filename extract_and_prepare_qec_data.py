@@ -21,7 +21,15 @@ ROW_PATTERN = re.compile(
 rows = []
 
 for file in FILES:
-    text = file.read_text()
+    try:
+        text = file.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        try:
+            text = file.read_text(encoding="latin-1")
+            print(f"⚠️  File {file} read with latin-1 encoding due to UTF-8 decode error.")
+        except Exception as e:
+            print(f"⚠️  Could not read file {file}: {e}")
+            continue
     matches = ROW_PATTERN.findall(text)
     for match in matches:
         try:
