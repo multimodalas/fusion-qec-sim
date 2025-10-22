@@ -50,9 +50,7 @@ amplitude = 0.3
 # Normalize helper
 def normalize(arr):
     arr = np.array(arr, dtype=float)
-    if arr.ptp() == 0:
-        return np.zeros_like(arr)
-    return (arr - arr.min()) / arr.ptp()
+    return np.zeros_like(arr) if arr.ptp() == 0 else (arr - arr.min()) / arr.ptp()
 
 # Generate tone
 def make_tone(freq, amp=0.3, phase=0):
