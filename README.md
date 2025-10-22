@@ -33,14 +33,17 @@ IRC Protocol	Real-time Q&A, simulation control, and generative music triggers
 
 ### 🎧 E8 Triality Sonification Demo
 
-Experience the sound of **symmetry meeting error correction** —  
-data from `qec_data_prepared.csv` transformed into harmonic structure  
-using the relation <code>Φ = π / 2 SCL DIAG + [ 1 , − 2 , 1 ]</code>.
+Experience the sound of **symmetry meeting error correction**.  
+This audio was generated directly from your QEC simulation data using the  
+<code>Φ = π / 2 SCL DIAG + [ 1 , − 2 , 1 ]</code> mapping.
 
-> Each amplitude and interval reflects the quantum balance of signal, coherence, and loss.  
-> This render was generated directly from the QEC simulation pipeline.
+> Each amplitude and interval reflects the balance between signal, coherence, and loss —  
+> a musical rendering of your Fusion-QEC triality model.
 
-🔗 **[Download / Play e8_triality.wav](./e8_triality.wav)**  
-*(Recorded output from `sonify_triality.py`, rendered via E8 Triality mapping)*  
+<audio controls>
+  <source src="e8_triality.wav" type="audio/wav">
+  Your browser does not support the audio element.  
+  [Download the demo](./e8_triality.wav)
+</audio>
 
 ---
