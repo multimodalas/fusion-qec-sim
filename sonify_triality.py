@@ -80,6 +80,8 @@ for i, row in df.iterrows():
 
     # Sum and normalize mixed frame
     tone_mix = sum(make_tone(f, a, phase_shift) for f, a in zip(freqs, amps))
+    tone_mix = tone_mix.astype(np.float32) / len(freqs)
+    tone_mix = np.clip(tone_mix, -32767, 32767).astype(np.int16)
     tone_mix = np.clip(tone_mix / len(freqs), -32767, 32767).astype(np.int16)
     audio_frames.append(tone_mix)
 
