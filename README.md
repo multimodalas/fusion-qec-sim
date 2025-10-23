@@ -77,7 +77,15 @@ This audio was generated directly from QEC simulation data using the
 
 ---
 
-### ⚙️ Quick Start
+# Connect to IRC server with QuTiP backend (default)
+export IRC_SERVER=irc.libera.chat
+export IRC_CHANNEL=#qec-sim
+python run_bot.py
+
+# Or use Qiskit backend
+export QEC_BACKEND=qiskit
+python run_bot.py
+```
 
 ```bash
 # Install dependencies
@@ -90,3 +98,30 @@ or remix the exported audio in your preferred DAW.
 
 © 2025 QSOLKCB / Trent Slade. All rights reserved.
 Open collaboration welcome under MIT License.
+- `!runsim [error_rate]` - Run Steane code simulation
+- `!threshold` - Display pseudo-threshold
+- `!backend [qutip|qiskit]` - Switch quantum backend
+- `!ai <question>` - Ask AI about QEC concepts
+- `!export [type]` - Export simulation to MIDI
+- `!note <note>` - Play MIDI note (C3-G5)
+
+See [docs/IRC_BOT_GUIDE.md](docs/IRC_BOT_GUIDE.md) for complete documentation.
+
+### Examples
+
+```bash
+# Run complete demo
+python examples/qec_demo_full.py
+
+# Run individual modules
+python src/qec_steane.py        # QEC simulations (QuTiP)
+python src/qec_steane.py --compare  # Compare QuTiP vs Qiskit
+python src/midi_export.py       # MIDI export
+python src/llm_integration.py   # LLM features
+```
+
+---
+
+## Original Features
+
+...
