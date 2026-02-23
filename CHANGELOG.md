@@ -15,7 +15,7 @@ Deterministic candidate ordering via structured _candidate_key comparison.
 
 Lexicographic ordering: Hamming weight → rounded path metric → combination index.
 
-NumPy-native metric rounding (12 decimal places) to eliminate floating precision ordering drift.
+NumPy-native metric rounding (12 decimal places) to eliminate floating-point precision ordering drift.
 
 Configurable sweep depth via osd_cs_lam.
 

@@ -930,10 +930,11 @@ def bp_decode(
         is_residual = (schedule == "residual")
         if is_residual:
             residuals = np.zeros(m, dtype=np.float64)
+            check_indices = np.arange(m, dtype=np.int64)
 
         for it in range(max_iters):
             if is_residual:
-                check_order = np.lexsort((np.arange(m, dtype=np.int64), -residuals))
+                check_order = np.lexsort((check_indices, -residuals))
                 c2v_msg_before = c2v_msg.copy()
             else:
                 check_order = range(m)
