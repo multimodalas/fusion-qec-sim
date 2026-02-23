@@ -1,51 +1,98 @@
-# Changelog
+Changelog
 
 All notable changes to this project will be documented in this file.
 
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
-[2.8.0] — 2026-02-23
+[2.8.0] - 2026-02-23
+
 Deterministic Scheduling & State-Aware Enhancements
 
 Belief Propagation decoder enhancements for QLDPC codes.
 
-### `improved_norm` / `improved_offset` modes
+Added
+improved_norm / improved_offset modes
 
-- Extended min-sum variants with dual scaling parameters `alpha1` and `alpha2`.
-- Deterministic, invariant-preserving check-node update modifications.
-- Fully backward-compatible with existing min-sum modes.
+Extended min-sum variants with dual scaling parameters:
 
-### `hybrid_residual` schedule
+alpha1 applied to first minimum
 
-- Deterministic even/odd check-node partitioning.
-- Within each layer, checks are ordered by descending residual.
-- Optional `hybrid_residual_threshold` prioritizes high-residual checks within each layer.
-- No randomness; stable tie-breaking by ascending check index.
+alpha2 applied to second minimum
 
-### Deterministic ensemble decoding (`ensemble_k`)
+Deterministic, invariant-preserving check-node updates
 
-- Runs K independent BP passes with deterministic, zero-mean alternating LLR perturbations.
-- Member 0 uses exact baseline LLR.
-- Selection criteria:
-  - Converged solutions preferred.
-  - Lowest syndrome weight.
-  - Deterministic member index tie-break.
-- No RNG usage; fully reproducible.
+Fully backward-compatible with existing min-sum modes
 
-### State-aware residual weighting (`state_aware_residual`)
+hybrid_residual schedule
 
-- Residual ordering can be modulated by per-check state weights:
-  - `weight = s_by_state[label] * |cos(phi_by_state[label])|`
-- Applied multiplicatively to raw residuals.
-- Strict validation of state labels (non-negative, in-range, length `m`).
-- Disabled by default — baseline behavior unchanged when off.
+Deterministic even/odd check-node partitioning
 
-### Test Boundary Stabilization
+Per-layer descending residual ordering
 
-- Added `pytest.ini` to scope test discovery to `tests/`.
-- Full regression: 339 passed, 7 skipped, 0 failed.
-- Determinism verified across repeated runs.
+Optional hybrid_residual_threshold to prioritize high-residual checks
+
+Stable tie-breaking by ascending check index
+
+No randomness introduced
+
+Deterministic ensemble decoding (ensemble_k)
+
+K independent BP passes using deterministic zero-mean alternating perturbations
+
+Member 0 uses exact baseline LLR
+
+Selection priority:
+
+Converged solution
+
+Lowest syndrome weight
+
+Deterministic member index
+
+No RNG usage; fully reproducible
+
+State-aware residual weighting (state_aware_residual)
+
+Residual modulation:
+
+weight = s_by_state[label] * |cos(phi_by_state[label])|
+
+Multiplicative weighting of residual ordering
+
+Strict validation:
+
+Non-negative labels
+
+In-range labels
+
+Length must equal number of checks (m)
+
+Disabled by default (no baseline behavior change)
+
+Improved
+
+Precomputed ensemble syndrome matrix (H32) to avoid repeated casting
+
+Precomputed state-aware residual weights to eliminate per-iteration trig
+
+Hybrid threshold validation scoped to hybrid schedule only
+
+Alpha parameter semantics aligned with documentation
+
+Testing
+
+Added pytest.ini to scope test discovery to tests/
+
+Full regression suite:
+
+339 passed
+
+7 skipped
+
+0 failed
+
+Determinism verified across repeated runs
 
 [2.7.0] — 2026-02-23
 Deterministic Residual Scheduling
