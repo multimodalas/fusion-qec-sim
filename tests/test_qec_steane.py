@@ -4,6 +4,9 @@ Tests for QEC Steane code simulation module.
 
 import pytest
 import numpy as np
+
+pytest.importorskip("qutip")
+
 from src.qec_steane import SteaneCode, ThresholdSimulation, SurfaceLattice
 
 

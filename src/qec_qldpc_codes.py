@@ -656,7 +656,7 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
 
 _BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum"}
 _BP_SCHEDULES = {"flooding", "layered"}
-_BP_POSTPROCESS = {None, "osd0", "osd1"}
+_BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs"}
 
 
 def bp_decode(
@@ -672,13 +672,15 @@ def bp_decode(
     postprocess: Optional[str] = None,
     seed: Optional[int] = None,
     syndrome_vec: Optional[np.ndarray] = None,
+    llr_history: int = 0,
+    osd_cs_lam: int = 1,
     **kwargs,
-) -> Tuple[np.ndarray, int]:
+) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
     """
     Standalone belief-propagation decoder for a binary parity-check matrix.
 
     Supports multiple check-node update rules, message damping,
-    magnitude clipping, and optional OSD-0 post-processing.
+    magnitude clipping, and optional OSD post-processing.
 
     Args:
         H: Binary parity-check matrix, shape (m, n).
@@ -700,16 +702,30 @@ def bp_decode(
         postprocess: Optional post-processing.  ``"osd0"`` applies order-0
             Ordered Statistics Decoding when BP fails to converge.
             ``"osd1"`` extends OSD-0 by testing a single least-reliable
-            bit flip.
+            bit flip.  ``"osd_cs"`` applies Combination Sweep OSD
+            (controlled by *osd_cs_lam*).
         seed: Unused; reserved for future stochastic post-processors.
         syndrome_vec: Binary syndrome vector, length m.  Defaults to all-zeros.
+        llr_history: Number of recent L_total snapshots to retain.
+            When 0 (default), no history is stored and the return type
+            is ``(correction, iterations)``.  When > 0, the return type
+            becomes ``(correction, iterations, history)`` where *history*
+            has shape ``(k, n)`` with ``k = min(iterations_run, llr_history)``.
+        osd_cs_lam: Lambda parameter for OSD-CS when
+            ``postprocess="osd_cs"``.  Maximum number of pivot bits to
+            flip simultaneously.  Default 1.
         **kwargs: Accepts legacy ``max_iter`` keyword for backward
             compatibility.
 
     Returns:
-        (correction, iterations):
-            correction — hard-decision binary vector, length n, dtype uint8.
-            iterations — number of BP iterations actually executed.
+        When ``llr_history == 0``:
+            ``(correction, iterations)`` — hard-decision binary vector
+            (length n, dtype uint8) and iteration count.
+
+        When ``llr_history > 0``:
+            ``(correction, iterations, history)`` — same as above plus
+            a float64 array of shape ``(k, n)`` containing the last *k*
+            per-iteration L_total snapshots.
     """
     # ── backward compatibility: accept old ``max_iter`` keyword ──
     if "max_iter" in kwargs:
@@ -736,6 +752,14 @@ def bp_decode(
         )
     if offset < 0.0:
         raise ValueError(f"offset must be >= 0.0, got {offset}")
+    if not isinstance(llr_history, int) or llr_history < 0:
+        raise ValueError(
+            f"llr_history must be a non-negative integer, got {llr_history}"
+        )
+    if not isinstance(osd_cs_lam, int) or osd_cs_lam < 0:
+        raise ValueError(
+            f"osd_cs_lam must be a non-negative integer, got {osd_cs_lam}"
+        )
 
     m, n = H.shape
     eps = 1e-30
@@ -758,6 +782,13 @@ def bp_decode(
     c2v_msg = np.zeros((m, n), dtype=np.float64)
 
     hard = np.zeros(n, dtype=np.uint8)
+
+    # ── LLR history buffer (circular, fixed-size) ──
+    if llr_history > 0:
+        _hist_buf = [None] * llr_history
+        _hist_idx = 0
+        _hist_count = 0
+        _L_total = np.empty(n, dtype=np.float64)
 
     use_min_sum = mode in ("min_sum", "norm_min_sum", "offset_min_sum")
 
@@ -841,19 +872,35 @@ def bp_decode(
                 for c in nbrs:
                     v2c_msg[v, c] = total - c2v_msg[c, v]
                 hard[v] = 0 if total >= 0.0 else 1
+                if llr_history > 0:
+                    _L_total[v] = total
+
+            # ── LLR history snapshot (flooding) ──
+            if llr_history > 0:
+                _hist_buf[_hist_idx % llr_history] = _L_total.copy()
+                _hist_idx += 1
+                _hist_count = min(_hist_count + 1, llr_history)
 
             # ── early stop ──
             if np.array_equal(
                 (H.astype(np.int32) @ hard.astype(np.int32)) % 2,
                 syndrome_vec.astype(np.uint8),
             ):
-                return _bp_postprocess(
-                    H, llr, hard, it + 1, syndrome_vec, postprocess
+                pp_result = _bp_postprocess(
+                    H, llr, hard, it + 1, syndrome_vec, postprocess,
+                    osd_cs_lam=osd_cs_lam,
                 )
+                if llr_history > 0:
+                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                return pp_result
 
-        return _bp_postprocess(
-            H, llr, hard, max_iters, syndrome_vec, postprocess
+        pp_result = _bp_postprocess(
+            H, llr, hard, max_iters, syndrome_vec, postprocess,
+            osd_cs_lam=osd_cs_lam,
         )
+        if llr_history > 0:
+            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        return pp_result
 
     else:
         # ══════════════════════════════════════════════════════════════
@@ -985,23 +1032,46 @@ def bp_decode(
             for v in range(n):
                 hard[v] = 0 if L_total[v] >= 0.0 else 1
 
+            # ── LLR history snapshot (layered) ──
+            if llr_history > 0:
+                _hist_buf[_hist_idx % llr_history] = L_total.copy()
+                _hist_idx += 1
+                _hist_count = min(_hist_count + 1, llr_history)
+
             # ── early stop ──
             if np.array_equal(
                 (H.astype(np.int32) @ hard.astype(np.int32)) % 2,
                 syndrome_vec.astype(np.uint8),
             ):
-                return _bp_postprocess(
-                    H, llr, hard, it + 1, syndrome_vec, postprocess
+                pp_result = _bp_postprocess(
+                    H, llr, hard, it + 1, syndrome_vec, postprocess,
+                    osd_cs_lam=osd_cs_lam,
                 )
+                if llr_history > 0:
+                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                return pp_result
 
-        return _bp_postprocess(
-            H, llr, hard, max_iters, syndrome_vec, postprocess
+        pp_result = _bp_postprocess(
+            H, llr, hard, max_iters, syndrome_vec, postprocess,
+            osd_cs_lam=osd_cs_lam,
         )
+        if llr_history > 0:
+            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        return pp_result
 
 
-def _bp_postprocess(H, llr, hard, iters, syndrome_vec, postprocess):
+def _assemble_history(hist_buf, hist_idx, hist_count, llr_history):
+    """Reconstruct ordered history array from circular buffer."""
+    filled = hist_buf[:hist_count]
+    if hist_count == llr_history:
+        start = hist_idx % llr_history
+        filled = hist_buf[start:] + hist_buf[:start]
+    return np.array(filled, dtype=np.float64)
+
+
+def _bp_postprocess(H, llr, hard, iters, syndrome_vec, postprocess, **pp_kwargs):
     """Apply optional post-processing after BP terminates."""
-    if postprocess not in ("osd0", "osd1"):
+    if postprocess not in ("osd0", "osd1", "osd_cs"):
         return hard, iters
 
     bp_syn = (
@@ -1015,9 +1085,13 @@ def _bp_postprocess(H, llr, hard, iters, syndrome_vec, postprocess):
     if postprocess == "osd0":
         from .decoder.osd import osd0
         hard_pp = osd0(H, llr, hard, syndrome_vec=syndrome_vec)
-    else:  # "osd1"
+    elif postprocess == "osd1":
         from .decoder.osd import osd1
         hard_pp = osd1(H, llr, hard, syndrome_vec=syndrome_vec)
+    else:  # "osd_cs"
+        from .decoder.osd import osd_cs
+        lam = pp_kwargs.get("osd_cs_lam", 1)
+        hard_pp = osd_cs(H, llr, hard, syndrome_vec=syndrome_vec, lam=lam)
 
     pp_syn = (
         (H.astype(np.int32) @ hard_pp.astype(np.int32)) % 2
@@ -1056,7 +1130,9 @@ def infer(
     postprocess: Optional[str] = None,
     seed: Optional[int] = None,
     syndrome_vec: Optional[np.ndarray] = None,
-) -> Tuple[np.ndarray, int]:
+    llr_history: int = 0,
+    osd_cs_lam: int = 1,
+) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
     """
     Infer the most likely error pattern via belief propagation
     (thin wrapper over :func:`bp_decode`).
@@ -1070,19 +1146,22 @@ def infer(
         norm_factor: Normalisation factor for ``"norm_min_sum"``.
         offset: Offset for ``"offset_min_sum"``.
         clip: Message magnitude clipping bound.
-        schedule: Message-passing schedule (``"flooding"`` only).
-        postprocess: Optional post-processing (``"osd0"`` or None).
+        schedule: Message-passing schedule (``"flooding"`` or ``"layered"``).
+        postprocess: Optional post-processing (see :func:`bp_decode`).
         seed: Reserved for future use.
         syndrome_vec: Binary syndrome vector, length m.  Defaults to all-zeros.
+        llr_history: See :func:`bp_decode`.
+        osd_cs_lam: See :func:`bp_decode`.
 
     Returns:
-        (correction, iterations) — same as :func:`bp_decode`.
+        Same as :func:`bp_decode`.
     """
     return bp_decode(
         H, llr, max_iters=max_iter, mode=mode, damping=damping,
         norm_factor=norm_factor, offset=offset, clip=clip,
         schedule=schedule, postprocess=postprocess, seed=seed,
-        syndrome_vec=syndrome_vec,
+        syndrome_vec=syndrome_vec, llr_history=llr_history,
+        osd_cs_lam=osd_cs_lam,
     )
 
 

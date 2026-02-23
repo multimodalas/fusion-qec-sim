@@ -207,9 +207,10 @@ def simulate_fer(H, decoder_config, noise_config, trials, seed=None,
             s = syndrome(H, e)
             llr = channel_llr(e, p, bias=bias)
 
-            correction, iters = bp_decode(
+            result = bp_decode(
                 H, llr, syndrome_vec=s, **dc
             )
+            correction, iters = result[0], result[1]
 
             total_iters += iters
             residual = e ^ correction

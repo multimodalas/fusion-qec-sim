@@ -1,5 +1,5 @@
 """
-Ordered Statistics Decoding (OSD-0 and OSD-1).
+Ordered Statistics Decoding (OSD-0, OSD-1, and OSD-CS).
 
 Post-processing steps for belief-propagation decoders.  When BP fails
 to converge, OSD uses the soft reliability information (LLRs) to
@@ -8,6 +8,10 @@ most likely error pattern.
 """
 
 from __future__ import annotations
+
+import itertools
+import math
+import warnings
 
 import numpy as np
 
@@ -91,6 +95,41 @@ def _osd0_core(H, llr, hard_decision, syndrome_vec):
     valid = np.array_equal(osd_syn, syndrome_vec)
 
     return result, reliability_order, pivot_cols, rank, valid
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Path-metric candidate key (used by OSD-CS)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _candidate_key(candidate_vec, llr_abs, tie_index):
+    """Deterministic candidate comparison key.
+
+    Returns a tuple suitable for lexicographic sorting:
+    ``(weight, metric, tie_index)``.
+
+    - *weight*: Hamming weight (primary, ascending = fewer flips better).
+    - *metric*: Sum of ``|llr|`` at flipped positions, rounded to 12
+      decimal places via :func:`numpy.round` for float-stable ordering
+      (secondary, ascending = flip least-reliable bits preferred).
+    - *tie_index*: Enumeration order integer (tertiary, ascending =
+      earlier combination preferred).
+
+    Args:
+        candidate_vec: Binary candidate vector, length n.
+        llr_abs: Precomputed ``|llr|`` vector, length n.
+        tie_index: Integer tie-breaking index for this candidate.
+
+    Returns:
+        ``(weight, metric, tie_index)`` tuple.
+    """
+    weight = int(np.sum(candidate_vec))
+    # Determinism audit: np.round is NumPy-native, .item() yields a
+    # Python float for stable tuple comparison across platforms.
+    metric = np.round(
+        np.dot(candidate_vec.astype(np.float64), llr_abs),
+        12,
+    ).item()
+    return (weight, metric, tie_index)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -216,3 +255,118 @@ def osd1(H, llr, hard_decision, syndrome_vec=None):
     # Select candidate with lowest Hamming weight; ties broken by order.
     candidates.sort(key=lambda x: (x[0], x[1]))
     return candidates[0][2]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# OSD-CS (Combination Sweep)
+# ═══════════════════════════════════════════════════════════════════════
+
+def osd_cs(H, llr, hard_decision, syndrome_vec=None, lam=1):
+    """Combination Sweep OSD (OSD-CS).
+
+    Extends OSD-0 by testing all combinations of flipping up to *lam*
+    pivot columns.  Candidates are evaluated using the path-metric
+    lexicographic ordering produced by :func:`_candidate_key`:
+    ``(weight, metric, combination_index)``.
+
+    The *never-degrade* guarantee is preserved: if no candidate satisfies
+    the syndrome, the original *hard_decision* is returned.
+
+    Deterministic enumeration: combinations are generated via
+    :func:`itertools.combinations` in lexicographic order over pivot
+    column indices (ascending).
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        llr: Per-variable log-likelihood ratios, length n.
+        hard_decision: Binary hard-decision vector from BP, length n.
+        syndrome_vec: Target syndrome, length m.  Defaults to all-zeros.
+        lam: Maximum number of pivot bits to flip simultaneously.
+            Default 1 (tests all single-pivot flips).
+            ``lam=0`` is equivalent to OSD-0.
+
+    Returns:
+        Corrected binary vector, length n, dtype uint8.
+
+    Raises:
+        ValueError: If *lam* < 0.
+    """
+    H = np.asarray(H)
+    llr = np.asarray(llr, dtype=np.float64)
+    hard_decision = np.asarray(hard_decision, dtype=np.uint8)
+    m, n = H.shape
+    # Pre-cast once to avoid repeated allocation inside candidate loop
+    H_int = H.astype(np.int32)
+
+    if lam < 0:
+        raise ValueError(f"lam must be >= 0, got {lam}")
+
+    if syndrome_vec is None:
+        syndrome_vec = np.zeros(m, dtype=np.uint8)
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    # ── Phase 1: OSD-0 core ──
+    result_0, reliability_order, pivot_cols, rank, osd0_valid = \
+        _osd0_core(H, llr, hard_decision, syndrome_vec)
+    # Ensure dtype stability (backward compatibility & deterministic output)
+    result_0 = result_0.astype(np.uint8, copy=False)
+
+    if rank == 0:
+        return hard_decision.copy()
+
+    # Effective lambda: cannot flip more pivots than exist.
+    effective_lam = min(lam, rank)
+
+    # Performance guard: warn on large candidate counts.
+    n_cands = sum(math.comb(rank, k) for k in range(effective_lam + 1))
+    if n_cands > 10000:
+        warnings.warn(
+            f"OSD-CS will evaluate {n_cands} candidates "
+            f"(rank={rank}, lam={effective_lam}). This may be slow.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    # ── Phase 2: Enumerate candidates ──
+    llr_abs = np.abs(llr)
+    best_key = None   # (weight, metric, combo_index)
+    best_candidate = None
+    combo_index = 0
+
+    # OSD-0 candidate (flip 0 pivots).
+    if osd0_valid:
+        key = _candidate_key(result_0, llr_abs, combo_index)
+        best_key = key
+        best_candidate = result_0
+    combo_index += 1
+
+    # Enumerate combinations of 1..effective_lam pivot flips.
+    # Determinism audit: itertools.combinations yields tuples in
+    # lexicographic order per the Python specification.
+    for num_flips in range(1, effective_lam + 1):
+        for combo in itertools.combinations(range(rank), num_flips):
+            candidate = result_0.copy()
+            for pivot_idx in combo:
+                flip_col_perm = pivot_cols[pivot_idx]
+                flip_col_orig = reliability_order[flip_col_perm]
+                candidate[flip_col_orig] ^= 1
+
+            # Syndrome check.
+            cand_syn = (
+                (H_int @ candidate.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            cand_valid = np.array_equal(cand_syn, syndrome_vec)
+
+            if cand_valid:
+                key = _candidate_key(candidate, llr_abs, combo_index)
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best_candidate = candidate
+
+            combo_index += 1
+
+    # Never-degrade guard.
+    if best_candidate is None:
+        return hard_decision.copy()
+
+    return best_candidate
