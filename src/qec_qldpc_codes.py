@@ -853,6 +853,98 @@ def bp_decode(
             "lift_braided is reserved for a future release and not yet implemented"
         )
 
+    # ── Deterministic ensemble wrapper (v2.8.0) ──
+    # When ensemble_k > 1, run K independent BP passes with deterministic
+    # LLR perturbations and return the best candidate.  Member 0 always
+    # uses the exact original LLR (baseline).  Falls through when k == 1.
+    if ensemble_k > 1:
+        _llr_arr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (H.shape[1],)
+        ).copy()
+        _n_ens = H.shape[1]
+        _mean_abs = np.mean(np.abs(_llr_arr)) if _n_ens > 0 else 0.0
+        _scale = 0.05 * _mean_abs if _mean_abs > 0.0 else 0.05
+
+        best_hard = None
+        best_iters = None
+        best_hist = None
+        best_syn_weight = None  # None means not yet set
+        best_converged = False
+        best_member = -1
+
+        for _k in range(ensemble_k):
+            if _k == 0:
+                llr_k = _llr_arr
+            else:
+                # Deterministic, discrete, zero-mean perturbation.
+                # Alternating +1/-1 base pattern, rolled by member index.
+                _base = np.where(
+                    (np.arange(_n_ens) % 2) == 0, 1.0, -1.0
+                )
+                _pattern = np.roll(_base, _k)
+                # Enforce exact zero-mean (needed when n is odd).
+                _pattern = _pattern - _pattern.mean()
+                epsilon_k = _scale * _pattern
+                llr_k = _llr_arr + epsilon_k
+
+            result_k = bp_decode(
+                H, llr_k, max_iters=max_iters, mode=mode,
+                damping=damping, norm_factor=norm_factor,
+                offset=offset, clip=clip,
+                syndrome_vec=syndrome_vec,
+                postprocess=postprocess, osd_cs_lam=osd_cs_lam,
+                llr_history=llr_history,
+                schedule=schedule,
+                alpha1=alpha1, alpha2=alpha2,
+                hybrid_residual_threshold=hybrid_residual_threshold,
+                ensemble_k=1,  # single run per member
+                state_aware_residual=state_aware_residual,
+                phi_by_state=phi_by_state,
+                s_by_state=s_by_state,
+                state_label_by_check=state_label_by_check,
+            )
+
+            if llr_history > 0:
+                hard_k, iters_k, hist_k = result_k
+            else:
+                hard_k, iters_k = result_k
+                hist_k = None
+
+            # Evaluate candidate quality.
+            syn_k = (
+                (H.astype(np.int32) @ hard_k.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            if syndrome_vec is not None:
+                syn_weight_k = int(np.sum(syn_k != syndrome_vec))
+            else:
+                syn_weight_k = int(np.sum(syn_k))
+            converged_k = (syn_weight_k == 0)
+
+            # Selection: prefer converged, then lowest syndrome weight,
+            # then lowest member index (deterministic tie-break).
+            if best_hard is None:
+                is_better = True
+            elif converged_k and not best_converged:
+                is_better = True
+            elif not converged_k and best_converged:
+                is_better = False
+            elif syn_weight_k < best_syn_weight:
+                is_better = True
+            else:
+                is_better = False
+
+            if is_better:
+                best_hard = hard_k
+                best_iters = iters_k
+                best_hist = hist_k
+                best_syn_weight = syn_weight_k
+                best_converged = converged_k
+                best_member = _k
+
+        if llr_history > 0:
+            return best_hard, best_iters, best_hist
+        return best_hard, best_iters
+
     m, n = H.shape
     eps = 1e-30
 
