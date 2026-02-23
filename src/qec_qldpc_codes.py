@@ -847,6 +847,25 @@ def bp_decode(
                 "state_aware_residual=True requires phi_by_state, "
                 "s_by_state, and state_label_by_check to be provided"
             )
+        state_label_by_check = np.asarray(state_label_by_check)
+        phi_by_state = np.asarray(phi_by_state, dtype=np.float64)
+        s_by_state = np.asarray(s_by_state, dtype=np.float64)
+        if state_label_by_check.shape[0] != H.shape[0]:
+            raise ValueError(
+                f"len(state_label_by_check) must equal m={H.shape[0]}, "
+                f"got {state_label_by_check.shape[0]}"
+            )
+        _max_label = int(np.max(state_label_by_check))
+        if _max_label >= len(phi_by_state):
+            raise ValueError(
+                f"state_label_by_check max={_max_label} exceeds "
+                f"phi_by_state length={len(phi_by_state)}"
+            )
+        if _max_label >= len(s_by_state):
+            raise ValueError(
+                f"state_label_by_check max={_max_label} exceeds "
+                f"s_by_state length={len(s_by_state)}"
+            )
 
     if lift_braided:
         raise NotImplementedError(
@@ -1268,6 +1287,11 @@ def bp_decode(
             # ── Update residuals (residual / hybrid_residual schedule) ──
             if is_residual or is_hybrid:
                 residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
+                if state_aware_residual:
+                    _weights = s_by_state[state_label_by_check] * np.abs(
+                        np.cos(phi_by_state[state_label_by_check])
+                    )
+                    residuals = residuals * _weights
 
             # ── After all layers: compute hard decisions from L_total ──
             for v in range(n):
