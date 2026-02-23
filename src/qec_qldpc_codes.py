@@ -1024,14 +1024,44 @@ def bp_decode(
         # c2v_msg is already zero, so invariant L_total = llr + 0 holds.
         L_total = llr.copy()
         is_residual = (schedule == "residual")
-        if is_residual:
+        is_hybrid = (schedule == "hybrid_residual")
+        if is_residual or is_hybrid:
             residuals = np.zeros(m, dtype=np.float64)
             check_indices = np.arange(m, dtype=np.int64)
+        if is_hybrid:
+            # Deterministic even/odd partition by check index.
+            layer_even = np.array([c for c in range(m) if c % 2 == 0], dtype=np.int64)
+            layer_odd = np.array([c for c in range(m) if c % 2 == 1], dtype=np.int64)
 
         for it in range(max_iters):
             if is_residual:
                 check_order = np.lexsort((check_indices, -residuals))
                 c2v_msg_before = c2v_msg.copy()
+            elif is_hybrid:
+                c2v_msg_before = c2v_msg.copy()
+                check_order_parts = []
+                for layer in (layer_even, layer_odd):
+                    if len(layer) == 0:
+                        continue
+                    layer_res = residuals[layer]
+                    layer_idx = layer
+                    if hybrid_residual_threshold is not None:
+                        high = layer_res > hybrid_residual_threshold
+                        low = ~high
+                        if np.any(high):
+                            h_idx = layer_idx[high]
+                            h_res = layer_res[high]
+                            h_order = np.lexsort((h_idx, -h_res))
+                            check_order_parts.append(h_idx[h_order])
+                        if np.any(low):
+                            l_idx = layer_idx[low]
+                            l_res = layer_res[low]
+                            l_order = np.lexsort((l_idx, -l_res))
+                            check_order_parts.append(l_idx[l_order])
+                    else:
+                        order = np.lexsort((layer_idx, -layer_res))
+                        check_order_parts.append(layer_idx[order])
+                check_order = np.concatenate(check_order_parts) if check_order_parts else np.array([], dtype=np.int64)
             else:
                 check_order = range(m)
 
@@ -1143,8 +1173,8 @@ def bp_decode(
                         # Step 6: Store new c2v message.
                         c2v_msg[c, v] = c2v_new_val
 
-            # ── Update residuals (residual schedule) ──
-            if is_residual:
+            # ── Update residuals (residual / hybrid_residual schedule) ──
+            if is_residual or is_hybrid:
                 residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
 
             # ── After all layers: compute hard decisions from L_total ──
