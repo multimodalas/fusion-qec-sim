@@ -215,7 +215,8 @@ def decimation_round(
 
         # ── Build beliefs from current LLR + hard decision ──
         # Belief sign follows hard decision; magnitude from clamped LLR.
-        beliefs = clamped_llr.copy()
+        signs = np.where(correction == 0, 1.0, -1.0)
+        beliefs = signs * np.abs(clamped_llr)
 
         # ── Decimate ──
         prev_committed_count = int(np.sum(committed))
@@ -236,8 +237,13 @@ def decimation_round(
                 clamped_llr[v] = sign * clamp_magnitude
 
         if new_committed_count == n:
-            # All bits committed; one final BP not needed.
-            return new_hard, total_bp_iters, rnd + 1
+            # All bits committed; verify syndrome before returning.
+            full_syn = syndrome(H, new_hard)
+            if np.array_equal(full_syn, syndrome_vec):
+                return new_hard, total_bp_iters, rnd + 1
+            # Fully committed state fails syndrome; fall back to last
+            # BP correction (best available).
+            return correction, total_bp_iters, rnd + 1
 
     # Max rounds exhausted; return last correction.
     return correction, total_bp_iters, max_rounds

@@ -1,15 +1,15 @@
-[Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
-[2.5.0] — 2026-02-21
+## [2.5.0] — 2026-02-21
 
-Deterministic Statistical Rigor and Layered Decoding
+### Deterministic Statistical Rigor and Layered Decoding
 
-Added
+### Added
 
 Wilson score confidence intervals for Monte Carlo FER simulations (`ci_method="wilson"`):
 - Continuity-corrected Wilson interval with configurable `alpha`.
@@ -33,7 +33,7 @@ Order-1 Ordered Statistics Decoding (`postprocess="osd1"`):
 - Deterministic tie-breaking.
 - Preserves never-degrade guarantee.
 
-Changed
+### Changed
 
 Confidence interval validation semantics:
 - `gamma` now allowed to be `>= 0.0`.
@@ -46,16 +46,16 @@ Backward compatibility preserved:
 - All new features are opt-in.
 - Default parameters produce bit-identical output to v2.4.0.
 
-Verified
+### Verified
 
 247/247 core tests passing.
 No change in deterministic behavior for existing configurations.
 
-[2.3.0] — 2026-02-18
+## [2.3.0] — 2026-02-18
 
-Decoder Utility Formalization and Stability Refinement
+### Decoder Utility Formalization and Stability Refinement
 
-Added
+### Added
 
 Standalone decoder utility layer formalizing detection–inference–correction separation:
 
@@ -83,7 +83,7 @@ Channel LLR validation and bias behavior
 
 Integration with decoding workflow
 
-Changed
+### Changed
 
 channel_llr now enforces p ∈ (0, 1) to prevent undefined or numerically unstable boundary behavior.
 
@@ -91,7 +91,7 @@ bp_decode now precomputes integer-casted parity-check matrix and syndrome vector
 
 Decoder workflow is now explicitly modular while remaining backward compatible.
 
-Notes
+### Notes
 
 No changes to construction layer.
 
@@ -105,17 +105,17 @@ Fully backward compatible.
 
 All tests passing (101 / 101).
 
-[2.2.0] — 2026-02-18
+## [2.2.0] — 2026-02-18
 
-Belief-Propagation Stability Hardening
+### Belief-Propagation Stability Hardening
 
-Added
+### Added
 
 Explicit handling of degree-1 check nodes in the JointSPDecoder belief-propagation loop.
 
 Zero extrinsic message returned for single-neighbor check nodes.
 
-Changed
+### Changed
 
 Corrected check-to-variable update rule in _bp_component:
 
@@ -129,13 +129,13 @@ atanh(≈1) → ∞
 
 when the product over an empty neighbor set numerically approaches unity.
 
-Fixed
+### Fixed
 
 Eliminated false confidence injection in BP decoding for sparse parity structures.
 
 Resolved numerical instability in extremely sparse or irregular Tanner graphs.
 
-Notes
+### Notes
 
 No changes to construction layer.
 
@@ -147,11 +147,11 @@ All tests passing (65 / 65).
 
 Decoder stability hardening release.
 
-[2.1.0] — 2026-02-16
+## [2.1.0] — 2026-02-16
 
-Additive Lift Invariant Hardening
+### Additive Lift Invariant Hardening
 
-Added
+### Added
 
 Additive lift invariant formalization for shared-circulant QLDPC CSS constructions.
 
@@ -168,7 +168,7 @@ Binary GF(2) rank computation without dense float conversion.
 
 Expanded invariant test coverage (89 / 89 passing).
 
-Changed
+### Changed
 
 Replaced per-edge random lift tables with additive invariant lift structure.
 
@@ -176,21 +176,21 @@ Lift implementation is now deterministic, process-independent, and order-indepen
 
 Orthogonality now follows structurally from base-matrix commutation.
 
-Removed
+### Removed
 
 Probabilistic orthogonality edge-case behavior from prior lift implementation.
 
-Notes
+### Notes
 
 No architectural changes from v2.0.0.
 
 Structural invariant hardening release.
 
-[2.0.0] — 2026-02-??
+## [2.0.0] — 2026-02-??
 
-Architectural Expansion of QLDPC CSS Stack
+### Architectural Expansion of QLDPC CSS Stack
 
-Added
+### Added
 
 Multidimensional stabilizer stack.
 
@@ -206,7 +206,6 @@ Deterministic seeded construction framework.
 
 Integrated simulation and hashing bound tooling.
 
-Notes
+### Notes
 
 Major architectural rewrite establishing the construction and decoding foundation for subsequent invariant hardening and stability refinement releases.
-](https://github.com/QSOLKCB/QEC/releases/tag/v2.5.0)

@@ -240,6 +240,24 @@ class TestDecimationRound:
         )
         assert correction.dtype == np.uint8
 
+    def test_with_llr_history(self):
+        """decimation_round handles bp_decode returning 3-tuple (llr_history > 0)."""
+        code = create_code('rate_0.50', lifting_size=8, seed=42)
+        rng = np.random.default_rng(88)
+        e = (rng.random(code.n) < 0.02).astype(np.uint8)
+        s = syndrome(code.H_X, e)
+        llr = channel_llr(e, 0.02)
+
+        correction, total_iters, rounds = decimation_round(
+            code.H_X, llr, threshold=3.0,
+            bp_kwargs={"max_iters": 20, "mode": "min_sum", "llr_history": 5},
+            max_rounds=3, syndrome_vec=s,
+        )
+        assert correction.dtype == np.uint8
+        assert correction.shape == (code.n,)
+        assert total_iters >= 1
+        assert 1 <= rounds <= 3
+
     def test_clamp_factor_constant(self):
         """LLR_CLAMP_FACTOR is a positive number."""
         assert LLR_CLAMP_FACTOR > 0

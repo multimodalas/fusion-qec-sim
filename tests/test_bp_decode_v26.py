@@ -197,6 +197,20 @@ class TestOSDCSIntegration:
         np.testing.assert_array_equal(c1, c2)
         assert i1 == i2
 
+    def test_osd_cs_lam0_matches_osd0(self, noisy_setup):
+        """postprocess='osd_cs' with osd_cs_lam=0 matches postprocess='osd0'."""
+        code, e, s, llr = noisy_setup
+        c_cs, i_cs = bp_decode(
+            code.H_X, llr, max_iters=5, mode="min_sum",
+            postprocess="osd_cs", syndrome_vec=s, osd_cs_lam=0,
+        )
+        c_0, i_0 = bp_decode(
+            code.H_X, llr, max_iters=5, mode="min_sum",
+            postprocess="osd0", syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c_cs, c_0)
+        assert i_cs == i_0
+
     def test_osd_cs_lam_negative_raises(self, small_code):
         """osd_cs_lam < 0 raises ValueError."""
         llr = np.full(small_code.n, 10.0)

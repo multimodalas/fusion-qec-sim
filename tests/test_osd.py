@@ -419,14 +419,13 @@ class TestOSDCS:
 
     def test_osd_cs_never_degrades(self):
         """When no candidate satisfies syndrome, original hard_decision returned."""
-        H = np.array([[1, 1]], dtype=np.uint8)
-        s = np.array([1], dtype=np.uint8)
+        # Duplicate rows make s=[1,0] unsatisfiable (Hx always has equal bits).
+        H = np.array([[1, 1], [1, 1]], dtype=np.uint8)
+        s = np.array([1, 0], dtype=np.uint8)
         hard = np.array([0, 0], dtype=np.uint8)
         llr = np.array([1.0, 1.0])
         result = osd_cs(H, llr, hard, syndrome_vec=s, lam=1)
-        result_syn = ((H.astype(np.int32) @ result.astype(np.int32)) % 2).astype(np.uint8)
-        if not np.array_equal(result_syn, s):
-            np.testing.assert_array_equal(result, hard)
+        np.testing.assert_array_equal(result, hard)
 
     def test_osd_cs_deterministic(self):
         """Same inputs produce identical outputs."""

@@ -788,6 +788,7 @@ def bp_decode(
         _hist_buf = [None] * llr_history
         _hist_idx = 0
         _hist_count = 0
+        _L_total = np.empty(n, dtype=np.float64)
 
     use_min_sum = mode in ("min_sum", "norm_min_sum", "offset_min_sum")
 
@@ -871,14 +872,12 @@ def bp_decode(
                 for c in nbrs:
                     v2c_msg[v, c] = total - c2v_msg[c, v]
                 hard[v] = 0 if total >= 0.0 else 1
+                if llr_history > 0:
+                    _L_total[v] = total
 
             # ── LLR history snapshot (flooding) ──
             if llr_history > 0:
-                L_total_snap = np.array([
-                    llr[v] + sum(c2v_msg[c, v] for c in v2c[v])
-                    for v in range(n)
-                ], dtype=np.float64)
-                _hist_buf[_hist_idx % llr_history] = L_total_snap
+                _hist_buf[_hist_idx % llr_history] = _L_total.copy()
                 _hist_idx += 1
                 _hist_count = min(_hist_count + 1, llr_history)
 
