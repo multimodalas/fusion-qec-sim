@@ -296,3 +296,158 @@ class TestBackwardCompatV26:
         result = bp_decode(code.H_X, llr, max_iters=5, syndrome_vec=s)
         assert isinstance(result, tuple)
         assert len(result) == 2
+
+
+# ───────────────────────────────────────────────────────────────────
+# Residual Schedule
+# ───────────────────────────────────────────────────────────────────
+
+class TestResidualSchedule:
+
+    def test_deterministic_repeated_runs_min_sum(self, noisy_setup):
+        """Same inputs produce identical correction and iteration count (min_sum)."""
+        code, e, s, llr = noisy_setup
+        c1, i1 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", syndrome_vec=s,
+        )
+        c2, i2 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c1, c2)
+        assert i1 == i2
+
+    def test_deterministic_repeated_runs_sum_product(self, noisy_setup):
+        """Same inputs produce identical correction and iteration count (sum_product)."""
+        code, e, s, llr = noisy_setup
+        c1, i1 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="sum_product",
+            schedule="residual", syndrome_vec=s,
+        )
+        c2, i2 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="sum_product",
+            schedule="residual", syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c1, c2)
+        assert i1 == i2
+
+    def test_residual_iters_le_flooding(self, noisy_setup):
+        """Residual schedule converges in <= iterations than flooding."""
+        code, e, s, llr = noisy_setup
+        _, i_flood = bp_decode(
+            code.H_X, llr, max_iters=100, mode="min_sum",
+            schedule="flooding", syndrome_vec=s,
+        )
+        _, i_resid = bp_decode(
+            code.H_X, llr, max_iters=100, mode="min_sum",
+            schedule="residual", syndrome_vec=s,
+        )
+        assert i_resid <= i_flood
+
+    def test_compatible_sum_product(self, noisy_setup):
+        """Residual schedule works with sum_product."""
+        code, e, s, llr = noisy_setup
+        correction, iters = bp_decode(
+            code.H_X, llr, max_iters=30, mode="sum_product",
+            schedule="residual", syndrome_vec=s,
+        )
+        assert correction.dtype == np.uint8
+        assert correction.shape == (code.n,)
+
+    def test_compatible_min_sum(self, noisy_setup):
+        """Residual schedule works with min_sum."""
+        code, e, s, llr = noisy_setup
+        correction, iters = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", syndrome_vec=s,
+        )
+        assert correction.dtype == np.uint8
+        assert correction.shape == (code.n,)
+
+    def test_compatible_norm_min_sum(self, noisy_setup):
+        """Residual schedule works with norm_min_sum."""
+        code, e, s, llr = noisy_setup
+        correction, iters = bp_decode(
+            code.H_X, llr, max_iters=30, mode="norm_min_sum",
+            schedule="residual", syndrome_vec=s,
+        )
+        assert correction.dtype == np.uint8
+        assert correction.shape == (code.n,)
+
+    def test_compatible_offset_min_sum(self, noisy_setup):
+        """Residual schedule works with offset_min_sum."""
+        code, e, s, llr = noisy_setup
+        correction, iters = bp_decode(
+            code.H_X, llr, max_iters=30, mode="offset_min_sum",
+            schedule="residual", syndrome_vec=s,
+        )
+        assert correction.dtype == np.uint8
+        assert correction.shape == (code.n,)
+
+    def test_compatible_with_damping(self, noisy_setup):
+        """Residual schedule is deterministic with damping."""
+        code, e, s, llr = noisy_setup
+        c1, i1 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", damping=0.5, syndrome_vec=s,
+        )
+        c2, i2 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", damping=0.5, syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c1, c2)
+        assert i1 == i2
+
+    def test_compatible_with_clipping(self, noisy_setup):
+        """Residual schedule is deterministic with clipping."""
+        code, e, s, llr = noisy_setup
+        c1, i1 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", clip=5.0, syndrome_vec=s,
+        )
+        c2, i2 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", clip=5.0, syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c1, c2)
+        assert i1 == i2
+
+    def test_compatible_damping_and_clipping(self, noisy_setup):
+        """Residual schedule is deterministic with both damping and clipping."""
+        code, e, s, llr = noisy_setup
+        c1, i1 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", damping=0.3, clip=10.0, syndrome_vec=s,
+        )
+        c2, i2 = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="residual", damping=0.3, clip=10.0, syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c1, c2)
+        assert i1 == i2
+
+    def test_default_schedule_unchanged(self, noisy_setup):
+        """Adding residual schedule does not change default (flooding) behavior."""
+        code, e, s, llr = noisy_setup
+        c_default, i_default = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            syndrome_vec=s,
+        )
+        c_flood, i_flood = bp_decode(
+            code.H_X, llr, max_iters=30, mode="min_sum",
+            schedule="flooding", syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(c_default, c_flood)
+        assert i_default == i_flood
+
+    def test_history_with_residual(self, noisy_setup):
+        """LLR history works with residual schedule."""
+        code, e, s, llr = noisy_setup
+        result = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            schedule="residual", syndrome_vec=s, llr_history=3,
+        )
+        assert len(result) == 3
+        assert result[2].shape[1] == code.n
+        assert result[2].dtype == np.float64
