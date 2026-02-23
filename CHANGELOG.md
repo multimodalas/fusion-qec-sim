@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
+[2.7.0] — 2026-02-23
+Deterministic Residual Scheduling
+
+Added
+
+Residual-Ordered Layered Scheduling (schedule="residual")
+
+Deterministic per-iteration reordering of check nodes based on descending maximum message residual.
+
+Residual defined as:
+
+max |new_msg - old_msg| per check node.
+
+Stable lexicographic ordering via:
+
+np.lexsort((check_indices, -residuals))
+
+Deterministic tie-breaking by ascending check index.
+
+Fully opt-in behavior.
+
+Default flooding and layered schedules unchanged.
+
+Compatibility
+
+Works with all BP modes:
+
+sum_product
+
+min_sum
+
+norm_min_sum
+
+offset_min_sum
+
+Fully compatible with:
+
+damping
+
+clipping
+
+LLR history instrumentation (llr_history)
+
+OSD-0, OSD-1, and OSD-CS post-processing
+
+No change to public API.
+
+No change to return signatures.
+
+No new dependencies introduced.
+
+Changed
+
+Precomputed check_indices array to avoid per-iteration allocation during residual scheduling.
+
+Minor documentation wording improvement:
+
+“floating precision” → “floating-point precision”.
+
+Verified
+
+73 BP decoder regression tests across v2.4–v2.6 passing.
+
+312 total project tests passing (environment-dependent mirror tests unaffected).
+
+Deterministic repeated runs verified for residual schedule.
+
+Flooding and layered schedules remain bit-identical to v2.6.0.
+
+Backward compatibility maintained:
+
+No API breakage.
+
+No required dependency changes.
+
+Default behavior remains bit-identical to v2.6.0.
+
 [2.6.0] — 2026-02-23
 Deterministic Decoding Hardening and Meta-Algorithm Stabilization
 Added
