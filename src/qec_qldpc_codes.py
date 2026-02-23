@@ -882,7 +882,8 @@ def bp_decode(
         _hist_count = 0
         _L_total = np.empty(n, dtype=np.float64)
 
-    use_min_sum = mode in ("min_sum", "norm_min_sum", "offset_min_sum")
+    use_min_sum = mode in ("min_sum", "norm_min_sum", "offset_min_sum",
+                           "improved_norm", "improved_offset")
 
     if schedule == "flooding":
         # ══════════════════════════════════════════════════════════════
@@ -935,8 +936,14 @@ def bp_decode(
                             c2v_msg[c, v] = sign_excl * min_excl
                         elif mode == "norm_min_sum":
                             c2v_msg[c, v] = norm_factor * sign_excl * min_excl
-                        else:  # offset_min_sum
+                        elif mode == "offset_min_sum":
                             c2v_msg[c, v] = sign_excl * max(min_excl - offset, 0.0)
+                        elif mode == "improved_norm":
+                            alpha = alpha2 if idx == min1_idx else alpha1
+                            c2v_msg[c, v] = alpha * sign_excl * min_excl
+                        else:  # improved_offset
+                            alpha = alpha2 if idx == min1_idx else alpha1
+                            c2v_msg[c, v] = sign_excl * max(alpha * min_excl - offset, 0.0)
                 else:
                     # sum_product: tanh product rule.
                     tanhs = np.array([
@@ -1081,8 +1088,14 @@ def bp_decode(
                             c2v_raw = sign_excl * min_excl
                         elif mode == "norm_min_sum":
                             c2v_raw = norm_factor * sign_excl * min_excl
-                        else:  # offset_min_sum
+                        elif mode == "offset_min_sum":
                             c2v_raw = sign_excl * max(min_excl - offset, 0.0)
+                        elif mode == "improved_norm":
+                            alpha = alpha2 if idx == min1_idx else alpha1
+                            c2v_raw = alpha * sign_excl * min_excl
+                        else:  # improved_offset
+                            alpha = alpha2 if idx == min1_idx else alpha1
+                            c2v_raw = sign_excl * max(alpha * min_excl - offset, 0.0)
 
                         # Step 3: Damping per-message.
                         old_val = c2v_msg[c, v]
