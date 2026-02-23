@@ -821,7 +821,7 @@ def bp_decode(
                 f"alpha2 must be in the interval (0.0, 1.0], got {alpha2}"
             )
 
-    if hybrid_residual_threshold is not None and hybrid_residual_threshold < 0.0:
+    if schedule == "hybrid_residual" and hybrid_residual_threshold is not None and hybrid_residual_threshold < 0.0:
         raise ValueError(
             f"hybrid_residual_threshold must be >= 0.0, got {hybrid_residual_threshold}"
         )
@@ -873,6 +873,12 @@ def bp_decode(
                     f"s_by_state length={len(s_by_state)}"
                 )
 
+    if state_aware_residual:
+        state_aware_residual_weights = (
+            s_by_state[state_label_by_check]
+            * np.abs(np.cos(phi_by_state[state_label_by_check]))
+        )
+
     if lift_braided:
         raise NotImplementedError(
             "lift_braided is reserved for a future release and not yet implemented"
@@ -896,6 +902,7 @@ def bp_decode(
         best_syn_weight = None  # None means not yet set
         best_converged = False
         best_member = -1
+        H32 = H.astype(np.int32, copy=False)
 
         for _k in range(ensemble_k):
             if _k == 0:
@@ -937,7 +944,7 @@ def bp_decode(
 
             # Evaluate candidate quality.
             syn_k = (
-                (H.astype(np.int32) @ hard_k.astype(np.int32)) % 2
+                (H32 @ hard_k.astype(np.int32)) % 2
             ).astype(np.uint8)
             if syndrome_vec is not None:
                 syn_weight_k = int(np.sum(syn_k != syndrome_vec))
@@ -1056,10 +1063,10 @@ def bp_decode(
                         elif mode == "offset_min_sum":
                             c2v_msg[c, v] = sign_excl * max(min_excl - offset, 0.0)
                         elif mode == "improved_norm":
-                            alpha = alpha2 if idx == min1_idx else alpha1
+                            alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_msg[c, v] = alpha * sign_excl * min_excl
                         else:  # improved_offset
-                            alpha = alpha2 if idx == min1_idx else alpha1
+                            alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_msg[c, v] = sign_excl * max(alpha * min_excl - offset, 0.0)
                 else:
                     # sum_product: tanh product rule.
@@ -1238,10 +1245,10 @@ def bp_decode(
                         elif mode == "offset_min_sum":
                             c2v_raw = sign_excl * max(min_excl - offset, 0.0)
                         elif mode == "improved_norm":
-                            alpha = alpha2 if idx == min1_idx else alpha1
+                            alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_raw = alpha * sign_excl * min_excl
                         else:  # improved_offset
-                            alpha = alpha2 if idx == min1_idx else alpha1
+                            alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_raw = sign_excl * max(alpha * min_excl - offset, 0.0)
 
                         # Step 3: Damping per-message.
@@ -1294,10 +1301,7 @@ def bp_decode(
             if is_residual or is_hybrid:
                 residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
                 if state_aware_residual:
-                    _weights = s_by_state[state_label_by_check] * np.abs(
-                        np.cos(phi_by_state[state_label_by_check])
-                    )
-                    residuals = residuals * _weights
+                    residuals *= state_aware_residual_weights
 
             # ── After all layers: compute hard decisions from L_total ──
             for v in range(n):
