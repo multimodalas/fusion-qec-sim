@@ -1,10 +1,8 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![v2.5.0](https://img.shields.io/badge/version-v2.5.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v2.5.0)
+[![Latest](https://img.shields.io/badge/version-v2.6.0-blue)](https://github.com/QSOLKCB/QEC/releases/latest)
 &nbsp;&nbsp;
-[![v2.4.0](https://img.shields.io/badge/version-v2.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v2.4.0)
-&nbsp;&nbsp;
-![License](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)
+[![License](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](LICENSE)
 
 Deterministic quantum error correction framework for QLDPC CSS codes with algebraic construction guarantees, numerically stable belief propagation, statistically rigorous FER simulation, and modular decoder utilities.
 
@@ -14,175 +12,197 @@ Deterministic quantum error correction framework for QLDPC CSS codes with algebr
 
 ---
 
-## v2.5.0 — Deterministic Statistical Rigor + Layered Decoding
+v2.6.0 — Deterministic Decoding & Stability Hardening
+Highlights
 
-### Highlights
+OSD-CS (Combination Sweep)
 
-Wilson score confidence intervals for FER simulation  
-- Continuity-corrected Wilson interval (`ci_method="wilson"`)  
-- Configurable `alpha`  
-- `gamma >= 0.0` (set `gamma=0` to disable correction)  
-- Integer-grounded computation (no float reconstruction)  
+Deterministic path-metric candidate ordering
 
-Deterministic early termination  
-- `early_stop_epsilon` stops trials once CI width is sufficiently tight  
-- Fully reproducible termination point  
+NumPy-stable metric rounding (12-decimal precision)
 
-Layered (serial) BP scheduling  
-- `schedule="layered"`  
-- Incremental LLR update invariant  
-- O(nnz(H)) per iteration  
-- Deterministic check-node traversal  
+Guaranteed never-degrade fallback
 
-OSD-1 post-processing  
-- `postprocess="osd1"`  
-- Single least-reliable pivot flip  
-- Deterministic tie-breaking  
-- Never-degrade guarantee preserved  
+Integrated via postprocess="osd_cs" with osd_cs_lam
 
-All new features are opt-in.  
-Default parameters remain bit-identical to v2.4.0.
+Deterministic Decimation Module
 
-247 / 247 core tests passing.
+Threshold-based commitment with index-ordered tie-breaking
 
----
+Optional peeling (ascending check-index propagation)
 
-## v2.4.0 — Performance Hardening + Deterministic FER Harness
+Syndrome-verified early-return logic
 
-### Highlights
+Scaled LLR clamping (no magic constants)
 
-Multi-mode BP decoder  
-- `sum_product`
-- `min_sum`
-- `norm_min_sum`
-- `offset_min_sum`
+LLR History Instrumentation
+
+Optional llr_history parameter in bp_decode
+
+Returns (correction, iterations, history) when enabled
+
+Circular buffer implementation
+
+No impact on default return signature
+
+Stability & Performance Fixes
+
+Belief construction now strictly:
+sign from hard decision + magnitude from |clamped_llr|
+
+Early-return in decimation verified against syndrome
+
+Flooding schedule L_total recomputation removed (performance hardening)
+
+3-tuple return compatibility hardened
+
+Environment-agnostic test suite (mirror tests auto-skip if gh absent)
+
+All defaults remain bit-identical to v2.5.0.
+
+v2.5.0 — Deterministic Statistical Rigor + Layered Decoding
+Highlights
+
+Wilson score confidence intervals for FER simulation
+
+Continuity-corrected Wilson interval (ci_method="wilson")
+
+Configurable alpha
+
+gamma >= 0.0 (set gamma=0 to disable correction)
+
+Integer-grounded computation
+
+Deterministic early termination
+
+early_stop_epsilon stops trials once CI width is sufficiently tight
+
+Layered (serial) BP scheduling
+
+schedule="layered"
+
+O(nnz(H)) per iteration
+
+OSD-1 post-processing
+
+postprocess="osd1"
+
+Deterministic tie-breaking
+
+Never-degrade guarantee preserved
+
+All features opt-in.
+Defaults remain bit-identical to v2.4.0.
+
+v2.4.0 — Performance Hardening + Deterministic FER Harness
+Highlights
+
+Multi-mode BP decoder
+
+sum_product
+
+min_sum
+
+norm_min_sum
+
+offset_min_sum
 
 Message damping and magnitude clipping
-
-OSD-0 post-processing for BP failure recovery
-
-Dict-based asymmetric channel bias in `channel_llr`
-
-Deterministic Monte Carlo FER simulation harness
-
+OSD-0 post-processing
+Dict-based asymmetric channel bias
+Deterministic Monte Carlo FER harness
 Optional FER plotting utility
 
-Backward-compatible API (`max_iter` alias preserved)
+Backward-compatible API.
 
-168 / 168 tests passing
-
-Construction layer remains algebraically guaranteed (v2.1.0).
-
----
-
-## v2.3.0 — Decoder Utility Formalization and Stability Refinement
-
-This release formalized the decoder layer into standalone utilities while preserving full backward compatibility with JointSPDecoder.
-
-### Highlights
+v2.3.0 — Decoder Utility Formalization
 
 Explicit detection → inference → correction separation
 
-Standalone `bp_decode` with per-variable LLR input
+Standalone bp_decode
 
-Pauli-frame update abstraction (`update_pauli_frame`)
+Pauli-frame update abstraction
 
-Channel LLR modeling with optional scalar or vector bias
+Input validation enforcement
 
-Enforced input validation (`p ∈ (0, 1)`)
+Reduced BP early-stop overhead
 
-Reduced per-iteration overhead in BP early-stop logic
+v2.2.0 — Belief Propagation Stability Hardening
 
-101 / 101 tests passing
+Correct handling of degree-1 checks
 
-Construction layer remains algebraically guaranteed (v2.1.0).
+Eliminated artificial LLR amplification
 
----
+Stabilized sparse Tanner graph behavior
 
-## v2.2.0 — Belief Propagation Stability Hardening
+v2.1.0 — Additive Lift Invariant Hardening
 
-Numerical stability refinement of the sum-product decoder.
-
-### Highlights
-
-Correct handling of degree-1 check nodes
-
-Eliminated artificial LLR amplification from `atanh(≈1)`
-
-Removed false confidence injection in sparse Tanner graphs
-
-Stabilized BP behavior under irregular parity structures
-
-No architectural changes. Decoder logic stabilization only.
-
----
-
-## v2.1.0 — Additive Lift Invariant Hardening
-
-Transition from empirically stable lifting to algebraically guaranteed construction.
-
-Additive lift structure:
-
+Algebraically guaranteed lifted CSS construction:
 
 s(i, j) = (r_i + c_j) mod L
-
-
-### Highlights
-
-Algebraic guarantee of lifted CSS orthogonality
 
 Sparse-safe GF(2) rank computation
 
 Deterministic seeded construction
 
-89 / 89 invariant tests passing
+Full invariant enforcement
 
-Construction layer transitioned from probabilistic behavior → structural invariance.
+v2.0.0 — Architectural Expansion
 
----
+Protograph-based QLDPC construction
 
-## v2.0.0 — Architectural Expansion
+GF(2^e) lifting
 
-Initial multidimensional QLDPC CSS stack:
+Ternary Golay [[11,1,5]]₃
 
-- Protograph-based construction  
-- GF(2^e) lifting  
-- Ternary Golay [[11,1,5]]₃  
-- Ququart stabilizer + D4 lattice prior  
-- Deterministic construction framework  
+Ququart stabilizer + D4 lattice prior
 
----
+Deterministic construction framework
 
-# Current System State (v2.5.0)
+Current System State (v2.6.0)
 
 Construction layer is algebraically enforced.
 
 Decoder layer supports:
-- Multi-mode BP
-- Layered scheduling
-- OSD-0 and OSD-1 post-processing
 
-Detection, inference, and correction are modular and independently test-covered.
+Multi-mode BP
 
-Deterministic FER simulation harness with:
-- Wilson confidence intervals
-- Early termination
-- Seeded RNG workflow
+Flooding and layered scheduling
 
-Fully deterministic execution path.
+OSD-0, OSD-1, and OSD-CS
 
-247 total core tests passing.
+Deterministic decimation rounds
 
----
+Optional diagnostic instrumentation:
 
-# Architecture Overview
+LLR history tracing
 
-Channel Model      → `channel_llr`  
-Detection          → `syndrome` / `detect`  
-Inference          → `bp_decode` / `infer`  
-Correction         → `update_pauli_frame`  
-Construction Layer → Additive invariant QLDPC CSS lift  
+FER simulation harness includes:
 
----
+Wilson confidence intervals
 
-The framework cleanly separates algebraic construction guarantees from numerically stable belief-propagation decoding, enabling deterministic, test-covered workflows from channel modeling through Pauli-frame correction and statistically rigorous simulation.
+Deterministic early termination
+
+Seeded RNG workflow
+
+Full deterministic execution path.
+
+Architecture Overview
+
+Channel Model → channel_llr
+Detection → syndrome / detect
+Inference → bp_decode / infer
+Post-processing → osd0 / osd1 / osd_cs
+Decimation → decimate / decimation_round
+Correction → update_pauli_frame
+Construction Layer → Additive invariant QLDPC CSS lift
+
+Citation & Authorship
+
+Author: Trent Slade
+ORCID: https://orcid.org/0009-0002-4515-9237
+
+If you use this toolkit in academic work, please cite appropriately and reference the release version used.
+
+Small is beautiful.
+Determinism is holy.
