@@ -5,6 +5,96 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
+[2.6.0] — 2026-02-23
+Deterministic Decoding Hardening and Meta-Algorithm Stabilization
+Added
+
+Order-k Combination Sweep OSD (postprocess="osd_cs")
+
+Deterministic candidate ordering via structured _candidate_key comparison.
+
+Lexicographic ordering: Hamming weight → rounded path metric → combination index.
+
+NumPy-native metric rounding (12 decimal places) to eliminate floating precision ordering drift.
+
+Configurable sweep depth via osd_cs_lam.
+
+Explicit never-degrade fallback: original hard decision returned if no valid candidate found.
+
+Deterministic Decimation Meta-Decoder
+
+Standalone module:
+
+decimate(...)
+
+decimation_round(...)
+
+Features:
+
+Threshold-based commitment with ascending index tie-breaking.
+
+Optional peeling with deterministic ascending check-node propagation.
+
+Scaled LLR clamping using channel-derived magnitude (no fixed magic constants).
+
+Syndrome-verified early-return behavior (invalid fully-committed states rejected).
+
+LLR History Instrumentation (llr_history)
+
+Optional circular history buffer in bp_decode.
+
+Returns (correction, iterations, history) when enabled.
+
+Flooding and layered schedules supported.
+
+Default return signature unchanged.
+
+No impact on deterministic defaults.
+
+Changed
+
+Belief construction in decimation now strictly follows:
+
+Sign from hard decision.
+
+Magnitude from |clamped_llr|.
+
+Removed redundant L_total recomputation in flooding schedule:
+
+L_total allocated once per iteration.
+
+Snapshot uses existing vector copy.
+
+Eliminates extra Python-level O(m·n) pass.
+
+Decimation early-return now verifies syndrome before accepting fully committed state.
+
+Improved test coverage for:
+
+OSD-CS never-degrade guarantee.
+
+osd_cs_lam=0 equivalence with osd0 at bp_decode level.
+
+llr_history 3-tuple compatibility in decimation meta-loop.
+
+Test suite now environment-agnostic:
+
+Mirror repository tests auto-skip if gh CLI is not present.
+
+Verified
+
+305 tests collected.
+All QEC core tests passing.
+Deterministic behavior preserved for all default configurations.
+
+Backward compatibility maintained:
+
+No API breakage.
+
+No new required dependencies.
+
+Default behavior remains bit-identical to v2.5.0.
+
 ## [2.5.0] — 2026-02-21
 
 ### Deterministic Statistical Rigor and Layered Decoding
