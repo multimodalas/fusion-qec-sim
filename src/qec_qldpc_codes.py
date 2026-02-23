@@ -655,7 +655,7 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
 
 
 _BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum"}
-_BP_SCHEDULES = {"flooding", "layered"}
+_BP_SCHEDULES = {"flooding", "layered", "residual"}
 _BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs"}
 
 
@@ -699,6 +699,9 @@ def bp_decode(
             updates all check nodes then all variable nodes per iteration.
             ``"layered"`` processes check nodes serially, updating beliefs
             incrementally — typically converges in fewer iterations.
+            ``"residual"`` is a variant of layered that reorders check nodes
+            each iteration by descending max message residual, with
+            deterministic tie-breaking by ascending check index.
         postprocess: Optional post-processing.  ``"osd0"`` applies order-0
             Ordered Statistics Decoding when BP fails to converge.
             ``"osd1"`` extends OSD-0 by testing a single least-reliable
@@ -924,9 +927,18 @@ def bp_decode(
         # Initialise total beliefs from channel LLRs.
         # c2v_msg is already zero, so invariant L_total = llr + 0 holds.
         L_total = llr.copy()
+        is_residual = (schedule == "residual")
+        if is_residual:
+            residuals = np.zeros(m, dtype=np.float64)
 
         for it in range(max_iters):
-            for c in range(m):
+            if is_residual:
+                check_order = np.lexsort((np.arange(m, dtype=np.int64), -residuals))
+                c2v_msg_before = c2v_msg.copy()
+            else:
+                check_order = range(m)
+
+            for c in check_order:
                 nbrs = c2v[c]
                 if len(nbrs) == 0:
                     continue
@@ -1027,6 +1039,10 @@ def bp_decode(
 
                         # Step 6: Store new c2v message.
                         c2v_msg[c, v] = c2v_new_val
+
+            # ── Update residuals (residual schedule) ──
+            if is_residual:
+                residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
 
             # ── After all layers: compute hard decisions from L_total ──
             for v in range(n):
@@ -1146,7 +1162,8 @@ def infer(
         norm_factor: Normalisation factor for ``"norm_min_sum"``.
         offset: Offset for ``"offset_min_sum"``.
         clip: Message magnitude clipping bound.
-        schedule: Message-passing schedule (``"flooding"`` or ``"layered"``).
+        schedule: Message-passing schedule (``"flooding"``, ``"layered"``,
+            or ``"residual"``).
         postprocess: Optional post-processing (see :func:`bp_decode`).
         seed: Reserved for future use.
         syndrome_vec: Binary syndrome vector, length m.  Defaults to all-zeros.
