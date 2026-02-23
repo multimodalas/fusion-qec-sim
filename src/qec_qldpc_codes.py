@@ -847,7 +847,7 @@ def bp_decode(
                 "state_aware_residual=True requires phi_by_state, "
                 "s_by_state, and state_label_by_check to be provided"
             )
-        state_label_by_check = np.asarray(state_label_by_check)
+        state_label_by_check = np.asarray(state_label_by_check, dtype=np.int64)
         phi_by_state = np.asarray(phi_by_state, dtype=np.float64)
         s_by_state = np.asarray(s_by_state, dtype=np.float64)
         if state_label_by_check.shape[0] != H.shape[0]:
@@ -855,17 +855,23 @@ def bp_decode(
                 f"len(state_label_by_check) must equal m={H.shape[0]}, "
                 f"got {state_label_by_check.shape[0]}"
             )
-        _max_label = int(np.max(state_label_by_check))
-        if _max_label >= len(phi_by_state):
-            raise ValueError(
-                f"state_label_by_check max={_max_label} exceeds "
-                f"phi_by_state length={len(phi_by_state)}"
-            )
-        if _max_label >= len(s_by_state):
-            raise ValueError(
-                f"state_label_by_check max={_max_label} exceeds "
-                f"s_by_state length={len(s_by_state)}"
-            )
+        if state_label_by_check.shape[0] > 0:
+            _min_label = int(np.min(state_label_by_check))
+            if _min_label < 0:
+                raise ValueError(
+                    f"state_label_by_check must be >= 0, got min={_min_label}"
+                )
+            _max_label = int(np.max(state_label_by_check))
+            if _max_label >= len(phi_by_state):
+                raise ValueError(
+                    f"state_label_by_check max={_max_label} exceeds "
+                    f"phi_by_state length={len(phi_by_state)}"
+                )
+            if _max_label >= len(s_by_state):
+                raise ValueError(
+                    f"state_label_by_check max={_max_label} exceeds "
+                    f"s_by_state length={len(s_by_state)}"
+                )
 
     if lift_braided:
         raise NotImplementedError(

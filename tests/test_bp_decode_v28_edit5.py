@@ -216,3 +216,18 @@ class TestValidation:
                 phi_by_state=phi, s_by_state=s_amp,
                 state_label_by_check=bad_labels,
             )
+
+    def test_negative_label(self, noisy_setup):
+        """Negative label in state_label_by_check raises ValueError."""
+        code, e, s, llr = noisy_setup
+        m = code.H_X.shape[0]
+        phi, s_amp, _ = _make_state_arrays(m, n_states=3)
+        bad_labels = np.zeros(m, dtype=np.int64)
+        bad_labels[0] = -1
+        with pytest.raises(ValueError, match="must be >= 0"):
+            bp_decode(
+                code.H_X, llr, max_iters=5, mode="min_sum",
+                syndrome_vec=s, state_aware_residual=True,
+                phi_by_state=phi, s_by_state=s_amp,
+                state_label_by_check=bad_labels,
+            )
