@@ -5,6 +5,125 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
+[2.8.0] — 2026-02-23
+Deterministic Scheduling & State-Aware Enhancements
+
+Belief Propagation decoder enhancements for QLDPC codes.
+
+### `improved_norm` / `improved_offset` modes
+
+- Extended min-sum variants with dual scaling parameters `alpha1` and `alpha2`.
+- Deterministic, invariant-preserving check-node update modifications.
+- Fully backward-compatible with existing min-sum modes.
+
+### `hybrid_residual` schedule
+
+- Deterministic even/odd check-node partitioning.
+- Within each layer, checks are ordered by descending residual.
+- Optional `hybrid_residual_threshold` prioritizes high-residual checks within each layer.
+- No randomness; stable tie-breaking by ascending check index.
+
+### Deterministic ensemble decoding (`ensemble_k`)
+
+- Runs K independent BP passes with deterministic, zero-mean alternating LLR perturbations.
+- Member 0 uses exact baseline LLR.
+- Selection criteria:
+  - Converged solutions preferred.
+  - Lowest syndrome weight.
+  - Deterministic member index tie-break.
+- No RNG usage; fully reproducible.
+
+### State-aware residual weighting (`state_aware_residual`)
+
+- Residual ordering can be modulated by per-check state weights:
+  - `weight = s_by_state[label] * |cos(phi_by_state[label])|`
+- Applied multiplicatively to raw residuals.
+- Strict validation of state labels (non-negative, in-range, length `m`).
+- Disabled by default — baseline behavior unchanged when off.
+
+### Test Boundary Stabilization
+
+- Added `pytest.ini` to scope test discovery to `tests/`.
+- Full regression: 339 passed, 7 skipped, 0 failed.
+- Determinism verified across repeated runs.
+
+[2.7.0] — 2026-02-23
+Deterministic Residual Scheduling
+
+Added
+
+Residual-Ordered Layered Scheduling (schedule="residual")
+
+Deterministic per-iteration reordering of check nodes based on descending maximum message residual.
+
+Residual defined as:
+
+max |new_msg - old_msg| per check node.
+
+Stable lexicographic ordering via:
+
+np.lexsort((check_indices, -residuals))
+
+Deterministic tie-breaking by ascending check index.
+
+Fully opt-in behavior.
+
+Default flooding and layered schedules unchanged.
+
+Compatibility
+
+Works with all BP modes:
+
+sum_product
+
+min_sum
+
+norm_min_sum
+
+offset_min_sum
+
+Fully compatible with:
+
+damping
+
+clipping
+
+LLR history instrumentation (llr_history)
+
+OSD-0, OSD-1, and OSD-CS post-processing
+
+No change to public API.
+
+No change to return signatures.
+
+No new dependencies introduced.
+
+Changed
+
+Precomputed check_indices array to avoid per-iteration allocation during residual scheduling.
+
+Minor documentation wording improvement:
+
+“floating precision” → “floating-point precision”.
+
+Verified
+
+73 BP decoder regression tests across v2.4–v2.6 passing.
+
+312 total project tests passing (environment-dependent mirror tests unaffected).
+
+Deterministic repeated runs verified for residual schedule.
+
+Flooding and layered schedules remain bit-identical to v2.6.0.
+
+Backward compatibility maintained:
+
+No API breakage.
+
+No required dependency changes.
+
+Default behavior remains bit-identical to v2.6.0.
+
 [2.6.0] — 2026-02-23
 Deterministic Decoding Hardening and Meta-Algorithm Stabilization
 Added

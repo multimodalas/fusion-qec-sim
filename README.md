@@ -1,18 +1,79 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Latest](https://img.shields.io/badge/version-v2.6.0-blue)](https://github.com/QSOLKCB/QEC/releases/latest)
+[![Latest](https://img.shields.io/badge/version-v2.7.0-blue)](https://github.com/QSOLKCB/QEC/releases/latest)
 &nbsp;&nbsp;
 [![License](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](LICENSE)
 
+Latest Version: v2.7.0
+License: CC-BY-4.0
+
 Deterministic quantum error correction framework for QLDPC CSS codes with algebraic construction guarantees, numerically stable belief propagation, statistically rigorous FER simulation, and modular decoder utilities.
 
----
+Release Lineage
 
-# Release Lineage
+v2.7.0 — Deterministic Residual Scheduling
 
----
+Highlights
+
+Deterministic residual-based layered scheduling
+
+schedule="residual"
+
+Per-check residual defined as:
+
+abs(new_msg - old_msg)
+
+Residual aggregated deterministically per check using max residual
+
+Lexicographic ordering:
+
+np.lexsort((check_indices, -residuals))
+
+Tie-breaking guaranteed by ascending check index
+
+No randomness introduced
+
+No change to default behavior
+
+"flooding" remains default
+
+Bit-identical outputs for default calls
+
+No API changes
+
+No return signature changes
+
+Float64 discipline preserved
+
+Fully compatible with:
+
+sum_product
+
+min_sum
+
+norm_min_sum
+
+offset_min_sum
+
+damping
+
+clipping
+
+existing postprocess logic
+
+Performance hardening
+
+Precomputed check_indices to avoid per-iteration allocation
+
+No heap structures
+
+Minimal diff implementation
+
+All 73 BP decoder tests pass across v24, v25, v26 suites
+Full suite passes (excluding environment-dependent mirror tests)
 
 v2.6.0 — Deterministic Decoding & Stability Hardening
+
 Highlights
 
 OSD-CS (Combination Sweep)
@@ -61,6 +122,7 @@ Environment-agnostic test suite (mirror tests auto-skip if gh absent)
 All defaults remain bit-identical to v2.5.0.
 
 v2.5.0 — Deterministic Statistical Rigor + Layered Decoding
+
 Highlights
 
 Wilson score confidence intervals for FER simulation
@@ -95,6 +157,7 @@ All features opt-in.
 Defaults remain bit-identical to v2.4.0.
 
 v2.4.0 — Performance Hardening + Deterministic FER Harness
+
 Highlights
 
 Multi-mode BP decoder
@@ -108,9 +171,13 @@ norm_min_sum
 offset_min_sum
 
 Message damping and magnitude clipping
+
 OSD-0 post-processing
+
 Dict-based asymmetric channel bias
+
 Deterministic Monte Carlo FER harness
+
 Optional FER plotting utility
 
 Backward-compatible API.
@@ -159,7 +226,7 @@ Ququart stabilizer + D4 lattice prior
 
 Deterministic construction framework
 
-Current System State (v2.6.0)
+Current System State (v2.7.0)
 
 Construction layer is algebraically enforced.
 
@@ -167,7 +234,7 @@ Decoder layer supports:
 
 Multi-mode BP
 
-Flooding and layered scheduling
+Flooding, layered, and residual scheduling
 
 OSD-0, OSD-1, and OSD-CS
 

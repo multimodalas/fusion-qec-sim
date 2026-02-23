@@ -4,9 +4,16 @@ Tests for the repository mirroring script.
 """
 
 import os
+import shutil
 import subprocess
 import tempfile
 import pytest
+
+if shutil.which("gh") is None:
+    pytest.skip(
+        "gh CLI not installed; skipping mirror repo tests",
+        allow_module_level=True,
+    )
 
 
 class TestMirrorReposScript:
