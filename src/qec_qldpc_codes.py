@@ -23,6 +23,8 @@ where R = 1 - 2J/L (J = check rows, L = variable columns).
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from typing import Tuple, Dict, List, Optional, Union
 from dataclasses import dataclass, field as dc_field
@@ -654,8 +656,9 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
     return ((H.astype(np.int32) @ np.asarray(e).astype(np.int32)) % 2).astype(np.uint8)
 
 
-_BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum"}
-_BP_SCHEDULES = {"flooding", "layered", "residual"}
+_BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum",
+             "improved_norm", "improved_offset"}
+_BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual"}
 _BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs"}
 
 
@@ -674,6 +677,18 @@ def bp_decode(
     syndrome_vec: Optional[np.ndarray] = None,
     llr_history: int = 0,
     osd_cs_lam: int = 1,
+    # ── v2.8.0 opt-in parameters (defaults preserve v2.7.0 behavior) ──
+    alpha1: float = 0.9,
+    alpha2: float = 0.75,
+    hybrid_residual_threshold: Optional[float] = None,
+    ensemble_k: int = 1,
+    state_aware_residual: bool = False,
+    phi_by_state: Optional[np.ndarray] = None,
+    s_by_state: Optional[np.ndarray] = None,
+    state_label_by_check: Optional[np.ndarray] = None,
+    lift_braided: bool = False,
+    braid_distance: Optional[int] = None,
+    gsa_style: Optional[str] = None,
     **kwargs,
 ) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
     """
@@ -687,7 +702,8 @@ def bp_decode(
         llr: Per-variable log-likelihood ratios, length n (or scalar broadcast).
         max_iters: Maximum BP iterations (default 100).
         mode: Check-node update rule.  One of ``"sum_product"``,
-            ``"min_sum"``, ``"norm_min_sum"``, ``"offset_min_sum"``.
+            ``"min_sum"``, ``"norm_min_sum"``, ``"offset_min_sum"``,
+            ``"improved_norm"`` (v2.8.0), ``"improved_offset"`` (v2.8.0).
         damping: Damping factor in [0, 1).  ``0.0`` disables damping.
         norm_factor: Normalisation factor for ``"norm_min_sum"`` mode.
             Must be in the interval (0.0, 1.0].
@@ -702,6 +718,8 @@ def bp_decode(
             ``"residual"`` is a variant of layered that reorders check nodes
             each iteration by descending max message residual, with
             deterministic tie-breaking by ascending check index.
+            ``"hybrid_residual"`` (v2.8.0) deterministic hybrid of layered
+            + residual with even/odd layer partitioning.
         postprocess: Optional post-processing.  ``"osd0"`` applies order-0
             Ordered Statistics Decoding when BP fails to converge.
             ``"osd1"`` extends OSD-0 by testing a single least-reliable
@@ -717,6 +735,34 @@ def bp_decode(
         osd_cs_lam: Lambda parameter for OSD-CS when
             ``postprocess="osd_cs"``.  Maximum number of pivot bits to
             flip simultaneously.  Default 1.
+        alpha1: Scaling factor for ``"improved_norm"`` / ``"improved_offset"``
+            modes (v2.8.0).  Applied to the first minimum.  Must be in
+            (0, 1].  Default 0.9.
+        alpha2: Scaling factor for ``"improved_norm"`` / ``"improved_offset"``
+            modes (v2.8.0).  Applied to the second minimum.  Must be in
+            (0, 1].  Default 0.75.
+        hybrid_residual_threshold: Threshold for ``"hybrid_residual"``
+            schedule (v2.8.0).  If None (default), update all checks in
+            layered-residual order.  If set (>= 0), within each layer
+            update checks with residual > threshold first, then the rest.
+        ensemble_k: Number of ensemble members for deterministic ensemble
+            decoding (v2.8.0).  ``1`` (default) disables ensemble mode.
+            Member 0 is always the exact baseline.  Hard cap at 8; a
+            warning is issued if > 4.
+        state_aware_residual: If True, apply state-aware weighting to
+            residuals before ordering (v2.8.0).  Requires *phi_by_state*,
+            *s_by_state*, and *state_label_by_check* to be provided.
+        phi_by_state: Per-state phase array for state-aware residual
+            weighting.  Required when ``state_aware_residual=True``.
+        s_by_state: Per-state amplitude array for state-aware residual
+            weighting.  Required when ``state_aware_residual=True``.
+        state_label_by_check: Per-check state label array (integer indices
+            into *phi_by_state* / *s_by_state*).  Required when
+            ``state_aware_residual=True``.
+        lift_braided: Reserved for future braided-lift construction
+            (v2.8.0).  Not yet implemented.
+        braid_distance: Reserved for future braided-lift construction.
+        gsa_style: Reserved for future braided-lift construction.
         **kwargs: Accepts legacy ``max_iter`` keyword for backward
             compatibility.
 
@@ -762,6 +808,49 @@ def bp_decode(
     if not isinstance(osd_cs_lam, int) or osd_cs_lam < 0:
         raise ValueError(
             f"osd_cs_lam must be a non-negative integer, got {osd_cs_lam}"
+        )
+
+    # ── v2.8.0 parameter validation ──
+    if mode in ("improved_norm", "improved_offset"):
+        if not (0.0 < alpha1 <= 1.0):
+            raise ValueError(
+                f"alpha1 must be in the interval (0.0, 1.0], got {alpha1}"
+            )
+        if not (0.0 < alpha2 <= 1.0):
+            raise ValueError(
+                f"alpha2 must be in the interval (0.0, 1.0], got {alpha2}"
+            )
+
+    if hybrid_residual_threshold is not None and hybrid_residual_threshold < 0.0:
+        raise ValueError(
+            f"hybrid_residual_threshold must be >= 0.0, got {hybrid_residual_threshold}"
+        )
+
+    if not isinstance(ensemble_k, int) or ensemble_k < 1:
+        raise ValueError(
+            f"ensemble_k must be an integer >= 1, got {ensemble_k}"
+        )
+    if ensemble_k > 8:
+        raise ValueError(
+            f"ensemble_k must be <= 8, got {ensemble_k}"
+        )
+    if ensemble_k > 4:
+        warnings.warn(
+            f"ensemble_k={ensemble_k} is large; values > 4 may be slow "
+            "with diminishing returns",
+            stacklevel=2,
+        )
+
+    if state_aware_residual:
+        if phi_by_state is None or s_by_state is None or state_label_by_check is None:
+            raise ValueError(
+                "state_aware_residual=True requires phi_by_state, "
+                "s_by_state, and state_label_by_check to be provided"
+            )
+
+    if lift_braided:
+        raise NotImplementedError(
+            "lift_braided is reserved for a future release and not yet implemented"
         )
 
     m, n = H.shape
