@@ -658,7 +658,7 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
 
 _BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum",
              "improved_norm", "improved_offset"}
-_BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual"}
+_BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual", "adaptive"}
 _BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs"}
 
 
@@ -689,6 +689,10 @@ def bp_decode(
     lift_braided: bool = False,
     braid_distance: Optional[int] = None,
     gsa_style: Optional[str] = None,
+    # ── v2.9.0 adaptive schedule parameters ──
+    adaptive_k1: Optional[int] = None,
+    adaptive_rule: str = "one_way",
+    adaptive_log: bool = False,
     **kwargs,
 ) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
     """
@@ -763,6 +767,32 @@ def bp_decode(
             (v2.8.0).  Not yet implemented.
         braid_distance: Reserved for future braided-lift construction.
         gsa_style: Reserved for future braided-lift construction.
+        adaptive_k1: Number of iterations for phase 1 (flooding) when
+            ``schedule="adaptive"``.  Defaults to ``max(1, max_iters // 4)``
+            when *None*.
+
+            **Adaptive schedule overview** (v2.9.0):
+
+            ``schedule="adaptive"`` is a deterministic one-way checkpoint
+            controller.  It does **not** pass internal message state between
+            phases — each phase is a fresh, independent ``bp_decode()`` call.
+
+            * Phase 1: ``"flooding"`` for *k1* iterations.
+            * If phase 1 converges, return immediately (iters = iters_p1).
+            * Phase 2: ``"hybrid_residual"`` for *max_iters − k1* iterations.
+            * Tie-break between phases: prefer converged → lower syndrome
+              weight → fewer total iterations → phase order (deterministic).
+            * When phase 2 is selected the returned iteration count is
+              cumulative: ``k1 + iters_p2`` (total work performed).
+
+            No residual-based dynamic thresholding is applied to the
+            switching decision (reserved for a future extension).
+
+        adaptive_rule: Switching rule for adaptive schedule.  Currently
+            only ``"one_way"`` is supported: always switch to
+            ``"hybrid_residual"`` after phase 1 if not converged.
+        adaptive_log: If *True*, print a one-line log showing which
+            phase was selected and why.  Default *False*.
         **kwargs: Accepts legacy ``max_iter`` keyword for backward
             compatibility.
 
@@ -825,6 +855,25 @@ def bp_decode(
         raise ValueError(
             f"hybrid_residual_threshold must be >= 0.0, got {hybrid_residual_threshold}"
         )
+
+    # ── v2.9.0 adaptive schedule validation ──
+    _ADAPTIVE_RULES = {"one_way"}
+    if schedule == "adaptive":
+        if adaptive_rule not in _ADAPTIVE_RULES:
+            raise ValueError(
+                f"adaptive_rule must be one of {_ADAPTIVE_RULES}, "
+                f"got '{adaptive_rule}'"
+            )
+        if adaptive_k1 is not None:
+            if not isinstance(adaptive_k1, int) or adaptive_k1 < 1:
+                raise ValueError(
+                    f"adaptive_k1 must be a positive integer, got {adaptive_k1}"
+                )
+            if adaptive_k1 >= max_iters:
+                raise ValueError(
+                    f"adaptive_k1 must be < max_iters ({max_iters}), "
+                    f"got {adaptive_k1}"
+                )
 
     if not isinstance(ensemble_k, int) or ensemble_k < 1:
         raise ValueError(
@@ -976,6 +1025,131 @@ def bp_decode(
         if llr_history > 0:
             return best_hard, best_iters, best_hist
         return best_hard, best_iters
+
+    # ── Deterministic adaptive schedule controller (v2.9.0) ──
+    # One-way checkpointed controller:
+    #   Phase 1: run "flooding" for k1 iterations.
+    #   If converged → return immediately.
+    #   Phase 2: run "hybrid_residual" for remaining (max_iters - k1) iters.
+    #   Tie-break: prefer converged → lower syndrome weight → fewer iters
+    #   → phase order (deterministic).
+    # No internal message state is passed between phases; each phase is
+    # an independent bp_decode() call with a concrete schedule.
+    if schedule == "adaptive":
+        k1 = adaptive_k1 if adaptive_k1 is not None else max(1, max_iters // 4)
+        k2 = max_iters - k1
+
+        # Shared keyword arguments for both phases (forward all non-adaptive
+        # parameters unchanged).
+        _adaptive_common = dict(
+            mode=mode, damping=damping, norm_factor=norm_factor,
+            offset=offset, clip=clip, postprocess=postprocess,
+            osd_cs_lam=osd_cs_lam, llr_history=llr_history,
+            syndrome_vec=syndrome_vec,
+            alpha1=alpha1, alpha2=alpha2,
+            hybrid_residual_threshold=hybrid_residual_threshold,
+            ensemble_k=1,
+            state_aware_residual=state_aware_residual,
+            phi_by_state=phi_by_state,
+            s_by_state=s_by_state,
+            state_label_by_check=state_label_by_check,
+        )
+
+        H32 = H.astype(np.int32, copy=False)
+        _syn_ref = (
+            np.asarray(syndrome_vec, dtype=np.uint8)
+            if syndrome_vec is not None
+            else np.zeros(H.shape[0], dtype=np.uint8)
+        )
+
+        # ── Phase 1: flooding for k1 iterations ──
+        result_p1 = bp_decode(
+            H, llr, max_iters=k1, schedule="flooding", **_adaptive_common,
+        )
+        if llr_history > 0:
+            hard_p1, iters_p1, hist_p1 = result_p1
+        else:
+            hard_p1, iters_p1 = result_p1
+            hist_p1 = None
+
+        syn_p1 = (
+            (H32 @ hard_p1.astype(np.int32)) % 2
+        ).astype(np.uint8)
+        syn_weight_p1 = int(np.sum(syn_p1 != _syn_ref))
+        converged_p1 = (syn_weight_p1 == 0)
+
+        if adaptive_log:
+            print(
+                f"[adaptive] phase1 flooding k1={k1}: "
+                f"iters={iters_p1}, syn_weight={syn_weight_p1}, "
+                f"converged={converged_p1}"
+            )
+
+        if converged_p1:
+            # Phase 1 converged — return immediately.
+            if adaptive_log:
+                print("[adaptive] returning phase1 (converged)")
+            if llr_history > 0:
+                return hard_p1, iters_p1, hist_p1
+            return hard_p1, iters_p1
+
+        # ── Phase 2: hybrid_residual for remaining iterations ──
+        result_p2 = bp_decode(
+            H, llr, max_iters=k2, schedule="hybrid_residual",
+            **_adaptive_common,
+        )
+        if llr_history > 0:
+            hard_p2, iters_p2, hist_p2 = result_p2
+        else:
+            hard_p2, iters_p2 = result_p2
+            hist_p2 = None
+
+        syn_p2 = (
+            (H32 @ hard_p2.astype(np.int32)) % 2
+        ).astype(np.uint8)
+        syn_weight_p2 = int(np.sum(syn_p2 != _syn_ref))
+        converged_p2 = (syn_weight_p2 == 0)
+
+        if adaptive_log:
+            print(
+                f"[adaptive] phase2 hybrid_residual k2={k2}: "
+                f"iters={iters_p2}, syn_weight={syn_weight_p2}, "
+                f"converged={converged_p2}"
+            )
+
+        # ── Tie-break: pick best phase result ──
+        # Prefer: converged → lower syndrome weight → fewer total iters
+        # → phase order (phase 1 wins ties — deterministic).
+        # Iteration accounting: phase 1 returns iters_p1 directly;
+        # phase 2 returns k1 + iters_p2 (cumulative work).
+        total_iters_p1 = iters_p1
+        total_iters_p2 = k1 + iters_p2
+
+        pick_p2 = False
+        if converged_p2 and not converged_p1:
+            pick_p2 = True
+        elif not converged_p2 and converged_p1:
+            pick_p2 = False
+        elif syn_weight_p2 < syn_weight_p1:
+            pick_p2 = True
+        elif syn_weight_p2 > syn_weight_p1:
+            pick_p2 = False
+        elif total_iters_p2 < total_iters_p1:
+            pick_p2 = True
+        # else: tie on all criteria → prefer phase 1 (deterministic)
+
+        if pick_p2:
+            if adaptive_log:
+                print("[adaptive] returning phase2 (better)")
+            if llr_history > 0:
+                return hard_p2, total_iters_p2, hist_p2
+            return hard_p2, total_iters_p2
+        else:
+            if adaptive_log:
+                print("[adaptive] returning phase1 (better or tie)")
+            if llr_history > 0:
+                return hard_p1, total_iters_p1, hist_p1
+            return hard_p1, total_iters_p1
 
     m, n = H.shape
     eps = 1e-30
