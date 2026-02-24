@@ -662,6 +662,23 @@ _BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual"}
 _BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs"}
 
 
+# ── v2.9.0 residual metric helpers (deterministic, no dependencies) ──
+
+def _residual_linf(delta: np.ndarray) -> np.ndarray:
+    """Per-check L-inf residual: max |delta| across variable neighbors."""
+    return np.max(np.abs(delta), axis=1)
+
+
+def _residual_l2(delta: np.ndarray) -> np.ndarray:
+    """Per-check L2 residual: Euclidean norm of delta across variable neighbors."""
+    return np.sqrt(np.sum(delta ** 2, axis=1))
+
+
+def _residual_energy(delta: np.ndarray) -> float:
+    """Aggregate residual energy: total sum of squared deltas."""
+    return float(np.sum(delta ** 2))
+
+
 def bp_decode(
     H: np.ndarray,
     llr: np.ndarray,
@@ -689,8 +706,11 @@ def bp_decode(
     lift_braided: bool = False,
     braid_distance: Optional[int] = None,
     gsa_style: Optional[str] = None,
+    # ── v2.9.0 opt-in parameters (defaults preserve v2.8.0 behavior) ──
+    residual_metrics: bool = False,
     **kwargs,
-) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
+) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray],
+           Tuple[np.ndarray, int, dict], Tuple[np.ndarray, int, np.ndarray, dict]]:
     """
     Standalone belief-propagation decoder for a binary parity-check matrix.
 
@@ -763,18 +783,26 @@ def bp_decode(
             (v2.8.0).  Not yet implemented.
         braid_distance: Reserved for future braided-lift construction.
         gsa_style: Reserved for future braided-lift construction.
+        residual_metrics: If True, collect per-iteration residual metrics
+            and append a metrics dict to the return tuple (v2.9.0).
+            Only produces non-empty results with ``"residual"`` or
+            ``"hybrid_residual"`` schedules; other schedules return
+            empty metric lists.  Default False (no overhead, no change
+            to return type).
         **kwargs: Accepts legacy ``max_iter`` keyword for backward
             compatibility.
 
     Returns:
-        When ``llr_history == 0``:
-            ``(correction, iterations)`` — hard-decision binary vector
-            (length n, dtype uint8) and iteration count.
+        Base return is ``(correction, iterations)`` — hard-decision binary
+        vector (length n, dtype uint8) and iteration count.
 
-        When ``llr_history > 0``:
-            ``(correction, iterations, history)`` — same as above plus
-            a float64 array of shape ``(k, n)`` containing the last *k*
-            per-iteration L_total snapshots.
+        When ``llr_history > 0``, *history* (float64 array of shape
+        ``(k, n)``) is appended.
+
+        When ``residual_metrics is True``, *metrics_dict* is appended
+        last.  It contains keys ``"residual_linf"`` (list of shape-(m,)
+        arrays), ``"residual_l2"`` (list of shape-(m,) arrays), and
+        ``"residual_energy"`` (list of floats), one entry per iteration.
     """
     # ── backward compatibility: accept old ``max_iter`` keyword ──
     if "max_iter" in kwargs:
@@ -899,6 +927,7 @@ def bp_decode(
         best_hard = None
         best_iters = None
         best_hist = None
+        best_metrics = None
         best_syn_weight = None  # None means not yet set
         best_converged = False
         best_member = -1
@@ -934,13 +963,22 @@ def bp_decode(
                 phi_by_state=phi_by_state,
                 s_by_state=s_by_state,
                 state_label_by_check=state_label_by_check,
+                residual_metrics=residual_metrics,
             )
 
-            if llr_history > 0:
-                hard_k, iters_k, hist_k = result_k
+            if residual_metrics:
+                if llr_history > 0:
+                    hard_k, iters_k, hist_k, metrics_k = result_k
+                else:
+                    hard_k, iters_k, metrics_k = result_k
+                    hist_k = None
             else:
-                hard_k, iters_k = result_k
-                hist_k = None
+                if llr_history > 0:
+                    hard_k, iters_k, hist_k = result_k
+                else:
+                    hard_k, iters_k = result_k
+                    hist_k = None
+                metrics_k = None
 
             # Evaluate candidate quality.
             syn_k = (
@@ -969,10 +1007,15 @@ def bp_decode(
                 best_hard = hard_k
                 best_iters = iters_k
                 best_hist = hist_k
+                best_metrics = metrics_k
                 best_syn_weight = syn_weight_k
                 best_converged = converged_k
                 best_member = _k
 
+        if residual_metrics:
+            if llr_history > 0:
+                return best_hard, best_iters, best_hist, best_metrics
+            return best_hard, best_iters, best_metrics
         if llr_history > 0:
             return best_hard, best_iters, best_hist
         return best_hard, best_iters
@@ -1014,6 +1057,8 @@ def bp_decode(
         # Flooding schedule: update ALL check nodes, then ALL variable
         # nodes, in separate sweeps.  This is the v2.4.0 default.
         # ══════════════════════════════════════════════════════════════
+        if residual_metrics:
+            _rm_dict = {"residual_linf": [], "residual_l2": [], "residual_energy": []}
         for it in range(max_iters):
             # Save old messages for damping.
             if damping > 0.0:
@@ -1113,6 +1158,10 @@ def bp_decode(
                     H, llr, hard, it + 1, syndrome_vec, postprocess,
                     osd_cs_lam=osd_cs_lam,
                 )
+                if residual_metrics:
+                    if llr_history > 0:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _rm_dict
+                    return pp_result[0], pp_result[1], _rm_dict
                 if llr_history > 0:
                     return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
                 return pp_result
@@ -1121,6 +1170,10 @@ def bp_decode(
             H, llr, hard, max_iters, syndrome_vec, postprocess,
             osd_cs_lam=osd_cs_lam,
         )
+        if residual_metrics:
+            if llr_history > 0:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _rm_dict
+            return pp_result[0], pp_result[1], _rm_dict
         if llr_history > 0:
             return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
         return pp_result
@@ -1156,6 +1209,12 @@ def bp_decode(
             # Deterministic even/odd partition by check index.
             layer_even = np.array([c for c in range(m) if c % 2 == 0], dtype=np.int64)
             layer_odd = np.array([c for c in range(m) if c % 2 == 1], dtype=np.int64)
+
+        _collect_rm = residual_metrics and (is_residual or is_hybrid)
+        if residual_metrics:
+            _rm_linf = []
+            _rm_l2 = []
+            _rm_energy = []
 
         for it in range(max_iters):
             if is_residual:
@@ -1299,7 +1358,12 @@ def bp_decode(
 
             # ── Update residuals (residual / hybrid_residual schedule) ──
             if is_residual or is_hybrid:
-                residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
+                delta = c2v_msg - c2v_msg_before
+                residuals = _residual_linf(delta)
+                if _collect_rm:
+                    _rm_linf.append(residuals.copy())
+                    _rm_l2.append(_residual_l2(delta))
+                    _rm_energy.append(_residual_energy(delta))
                 if state_aware_residual:
                     residuals *= state_aware_residual_weights
 
@@ -1322,6 +1386,11 @@ def bp_decode(
                     H, llr, hard, it + 1, syndrome_vec, postprocess,
                     osd_cs_lam=osd_cs_lam,
                 )
+                if residual_metrics:
+                    _rm_dict = {"residual_linf": _rm_linf, "residual_l2": _rm_l2, "residual_energy": _rm_energy}
+                    if llr_history > 0:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _rm_dict
+                    return pp_result[0], pp_result[1], _rm_dict
                 if llr_history > 0:
                     return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
                 return pp_result
@@ -1330,6 +1399,11 @@ def bp_decode(
             H, llr, hard, max_iters, syndrome_vec, postprocess,
             osd_cs_lam=osd_cs_lam,
         )
+        if residual_metrics:
+            _rm_dict = {"residual_linf": _rm_linf, "residual_l2": _rm_l2, "residual_energy": _rm_energy}
+            if llr_history > 0:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _rm_dict
+            return pp_result[0], pp_result[1], _rm_dict
         if llr_history > 0:
             return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
         return pp_result
