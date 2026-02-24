@@ -17,96 +17,72 @@ The roadmap is structured to preserve deterministic guarantees while progressive
 
 ---
 
-# v2.9.0 — Deterministic Measurement & Adaptive Control
+# v2.9.0 — Deterministic Adaptive Control
 
-**Theme:** Internal observability and control formalization.
+**Theme:** Scheduling formalization without destabilization.
 
-This release strengthens the internal measurement and scheduling discipline of the decoder without expanding its external surface area.
+This release introduces a strictly deterministic adaptive schedule controller while preserving all existing decoder guarantees.
 
-## Objectives
+## Objectives (Completed)
 
-- Formalize residual instrumentation.
 - Introduce deterministic adaptive scheduling.
-- Provide reproducible threshold sweep utilities.
-- Add bounded internal evaluation harnesses.
-
-## Workstreams
-
-### 1. Residual Metric Expansion
-
-Extend residual tracking to include:
-
-- `residual_linf`
-- `residual_l2`
-- `residual_energy` (aggregate delta magnitude)
-
-Requirements:
-
-- Fully deterministic.
-- Opt-in only.
-- No change to default decoding behavior.
-- No new external dependencies.
+- Preserve backward compatibility.
+- Maintain bit-stability for default calls.
+- Expand deterministic validation coverage.
 
 ---
 
-### 2. Deterministic Adaptive Scheduling
+## Workstreams
+
+### 1. Deterministic Adaptive Scheduling (Completed)
 
 Add:
 
-
 schedule="adaptive"
 
+Adaptive mode performs:
 
-Adaptive mode selects among existing schedules using:
+- Phase 1: `flooding` for k1 iterations.
+- Phase 2: `hybrid_residual` for remaining iterations.
 
-- Residual thresholds
-- Iteration checkpoints
-- Stable deterministic tie-break rules
+Properties:
+
+- Strictly one-way switching.
+- No residual-triggered dynamic switching.
+- No internal message state shared between phases.
+- Cumulative iteration accounting.
+- Deterministic tie-break ordering:
+  - Converged
+  - Lower syndrome weight
+  - Fewer iterations
+  - Phase order
 
 Default scheduling behavior remains unchanged.
 
 ---
 
-### 3. Threshold Sweep & Deterministic Fitting
+## Deferred From v2.9.0
 
-Introduce:
+The following measurement and instrumentation work has been deferred to a future minor release to preserve release stability:
 
-- `threshold_sweep()`
-- `estimate_threshold()`
+- Residual metric expansion
+- Threshold sweep utilities
+- Internal evaluation harnesses
 
-Design goals:
+# v2.9.1 — Deterministic Measurement Expansion (Planned)
 
-- Fixed parameter grids.
-- Fixed seeds.
-- Stable JSON output.
-- Deterministic curve fitting.
+**Theme:** Internal observability without behavioral drift.
 
-No external statistical libraries.
+Planned objectives:
 
----
-
-### 4. Internal Evaluation Harnesses
-
-Bounded internal comparison tools:
-
-- Residual vs Hybrid schedule harness.
-- Ensemble scaling harness.
-
-Limited to small representative code sets to prevent scope expansion.
-
----
-
-## Explicitly Out of Scope (v2.9.0)
-
-- Thermodynamic decoding modes
-- Temperature schedules
-- External decoder adapters
-- Industry benchmarking integrations
-- Heterogeneous decoder fusion
-- Major API redesign
-- Core math refactors
-
----
+- Residual metric expansion:
+  - `residual_linf`
+  - `residual_l2`
+  - `residual_energy`
+- Opt-in instrumentation only.
+- No changes to default decoder return signature.
+- Deterministic JSON-safe measurement outputs.
+- No external dependencies.
 
 # v3.0.0 — Benchmark Standardization & Comparative Framework
 
