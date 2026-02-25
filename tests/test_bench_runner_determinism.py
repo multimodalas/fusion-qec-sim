@@ -64,7 +64,7 @@ class TestRunnerDeterminism:
         config = _small_config()
         result = run_benchmark(config)
 
-        assert result["schema_version"] == "3.0.0"
+        assert result["schema_version"] in ("3.0.0", "3.0.1")
         assert "created_utc" in result
         assert "environment" in result
         assert "config" in result
@@ -131,7 +131,7 @@ class TestRunnerDeterminism:
         text = dumps_result(result)
         # Must round-trip through JSON.
         parsed = json.loads(text)
-        assert parsed["schema_version"] == "3.0.0"
+        assert parsed["schema_version"] in ("3.0.0", "3.0.1")
 
 
 class TestRunnerRuntime:

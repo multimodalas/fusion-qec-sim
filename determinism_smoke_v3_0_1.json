@@ -1,0 +1,34 @@
+{
+  "schema_version": "3.0.1",
+  "seed": 123456,
+  "distances": [3],
+  "p_values": [0.001],
+  "trials": 5,
+  "max_iters": 10,
+  "decoders": [
+    {
+      "adapter": "bp",
+      "params": {
+        "mode": "min_sum",
+        "schedule": "flooding"
+      }
+    }
+  ],
+  "runtime_mode": "off",
+  "runtime": {
+    "warmup": 1,
+    "runs": 1,
+    "measure_memory": false
+  },
+  "qudit": {
+    "dimension": 2,
+    "encoding": "qubit",
+    "metadata": {}
+  },
+  "resource_model": {
+    "enabled": true,
+    "model": "qubit_decomp_v1",
+    "native_model": "native_placeholder_v1",
+    "assumptions": {}
+  }
+}

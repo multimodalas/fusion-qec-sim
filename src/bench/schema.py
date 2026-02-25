@@ -11,7 +11,10 @@ import copy
 import json
 from typing import Any
 
-SCHEMA_VERSION = "3.0.0"
+SCHEMA_VERSION = "3.0.1"
+
+# Schema versions accepted by the validator.
+_SUPPORTED_SCHEMA_VERSIONS = {"3.0.0", "3.0.1"}
 
 # Required top-level keys and their expected Python types.
 _REQUIRED_TOP_KEYS: dict[str, type | tuple[type, ...]] = {
@@ -90,10 +93,11 @@ def validate_result(obj: Any) -> None:
                 f"got {type(obj[key]).__name__}"
             )
 
-    if obj.get("schema_version") != SCHEMA_VERSION:
+    sv = obj.get("schema_version")
+    if sv not in _SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(
-            f"Unsupported schema_version: {obj.get('schema_version')!r} "
-            f"(expected {SCHEMA_VERSION!r})"
+            f"Unsupported schema_version: {sv!r} "
+            f"(expected one of {sorted(_SUPPORTED_SCHEMA_VERSIONS)})"
         )
 
     for i, rec in enumerate(obj["results"]):
