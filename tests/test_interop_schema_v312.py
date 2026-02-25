@@ -33,18 +33,19 @@ def _make_valid_interop_record() -> dict:
         "code_family": "qldpc_css",
         "representation": "pcm",
         "seed": 12345,
-        "noise_model": "independent_depolarizing",
+        "noise_model": "bsc_bitflip",
         "trials": 200,
         "results": {
             "logical_error_rate": 0.05,
+            "mean_iters": 3.5,
         },
         "determinism": {
             "canonical_json": {
                 "sort_keys": True,
                 "separators": [",", ":"],
             },
-            "stable_sweep_hash": "abc123",
-            "artifact_hash": "def456",
+            "stable_sweep_hash": "a" * 64,
+            "artifact_hash": "b" * 64,
         },
     }
 
@@ -211,3 +212,74 @@ class TestAllValidCodeFamilies:
         rec = _make_valid_interop_record()
         rec["representation"] = rep
         validate_interop_record(rec)
+
+
+class TestDeterminismFieldFormats:
+    """Test that determinism field format validation is enforced."""
+
+    def test_invalid_stable_sweep_hash_length(self):
+        """stable_sweep_hash must be exactly 64 hex chars."""
+        rec = _make_valid_interop_record()
+        rec["determinism"]["stable_sweep_hash"] = "abc123"
+        with pytest.raises(ValueError, match="stable_sweep_hash"):
+            validate_interop_record(rec)
+
+    def test_invalid_artifact_hash_length(self):
+        """artifact_hash must be exactly 64 hex chars."""
+        rec = _make_valid_interop_record()
+        rec["determinism"]["artifact_hash"] = "short"
+        with pytest.raises(ValueError, match="artifact_hash"):
+            validate_interop_record(rec)
+
+    def test_invalid_stable_sweep_hash_not_hex(self):
+        """stable_sweep_hash must be hex characters only."""
+        rec = _make_valid_interop_record()
+        rec["determinism"]["stable_sweep_hash"] = "g" * 64
+        with pytest.raises(ValueError, match="stable_sweep_hash"):
+            validate_interop_record(rec)
+
+    def test_invalid_artifact_hash_not_string(self):
+        """artifact_hash must be a string, not None or int."""
+        rec = _make_valid_interop_record()
+        rec["determinism"]["artifact_hash"] = None
+        with pytest.raises(ValueError, match="artifact_hash"):
+            validate_interop_record(rec)
+
+    def test_canonical_json_sort_keys_false_fails(self):
+        """canonical_json.sort_keys must be true."""
+        rec = _make_valid_interop_record()
+        rec["determinism"]["canonical_json"]["sort_keys"] = False
+        with pytest.raises(ValueError, match="sort_keys must be true"):
+            validate_interop_record(rec)
+
+    def test_canonical_json_wrong_separators_fails(self):
+        """canonical_json.separators must be [',', ':']."""
+        rec = _make_valid_interop_record()
+        rec["determinism"]["canonical_json"]["separators"] = [", ", ": "]
+        with pytest.raises(ValueError, match="separators"):
+            validate_interop_record(rec)
+
+
+class TestMeanItersRequirement:
+    """Test that mean_iters is required for direct_comparison only."""
+
+    def test_direct_comparison_without_mean_iters_fails(self):
+        """direct_comparison records must have mean_iters."""
+        rec = _make_valid_interop_record()
+        assert rec["benchmark_kind"] == "direct_comparison"
+        del rec["results"]["mean_iters"]
+        with pytest.raises(ValueError, match="mean_iters"):
+            validate_interop_record(rec)
+
+    def test_reference_baseline_without_mean_iters_passes(self):
+        """reference_baseline records do not require mean_iters."""
+        rec = _make_valid_interop_record()
+        rec["benchmark_kind"] = "reference_baseline"
+        del rec["results"]["mean_iters"]
+        validate_interop_record(rec)  # Must not raise
+
+    def test_direct_comparison_with_mean_iters_passes(self):
+        """direct_comparison with mean_iters passes."""
+        rec = _make_valid_interop_record()
+        assert "mean_iters" in rec["results"]
+        validate_interop_record(rec)  # Must not raise

@@ -115,6 +115,25 @@ _REQUIRED_TOOL_KEYS = {"name", "version", "category"}
 _REQUIRED_DETERMINISM_KEYS = {"canonical_json", "stable_sweep_hash", "artifact_hash"}
 
 
+import re
+
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_hex64(value: Any, field_name: str) -> None:
+    """Validate that *value* is a 64-character lowercase hex string."""
+    if not isinstance(value, str):
+        raise ValueError(
+            f"{field_name} must be a 64-char hex string, "
+            f"got {type(value).__name__}"
+        )
+    if not _HEX64_RE.match(value):
+        raise ValueError(
+            f"{field_name} must be a 64-char lowercase hex string, "
+            f"got {value!r}"
+        )
+
+
 def validate_interop_record(record: Any) -> None:
     """Validate that *record* conforms to the v3.1.2 interop schema.
 
@@ -188,6 +207,21 @@ def validate_interop_record(record: Any) -> None:
             f"determinism missing required keys: {sorted(missing_det)}"
         )
 
+    # Validate determinism field formats.
+    cj = det.get("canonical_json")
+    if isinstance(cj, dict):
+        if cj.get("sort_keys") is not True:
+            raise ValueError(
+                "determinism.canonical_json.sort_keys must be true"
+            )
+        if cj.get("separators") != [",", ":"]:
+            raise ValueError(
+                'determinism.canonical_json.separators must be [",", ":"]'
+            )
+
+    _validate_hex64(det.get("stable_sweep_hash"), "stable_sweep_hash")
+    _validate_hex64(det.get("artifact_hash"), "artifact_hash")
+
     # Validate optional channel_model field (if present, must be string).
     if "channel_model" in record:
         if not isinstance(record["channel_model"], str):
@@ -200,3 +234,9 @@ def validate_interop_record(record: Any) -> None:
     results = record["results"]
     if "logical_error_rate" not in results:
         raise ValueError("results must contain 'logical_error_rate'")
+
+    # direct_comparison records require mean_iters in results.
+    if bk == "direct_comparison" and "mean_iters" not in results:
+        raise ValueError(
+            "results must contain 'mean_iters' for direct_comparison records"
+        )
