@@ -1,9 +1,65 @@
-Changelog
+# Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
 
-The project follows semantic versioning.
-Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
+This project follows semantic versioning (SemVer).
+
+## [3.0.1] - 2026-02-25
+
+### Added
+
+**Dimension-Aware Scaffolding (QuditSpec)**
+- Optional `qudit` configuration block
+- Validated, JSON-safe `QuditSpec` (dimension, encoding, metadata)
+- Defaults to qubit mode (dimension=2)
+- No changes to decoder or simulation behavior
+
+**Deterministic Analytical Gate-Cost Modeling**
+- Optional `resource_model` configuration block
+- Deterministic analytical resource estimation utilities
+- Canonicalized `assumptions` field included for traceability
+- No impact on FER simulation or decoding logic
+
+**Shared Canonicalization Utility**
+- Introduced `src/utils/canonicalize.py`
+- Eliminated duplicated canonicalization logic
+- Single deterministic JSON-safe normalization path
+- Prevents drift between schema and dimension layers
+
+**Regression & Compatibility Hardening**
+- Schema version roundtrip regression tests
+- Determinism smoke test validated
+- Backward compatibility audit suite
+- Import hygiene verification tests
+- Nonbinary scaffolding interfaces (no decoding implementation)
+
+---
+
+### Changed
+
+- Result `schema_version` now strictly preserved from input config
+- Centralized canonicalization across schema and qudit layers
+- Gate-cost output now includes canonicalized `assumptions` (additive field only)
+
+---
+
+### Guarantees
+
+- No changes to core decoding logic
+- No changes to scheduling or ensemble behavior
+- No public API changes
+- No new required configuration fields
+- No new external dependencies
+- Determinism preserved (`runtime_mode="off"` byte-identical verified)
+- v3.0.0 configurations load and run unchanged
+
+---
+
+### Test Status
+
+526 passed  
+7 skipped  
+0 failed
 
 [3.0.0] - 2026-02-25
 
