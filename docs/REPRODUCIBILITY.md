@@ -55,7 +55,9 @@ payload = json.dumps(config_dict, sort_keys=True, separators=(",", ":"))
 stable_sweep_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 ```
 
-The full artifact hash covers the entire serialized output:
+The full artifact hash covers the entire serialized record, **including** the
+`determinism` sub-dict itself (with `artifact_hash` set to `null` at hash
+computation time):
 
 ```python
 artifact_bytes = json.dumps(result, sort_keys=True, separators=(",", ":")).encode("utf-8")

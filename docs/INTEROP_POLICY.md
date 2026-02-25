@@ -61,6 +61,8 @@ def run_stim_baseline(config):
 3. When `runtime_mode="off"`, timing fields are omitted and all output
    artifacts must be byte-identical across repeated runs.
 4. JSON serialization uses `sort_keys=True, separators=(",", ":")`.
+5. Stable sweep hash MUST be derived solely from configuration parameters,
+   never runtime or environment fields.
 
 ## Comparability Taxonomy (REQUIRED Labels)
 

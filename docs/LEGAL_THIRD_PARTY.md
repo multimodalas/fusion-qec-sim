@@ -38,6 +38,9 @@ in this project. They are listed solely for documentation completeness.
 | Google Matching     | Google      | Internal; not publicly available        |
 | IBM Qiskit-QEC      | IBM         | Not used as a dependency                |
 
+**Note:** Version tested reflects minimum validated version; newer compatible
+versions may be used.
+
 ## Version Audit Procedure
 
 1. Before each release, verify that upstream licenses for Category A tools
