@@ -269,7 +269,7 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
         })
 
     result_obj: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": config.schema_version,
         "created_utc": created_utc,
         "qec_version": str(qec_version),
         "environment": env,
