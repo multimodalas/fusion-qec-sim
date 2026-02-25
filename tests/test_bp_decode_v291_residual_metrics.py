@@ -144,3 +144,105 @@ class TestResidualMetricsInvariants:
         _ = bp_decode(code.H_X, llr, **kwargs)
         for orig, snap in zip(m1["residual_linf"], snapshot):
             np.testing.assert_array_equal(orig, snap)
+
+    def test_shape_invariants(self, noisy_setup):
+        """Per-iteration linf/l2 have shape (n_checks,); energy is scalar."""
+        code, e, s, llr = noisy_setup
+        _, iters, metrics = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            syndrome_vec=s, schedule="residual",
+            residual_metrics=True,
+        )
+        n_checks = code.H_X.shape[0]
+        for linf, l2 in zip(metrics["residual_linf"], metrics["residual_l2"]):
+            assert linf.shape == (n_checks,)
+            assert l2.shape == (n_checks,)
+        for energy in metrics["residual_energy"]:
+            assert np.isscalar(energy)
+
+
+class TestEnsembleResidualMetrics:
+    """Ensemble wrapper (ensemble_k > 1) does not forward residual_metrics
+    to inner calls.  Metrics dict is present but all lists are empty."""
+
+    def test_ensemble_no_history_returns_three_tuple(self, noisy_setup):
+        """ensemble_k=3, llr_history=0, residual_metrics=True → 3-tuple."""
+        code, e, s, llr = noisy_setup
+        result = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            syndrome_vec=s, schedule="residual",
+            ensemble_k=3, residual_metrics=True,
+        )
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        hard, iters, metrics = result
+        assert "residual_linf" in metrics
+        assert "residual_l2" in metrics
+        assert "residual_energy" in metrics
+        assert metrics["residual_linf"] == []
+        assert metrics["residual_l2"] == []
+        assert metrics["residual_energy"] == []
+
+    def test_ensemble_with_history_returns_four_tuple(self, noisy_setup):
+        """ensemble_k=3, llr_history>0, residual_metrics=True → 4-tuple."""
+        code, e, s, llr = noisy_setup
+        result = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            syndrome_vec=s, schedule="residual",
+            ensemble_k=3, llr_history=3, residual_metrics=True,
+        )
+        assert isinstance(result, tuple)
+        assert len(result) == 4
+        hard, iters, history, metrics = result
+        assert "residual_linf" in metrics
+        assert "residual_l2" in metrics
+        assert "residual_energy" in metrics
+        assert metrics["residual_linf"] == []
+        assert metrics["residual_l2"] == []
+        assert metrics["residual_energy"] == []
+
+
+class TestAdaptiveResidualMetrics:
+    """Adaptive schedule wrapper delegates to inner bp_decode calls and
+    does not forward residual_metrics.  Metrics dict is present but empty.
+    Direct residual/hybrid_residual schedules (non-adaptive, ensemble_k=1)
+    DO collect metrics — those are covered by the other test classes."""
+
+    def test_adaptive_schedule_metrics_empty(self, noisy_setup):
+        """schedule='adaptive', residual_metrics=True → empty metric lists."""
+        code, e, s, llr = noisy_setup
+        result = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            syndrome_vec=s, schedule="adaptive",
+            adaptive_k1=2, adaptive_rule="one_way",
+            residual_metrics=True,
+        )
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        _, iters, metrics = result
+        assert "residual_linf" in metrics
+        assert "residual_l2" in metrics
+        assert "residual_energy" in metrics
+        assert metrics["residual_linf"] == []
+        assert metrics["residual_l2"] == []
+        assert metrics["residual_energy"] == []
+
+    def test_direct_residual_collects_metrics(self, noisy_setup):
+        """schedule='residual' (direct, no adaptive wrapper) → len == iters."""
+        code, e, s, llr = noisy_setup
+        _, iters, metrics = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            syndrome_vec=s, schedule="residual",
+            residual_metrics=True,
+        )
+        assert len(metrics["residual_linf"]) == iters
+
+    def test_direct_hybrid_residual_collects_metrics(self, noisy_setup):
+        """schedule='hybrid_residual' (direct, no adaptive wrapper) → len == iters."""
+        code, e, s, llr = noisy_setup
+        _, iters, metrics = bp_decode(
+            code.H_X, llr, max_iters=10, mode="min_sum",
+            syndrome_vec=s, schedule="hybrid_residual",
+            residual_metrics=True,
+        )
+        assert len(metrics["residual_linf"]) == iters

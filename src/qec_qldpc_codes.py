@@ -26,8 +26,17 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
-from typing import Tuple, Dict, List, Optional, Union
+from typing import Any, Tuple, Dict, List, Optional, Union
 from dataclasses import dataclass, field as dc_field
+
+# Type aliases for bp_decode return variants (v2.9.1)
+ResidualMetrics = Dict[str, List[Any]]
+BpDecodeReturnType = Union[
+    Tuple[np.ndarray, int],
+    Tuple[np.ndarray, int, np.ndarray],
+    Tuple[np.ndarray, int, ResidualMetrics],
+    Tuple[np.ndarray, int, np.ndarray, ResidualMetrics],
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -696,7 +705,7 @@ def bp_decode(
     # ── v2.9.1 opt-in residual instrumentation ──
     residual_metrics: bool = False,
     **kwargs,
-) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
+) -> BpDecodeReturnType:
     """
     Standalone belief-propagation decoder for a binary parity-check matrix.
 
@@ -799,14 +808,39 @@ def bp_decode(
             compatibility.
 
     Returns:
-        When ``llr_history == 0``:
-            ``(correction, iterations)`` — hard-decision binary vector
-            (length n, dtype uint8) and iteration count.
+        When ``residual_metrics=False`` (default):
 
-        When ``llr_history > 0``:
-            ``(correction, iterations, history)`` — same as above plus
-            a float64 array of shape ``(k, n)`` containing the last *k*
-            per-iteration L_total snapshots.
+            When ``llr_history == 0``:
+                ``(correction, iterations)`` — hard-decision binary vector
+                (length n, dtype uint8) and iteration count.
+
+            When ``llr_history > 0``:
+                ``(correction, iterations, history)`` — same as above plus
+                a float64 array of shape ``(k, n)`` containing the last *k*
+                per-iteration L_total snapshots.
+
+        When ``residual_metrics=True``:
+
+            When ``llr_history == 0``:
+                ``(correction, iterations, metrics)`` — 3-tuple with a
+                metrics dict as the last element.
+
+            When ``llr_history > 0``:
+                ``(correction, iterations, history, metrics)`` — 4-tuple
+                with the LLR history array followed by the metrics dict.
+
+            The *metrics* dict has keys:
+                ``"residual_linf"``
+                    List of per-iteration L-inf residual arrays, each of
+                    shape ``(n_checks,)``.
+                ``"residual_l2"``
+                    List of per-iteration L2 residual arrays, each of
+                    shape ``(n_checks,)``.
+                ``"residual_energy"``
+                    List of per-iteration scalar energy values.
+            All three lists have length equal to the number of iterations
+            executed.  For schedules that do not compute residuals
+            (e.g. ``"flooding"``), the lists are empty.
     """
     # ── backward compatibility: accept old ``max_iter`` keyword ──
     if "max_iter" in kwargs:
