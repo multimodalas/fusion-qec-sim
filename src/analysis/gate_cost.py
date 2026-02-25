@@ -27,6 +27,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from ..utils.canonicalize import canonicalize
+
 
 # ── Supported model identifiers ──────────────────────────────────────
 
@@ -124,7 +126,9 @@ def estimate_gate_costs(
             f"Unknown model {model!r}. Available: {sorted(_MODEL_DISPATCH)}"
         )
     assumptions = assumptions if assumptions is not None else {}
-    return _MODEL_DISPATCH[model](dimension, assumptions)
+    result = _MODEL_DISPATCH[model](dimension, assumptions)
+    result["assumptions"] = canonicalize(assumptions)
+    return result
 
 
 def compare_costs(

@@ -75,6 +75,23 @@ class TestEstimateGateCosts:
         # Assumptions don't change the placeholder result but shouldn't error.
         assert r["model"] == "qubit_decomp_v1"
 
+    def test_assumptions_reflected_in_output(self):
+        assumptions = {"z_param": 99, "a_param": "hello"}
+        r = estimate_gate_costs(
+            3, "qubit_decomp_v1",
+            assumptions=assumptions,
+        )
+        # Assumptions must appear canonicalized (sorted keys).
+        assert r["assumptions"] == {"a_param": "hello", "z_param": 99}
+
+    def test_assumptions_empty_when_none(self):
+        r = estimate_gate_costs(2, "qubit_decomp_v1")
+        assert r["assumptions"] == {}
+
+    def test_assumptions_empty_when_explicit_empty(self):
+        r = estimate_gate_costs(2, "native_placeholder_v1", assumptions={})
+        assert r["assumptions"] == {}
+
     def test_unknown_model_raises(self):
         with pytest.raises(ValueError, match="Unknown model"):
             estimate_gate_costs(2, "nonexistent_model")

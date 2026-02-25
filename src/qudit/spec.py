@@ -16,42 +16,11 @@ Invariants
 
 from __future__ import annotations
 
-import copy
 import json
 from dataclasses import dataclass, field
 from typing import Any
 
-
-def _canonicalize_meta(obj: Any) -> Any:
-    """Deep-copy *obj* converting to JSON-safe plain-Python types.
-
-    Mirrors the canonicalize logic in ``src.bench.schema`` but is
-    self-contained so that this module has no dependency on
-    ``src.bench``.
-    """
-    try:
-        import numpy as np
-        _has_numpy = True
-    except ImportError:  # pragma: no cover
-        _has_numpy = False
-
-    def _convert(v: Any) -> Any:
-        if _has_numpy:
-            if isinstance(v, np.ndarray):
-                return [_convert(x) for x in v.tolist()]
-            if isinstance(v, (np.bool_,)):
-                return bool(v)
-            if isinstance(v, (np.integer,)):
-                return int(v)
-            if isinstance(v, (np.floating,)):
-                return float(v)
-        if isinstance(v, dict):
-            return {str(k): _convert(val) for k, val in sorted(v.items())}
-        if isinstance(v, (list, tuple)):
-            return [_convert(x) for x in v]
-        return v
-
-    return _convert(copy.deepcopy(obj))
+from ..utils.canonicalize import canonicalize as _canonicalize_meta
 
 
 def _is_json_serializable(obj: Any) -> bool:
