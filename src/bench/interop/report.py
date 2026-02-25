@@ -16,6 +16,16 @@ from typing import Any
 from .serialize import canonical_json
 
 
+def _record_sort_key(rec: dict[str, Any]) -> tuple:
+    """Deterministic sort key for interop records."""
+    cfg = rec.get("config", {})
+    return (
+        rec.get("tool", {}).get("name", ""),
+        cfg.get("distance", 0),
+        cfg.get("p", 0.0),
+    )
+
+
 def generate_report(suite_result: dict[str, Any]) -> str:
     """Generate a Markdown report from a baseline suite result.
 
@@ -59,7 +69,10 @@ def generate_report(suite_result: dict[str, Any]) -> str:
     lines.append("family and representation. Results are directly comparable.")
     lines.append("")
 
-    active_direct = [r for r in direct if r.get("status") != "skipped"]
+    active_direct = sorted(
+        [r for r in direct if r.get("status") != "skipped"],
+        key=_record_sort_key,
+    )
     if active_direct:
         lines.append(
             "| Tool | Code Family | Distance | p | "
@@ -97,7 +110,10 @@ def generate_report(suite_result: dict[str, Any]) -> str:
     lines.append("to QEC-native results.")
     lines.append("")
 
-    active_ref = [r for r in ref if r.get("status") != "skipped"]
+    active_ref = sorted(
+        [r for r in ref if r.get("status") != "skipped"],
+        key=_record_sort_key,
+    )
     skipped_ref = [r for r in ref if r.get("status") == "skipped"]
 
     if active_ref:

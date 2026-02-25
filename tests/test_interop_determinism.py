@@ -199,3 +199,30 @@ class TestGoldenVector:
         rec = records[0]
         # At d=3, p=0.001, trials=50: expect low error rate
         assert rec["results"]["logical_error_rate"] == 0.0
+
+
+class TestReportDeterminism:
+    """Test that report output is deterministic."""
+
+    def test_report_double_run_identical(self):
+        """Same suite result must produce identical report string."""
+        from src.bench.interop.baselines import run_baseline_suite
+        from src.bench.interop.report import generate_report
+
+        kwargs = dict(
+            native_distances=[3],
+            native_p_values=[0.001],
+            native_trials=50,
+            native_max_iters=10,
+            seed=42,
+            runtime_mode="off",
+            deterministic_metadata=True,
+        )
+
+        suite1 = run_baseline_suite(**kwargs)
+        report1 = generate_report(suite1)
+
+        suite2 = run_baseline_suite(**kwargs)
+        report2 = generate_report(suite2)
+
+        assert report1 == report2, "Report output is not deterministic!"
