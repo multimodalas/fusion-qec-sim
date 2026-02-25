@@ -31,6 +31,19 @@ class DecoderSpec:
 
 
 @dataclass
+class ResourceModelConfig:
+    """Analytical gate-cost estimation sub-configuration (v3.0.1).
+
+    Opt-in only.  When ``enabled`` is False (default) the resource
+    model is a no-op and does not affect benchmark results.
+    """
+    enabled: bool = False
+    model: str = "qubit_decomp_v1"
+    native_model: str = "native_placeholder_v1"
+    assumptions: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class BenchmarkConfig:
     """Top-level benchmark configuration.
 
@@ -55,6 +68,9 @@ class BenchmarkConfig:
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     collect_iter_hist: bool = False
     deterministic_metadata: bool = False
+    # v3.0.1 optional fields — absent by default for backward compat.
+    qudit: dict[str, Any] | None = None
+    resource_model: ResourceModelConfig | None = None
 
     def __post_init__(self) -> None:
         self.distances = sorted(self.distances)
@@ -70,10 +86,24 @@ class BenchmarkConfig:
         # Ensure runtime is RuntimeConfig.
         if isinstance(self.runtime, dict):
             self.runtime = RuntimeConfig(**self.runtime)
+        # Ensure qudit is a plain dict (from JSON) or None.
+        if isinstance(self.qudit, dict):
+            # Validate via QuditSpec (lazy import to avoid circular dep).
+            from ..qudit.spec import QuditSpec
+            QuditSpec.from_dict(self.qudit)  # validates; discard result
+        # Ensure resource_model is ResourceModelConfig or None.
+        if isinstance(self.resource_model, dict):
+            self.resource_model = ResourceModelConfig(**self.resource_model)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dict suitable for JSON serialization."""
         d = asdict(self)
+        # Omit v3.0.1 optional fields when absent so that v3.0.0
+        # configs round-trip identically.
+        if d.get("qudit") is None:
+            d.pop("qudit", None)
+        if d.get("resource_model") is None:
+            d.pop("resource_model", None)
         return d
 
     def to_json(self) -> str:
@@ -93,6 +123,10 @@ class BenchmarkConfig:
             rt = d["runtime"]
             if isinstance(rt, dict):
                 d["runtime"] = RuntimeConfig(**rt)
+        if "resource_model" in d:
+            rm = d["resource_model"]
+            if isinstance(rm, dict):
+                d["resource_model"] = ResourceModelConfig(**rm)
         return cls(**d)
 
     @classmethod

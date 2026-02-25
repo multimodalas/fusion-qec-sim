@@ -7,11 +7,15 @@ serialization with stable key ordering and compact separators.
 
 from __future__ import annotations
 
-import copy
 import json
 from typing import Any
 
-SCHEMA_VERSION = "3.0.0"
+from ..utils.canonicalize import canonicalize  # noqa: F401 — re-exported
+
+SCHEMA_VERSION = "3.0.1"
+
+# Schema versions accepted by the validator.
+_SUPPORTED_SCHEMA_VERSIONS = {"3.0.0", "3.0.1"}
 
 # Required top-level keys and their expected Python types.
 _REQUIRED_TOP_KEYS: dict[str, type | tuple[type, ...]] = {
@@ -34,45 +38,6 @@ _REQUIRED_RECORD_KEYS: set[str] = {
 }
 
 
-def canonicalize(obj: Any) -> Any:
-    """Deep-copy *obj* converting numpy types to plain Python.
-
-    * ``numpy.integer``  → ``int``
-    * ``numpy.floating`` → ``float``
-    * ``numpy.bool_``    → ``bool``
-    * ``numpy.ndarray``  → ``list`` (recursively)
-    * ``tuple``          → ``list``
-    * ``dict``           → ``dict`` with sorted keys (recursive)
-
-    The result is safe for :func:`json.dumps`.
-    """
-    # Import numpy lazily so schema.py can be imported even without numpy
-    # (although the project always has it).
-    try:
-        import numpy as np
-        _has_numpy = True
-    except ImportError:  # pragma: no cover
-        _has_numpy = False
-
-    def _convert(v: Any) -> Any:
-        if _has_numpy:
-            if isinstance(v, np.ndarray):
-                return [_convert(x) for x in v.tolist()]
-            if isinstance(v, (np.bool_,)):
-                return bool(v)
-            if isinstance(v, (np.integer,)):
-                return int(v)
-            if isinstance(v, (np.floating,)):
-                return float(v)
-        if isinstance(v, dict):
-            return {str(k): _convert(val) for k, val in sorted(v.items())}
-        if isinstance(v, (list, tuple)):
-            return [_convert(x) for x in v]
-        return v
-
-    return _convert(copy.deepcopy(obj))
-
-
 def validate_result(obj: Any) -> None:
     """Validate that *obj* conforms to the v3.0.0 benchmark result schema.
 
@@ -90,10 +55,11 @@ def validate_result(obj: Any) -> None:
                 f"got {type(obj[key]).__name__}"
             )
 
-    if obj.get("schema_version") != SCHEMA_VERSION:
+    sv = obj.get("schema_version")
+    if sv not in _SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(
-            f"Unsupported schema_version: {obj.get('schema_version')!r} "
-            f"(expected {SCHEMA_VERSION!r})"
+            f"Unsupported schema_version: {sv!r} "
+            f"(expected one of {sorted(_SUPPORTED_SCHEMA_VERSIONS)})"
         )
 
     for i, rec in enumerate(obj["results"]):

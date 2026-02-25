@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 
 from .config import BenchmarkConfig, DecoderSpec
-from .schema import SCHEMA_VERSION, canonicalize, validate_result
+from .schema import SCHEMA_VERSION, _SUPPORTED_SCHEMA_VERSIONS, canonicalize, validate_result
 from .compare import (
     compute_threshold_table,
     compute_runtime_scaling,
@@ -106,10 +106,10 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
     -------
     dict conforming to schema version 3.0.0.
     """
-    if config.schema_version != SCHEMA_VERSION:
+    if config.schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(
-            f"Config schema_version {config.schema_version!r} does not match "
-            f"expected {SCHEMA_VERSION!r}"
+            f"Config schema_version {config.schema_version!r} not in "
+            f"supported set {sorted(_SUPPORTED_SCHEMA_VERSIONS)}"
         )
 
     from ..qec_qldpc_codes import channel_llr, syndrome
@@ -244,8 +244,32 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
             .isoformat()
         )
 
+    # ── Resource estimates (opt-in, v3.0.1) ──
+    if (config.resource_model is not None
+            and config.resource_model.enabled):
+        from ..analysis.gate_cost import estimate_gate_costs, compare_costs
+        dim = 2  # default
+        if config.qudit is not None:
+            dim = config.qudit.get("dimension", 2)
+        qubit_est = estimate_gate_costs(
+            dimension=dim,
+            model=config.resource_model.model,
+            assumptions=config.resource_model.assumptions,
+        )
+        native_est = estimate_gate_costs(
+            dimension=dim,
+            model=config.resource_model.native_model,
+            assumptions=config.resource_model.assumptions,
+        )
+        comparison = compare_costs(qubit_est, native_est)
+        summaries["resource_estimates"] = canonicalize({
+            "qubit_decomposition": qubit_est,
+            "native_qudit": native_est,
+            "comparison": comparison,
+        })
+
     result_obj: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": config.schema_version,
         "created_utc": created_utc,
         "qec_version": str(qec_version),
         "environment": env,

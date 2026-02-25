@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
+[3.0.0] - 2026-02-25
+
+Added
+Deterministic benchmarking framework under src/bench/:
+- Config-driven sweep over decoders, distances, and physical error rates
+- Canonical JSON result schema (3.0.0)
+- Schema validation prior to return
+- Cryptographic sub-seed derivation (order-independent)
+- Optional deterministic_metadata mode for byte-identical artifacts
+- Runtime measurement module (perf_counter_ns, 95% CI, optional tracemalloc)
+- Threshold estimation via FER crossing interpolation
+- Log–log runtime scaling analysis
+- DecoderAdapter abstraction with BP adapter implementation
+
+Changed
+Sub-seed derivation now functional (SHA-256 over logical coordinates)
+Microsecond-free timestamps
+Schema version unified via single SCHEMA_VERSION constant
+Early config/schema mismatch validation guard
+Corrected runtime slope estimation to filter zero-latency points consistently
+
+Guarantees
+Core decoding logic unchanged
+No scheduling changes
+No adaptive logic changes
+No ensemble behavior changes
+No API breaking changes
+No new external dependencies
+Determinism preserved
+Order-independent seed derivation
+Backward compatibility with v2.9.1 decoding behavior
+
+Test Status
+438 passed
+7 skipped
+0 failed
+
 ## [2.9.1] - 2026-02-25
 
 ### Added

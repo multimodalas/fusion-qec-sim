@@ -1,12 +1,185 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Latest Release](https://img.shields.io/github/v/release/QSOLKCB/QEC?color=blue&cacheSeconds=300)](https://github.com/QSOLKCB/QEC/releases/latest)
+[![Release v3.0.0](https://img.shields.io/badge/release-v3.0.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.0.0)
 
 License: CC-BY-4.0
 
-Deterministic quantum error correction framework for QLDPC CSS codes with algebraic construction guarantees, numerically stable belief propagation, statistically rigorous FER simulation, and modular decoder utilities.
+Deterministic QLDPC CSS quantum error correction framework with invariant-safe algebraic construction, multi-mode belief propagation, ensemble and dual-parameter min-sum decoding, statistically rigorous FER simulation, and a schema-validated deterministic benchmarking framework.
 
 Release Lineage
+
+v3.0.0 — Deterministic Benchmark Standardization Framework
+
+Highlights
+
+Deterministic Benchmark Engine
+
+Config-driven sweep over:
+
+Decoders
+
+Code distances
+
+Physical error probabilities
+
+Strict sweep ordering
+
+Canonical JSON output (stable key ordering)
+
+Schema-validated result objects
+
+No implicit RNG state dependence
+
+Cryptographic Sub-Seed Derivation
+
+Functional sub-seed generation via SHA-256 over:
+
+base_seed
+
+decoder identity
+
+distance
+
+physical error rate
+
+Order-independent seed derivation
+
+No sweep-order coupling
+
+32-bit seed normalization
+
+No reliance on Python hash()
+
+Deterministic repeatability guaranteed
+
+Versioned Result Schema (3.0.0)
+
+Single canonical SCHEMA_VERSION constant
+
+Config schema version bound to schema constant
+
+Early mismatch validation guard in runner
+
+Numpy-safe canonicalization
+
+Stable JSON serialization:
+
+sort_keys=True
+
+compact separators
+
+deterministic formatting
+
+Optional:
+
+deterministic_metadata=True
+
+Fixed epoch timestamp
+
+Fully byte-identical artifacts
+
+Microsecond-free timestamps by default
+
+Structured Comparison & Analysis
+
+Threshold estimation via FER crossing interpolation
+
+Log–log runtime scaling slope computation
+
+Zero-latency filtering correction (aligned regression inputs)
+
+Iteration distribution histograms
+
+No pandas
+
+No matplotlib
+
+Pure numpy + stdlib
+
+Runtime Measurement Module
+
+perf_counter_ns-based latency tracking
+
+Average latency (µs)
+
+95% confidence interval
+
+Optional tracemalloc peak memory tracking
+
+Fully isolated from core decoder logic
+
+Decoder Adapter Abstraction
+
+Formal DecoderAdapter interface
+
+BP adapter wrapping existing bp_decode
+
+No import contamination of core modules
+
+Core decoding layer remains untouched
+
+Architectural Scope (Intentional)
+
+All benchmarking logic isolated under:
+
+src/bench/
+
+Zero modifications to:
+
+Code construction
+
+Belief propagation
+
+Scheduling
+
+Ensemble logic
+
+Adaptive logic
+
+RNG in core decoders
+
+No new external dependencies
+
+Backward compatibility preserved
+
+Determinism & Stability
+
+runtime_mode="off" → statistically deterministic outputs
+
+deterministic_metadata=True → fully byte-identical JSON
+
+Order-independent sub-seeds
+
+Schema drift eliminated
+
+Import hygiene verified
+
+No circular dependencies introduced
+
+No behavioral regression from v2.9.1
+
+Validation & Invariants
+
+Schema validation enforced before return
+
+Positive-latency filtering ensures correct slope estimation
+
+Config/schema mismatch fails early
+
+Canonicalized numpy structures
+
+No mutation after result serialization
+
+Deterministic repeatability verified
+
+Test Status
+
+438 passed
+7 skipped
+0 failed
+
+CI green
+Regression verified
 
 ### v2.9.1 — Deterministic Residual Instrumentation Hardening
 
