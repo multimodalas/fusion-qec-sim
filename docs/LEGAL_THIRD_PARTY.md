@@ -10,10 +10,10 @@ referenced by the QEC benchmarking interop layer (`bench/interop/`).
 These tools are **optionally** used in `bench/interop/` for reference baseline
 generation. They are **never** imported by core QEC modules.
 
-| Tool       | Version Tested | SPDX License ID | Upstream URL                           | Usage                                      |
-|------------|---------------|-----------------|----------------------------------------|--------------------------------------------|
-| Stim       | ≥1.12         | Apache-2.0      | https://github.com/quantumlib/Stim     | Circuit/DEM generation for reference baselines |
-| PyMatching | ≥2.0          | Apache-2.0      | https://github.com/oscarhiggott/PyMatching | MWPM decoding for reference baselines      |
+| Tool       | Version Tested | SPDX License ID             | Upstream URL                           | Usage                                      |
+|------------|---------------|-----------------------------|----------------------------------------|--------------------------------------------|
+| Stim       | ≥1.12         | Apache-2.0                  | https://github.com/quantumlib/Stim     | Circuit/DEM generation for reference baselines |
+| PyMatching | ≥2.0          | Apache-2.0 (verified 2026-02-25) | https://github.com/oscarhiggott/PyMatching | MWPM decoding for reference baselines      |
 
 ### Category B — Clean-Room Implementations (Literature-Based)
 

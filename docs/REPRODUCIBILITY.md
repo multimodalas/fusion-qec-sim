@@ -2,10 +2,16 @@
 
 This document defines the reproducibility guarantees for QEC benchmark artifacts.
 
-## Byte-Identical Artifacts (runtime_mode="off")
+## Byte-Identical Artifacts
 
-When `runtime_mode="off"` (the default), benchmark output artifacts MUST be
-byte-identical across repeated runs given the same configuration. This means:
+Byte-identical artifacts require **both** of the following settings:
+
+- `runtime_mode="off"` — disables timing measurements (which vary per run)
+- `deterministic_metadata=True` — replaces machine-dependent environment
+  fields with fixed placeholders
+
+With both enabled, benchmark output artifacts MUST be byte-identical across
+repeated runs given the same configuration. This means:
 
 1. **No timestamps** in output: `created_utc` is set to a fixed epoch value
    (`"1970-01-01T00:00:00+00:00"`) when `deterministic_metadata=True`.
