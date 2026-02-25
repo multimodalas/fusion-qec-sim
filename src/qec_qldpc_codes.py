@@ -693,6 +693,8 @@ def bp_decode(
     adaptive_k1: Optional[int] = None,
     adaptive_rule: str = "one_way",
     adaptive_log: bool = False,
+    # ── v2.9.1 opt-in residual instrumentation ──
+    residual_metrics: bool = False,
     **kwargs,
 ) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
     """
@@ -933,6 +935,10 @@ def bp_decode(
             "lift_braided is reserved for a future release and not yet implemented"
         )
 
+    # ── v2.9.1: residual metric collection (opt-in) ──
+    if residual_metrics:
+        _res_metrics = {"residual_linf": [], "residual_l2": [], "residual_energy": []}
+
     # ── Deterministic ensemble wrapper (v2.8.0) ──
     # When ensemble_k > 1, run K independent BP passes with deterministic
     # LLR perturbations and return the best candidate.  Member 0 always
@@ -1023,7 +1029,11 @@ def bp_decode(
                 best_member = _k
 
         if llr_history > 0:
+            if residual_metrics:
+                return best_hard, best_iters, best_hist, _res_metrics
             return best_hard, best_iters, best_hist
+        if residual_metrics:
+            return best_hard, best_iters, _res_metrics
         return best_hard, best_iters
 
     # ── Deterministic adaptive schedule controller (v2.9.0) ──
@@ -1090,7 +1100,11 @@ def bp_decode(
             if adaptive_log:
                 print("[adaptive] returning phase1 (converged)")
             if llr_history > 0:
+                if residual_metrics:
+                    return hard_p1, iters_p1, hist_p1, _res_metrics
                 return hard_p1, iters_p1, hist_p1
+            if residual_metrics:
+                return hard_p1, iters_p1, _res_metrics
             return hard_p1, iters_p1
 
         # ── Phase 2: hybrid_residual for remaining iterations ──
@@ -1142,13 +1156,21 @@ def bp_decode(
             if adaptive_log:
                 print("[adaptive] returning phase2 (better)")
             if llr_history > 0:
+                if residual_metrics:
+                    return hard_p2, total_iters_p2, hist_p2, _res_metrics
                 return hard_p2, total_iters_p2, hist_p2
+            if residual_metrics:
+                return hard_p2, total_iters_p2, _res_metrics
             return hard_p2, total_iters_p2
         else:
             if adaptive_log:
                 print("[adaptive] returning phase1 (better or tie)")
             if llr_history > 0:
+                if residual_metrics:
+                    return hard_p1, total_iters_p1, hist_p1, _res_metrics
                 return hard_p1, total_iters_p1, hist_p1
+            if residual_metrics:
+                return hard_p1, total_iters_p1, _res_metrics
             return hard_p1, total_iters_p1
 
     m, n = H.shape
@@ -1288,7 +1310,11 @@ def bp_decode(
                     osd_cs_lam=osd_cs_lam,
                 )
                 if llr_history > 0:
+                    if residual_metrics:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
                     return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                if residual_metrics:
+                    return pp_result[0], pp_result[1], _res_metrics
                 return pp_result
 
         pp_result = _bp_postprocess(
@@ -1296,7 +1322,11 @@ def bp_decode(
             osd_cs_lam=osd_cs_lam,
         )
         if llr_history > 0:
+            if residual_metrics:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
             return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        if residual_metrics:
+            return pp_result[0], pp_result[1], _res_metrics
         return pp_result
 
     else:
@@ -1473,7 +1503,16 @@ def bp_decode(
 
             # ── Update residuals (residual / hybrid_residual schedule) ──
             if is_residual or is_hybrid:
-                residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
+                if residual_metrics:
+                    delta = c2v_msg - c2v_msg_before
+                    abs_delta = np.abs(delta)
+                    sq_delta = delta * delta
+                    residuals = np.max(abs_delta, axis=1)
+                    _res_metrics["residual_linf"].append(residuals.copy())
+                    _res_metrics["residual_l2"].append(np.sqrt(np.sum(sq_delta, axis=1)))
+                    _res_metrics["residual_energy"].append(float(np.sum(sq_delta)))
+                else:
+                    residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
                 if state_aware_residual:
                     residuals *= state_aware_residual_weights
 
@@ -1497,7 +1536,11 @@ def bp_decode(
                     osd_cs_lam=osd_cs_lam,
                 )
                 if llr_history > 0:
+                    if residual_metrics:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
                     return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                if residual_metrics:
+                    return pp_result[0], pp_result[1], _res_metrics
                 return pp_result
 
         pp_result = _bp_postprocess(
@@ -1505,7 +1548,11 @@ def bp_decode(
             osd_cs_lam=osd_cs_lam,
         )
         if llr_history > 0:
+            if residual_metrics:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
             return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        if residual_metrics:
+            return pp_result[0], pp_result[1], _res_metrics
         return pp_result
 
 
