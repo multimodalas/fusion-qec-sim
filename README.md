@@ -89,3 +89,4 @@ ORCID: https://orcid.org/0009-0002-4515-9237
 
 Small is beautiful.
 Determinism is holy.
+Stability is engineered.
