@@ -102,14 +102,11 @@ def run_baseline_suite(
         ref_records.extend(records)
 
     # Validate all records.
+    # NOTE: records are immutable after runners return them (artifact_hash
+    # is already computed).  Environment lives at the suite level only.
     all_records = direct_records + ref_records
     for rec in all_records:
         validate_interop_record(rec)
-
-    # Add environment to each non-skipped record.
-    for rec in all_records:
-        if rec.get("status") != "skipped":
-            rec["environment"] = env
 
     suite_config = {
         "native_distances": sorted(native_distances),
