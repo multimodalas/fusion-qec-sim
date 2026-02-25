@@ -119,16 +119,29 @@ class TestResidualMetricsDeterminism:
 class TestResidualMetricsInvariants:
 
     def test_metric_length_equals_iterations(self, noisy_setup):
-        """len(metric_list) must equal iterations executed."""
+        """len(metric_list) must equal iterations executed and shapes must match contract."""
         code, e, s, llr = noisy_setup
         _, iters, metrics = bp_decode(
             code.H_X, llr, max_iters=10, mode="min_sum",
             syndrome_vec=s, schedule="residual",
             residual_metrics=True,
         )
+        # Length invariants: one metric entry per iteration.
         assert len(metrics["residual_linf"]) == iters
         assert len(metrics["residual_l2"]) == iters
         assert len(metrics["residual_energy"]) == iters
+
+        # Shape invariants for per-iteration metrics.
+        n_checks = code.H_X.shape[0]
+
+        # Per-check residuals must be vectors of length n_checks.
+        for linf, l2 in zip(metrics["residual_linf"], metrics["residual_l2"]):
+            assert linf.shape == (n_checks,)
+            assert l2.shape == (n_checks,)
+
+        # Residual energy must be scalar per iteration.
+        for energy in metrics["residual_energy"]:
+            assert np.isscalar(energy)
 
     def test_no_mutation_after_return(self, noisy_setup):
         """Returned metrics must not be mutated by subsequent decodes."""
