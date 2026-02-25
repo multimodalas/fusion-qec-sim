@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.0.2] - 2026-02-25
+
+### Added
+
+**Fuzz-Style Determinism Tests for canonicalize()**
+- Seeded random nested structure generator (numpy.random.default_rng)
+- Idempotence test: canonicalize(canonicalize(x)) == canonicalize(x)
+- JSON roundtrip stability test: stable serialization across calls
+- No-input-mutation test: original objects unchanged after canonicalization
+- Repeatability test: identical outputs across repeated runs
+- 50 fuzz cases per test, max recursion depth 3
+
+### Guarantees
+- No production code changes
+- No behavior changes
+- No API changes
+- No dependency changes
+- No decoder or schema modifications
+- All existing tests remain green
+
+---
+
 ## [3.0.1] - 2026-02-25
 
 ### Added
