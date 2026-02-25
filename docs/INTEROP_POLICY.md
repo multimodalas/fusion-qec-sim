@@ -48,9 +48,22 @@ return a structured "tool unavailable" result rather than raising:
 ```python
 def run_stim_baseline(config):
     if not HAS_STIM:
-        return {"status": "skipped", "reason": "stim not installed"}
+        return {
+            "status": "skipped",
+            "reason": "stim not installed",
+            "tool": {
+                "name": "stim",
+                "version": None,
+                "category": "third_party",
+            },
+            "benchmark_kind": "reference_baseline",
+            "code_family": "repetition",
+        }
     # ... actual implementation ...
 ```
+
+Skipped records must include minimal structural metadata (tool name,
+`benchmark_kind`, and `code_family`) to satisfy interop schema validation.
 
 ## Determinism Contract for Interop
 
