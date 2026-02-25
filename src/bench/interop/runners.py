@@ -56,13 +56,13 @@ def run_qec_native(
 
     records: list[dict[str, Any]] = []
 
-    for distance in sorted(distances):
-        code = create_code(name="rate_0.50", lifting_size=distance, seed=seed)
+    for lift in sorted(distances):
+        code = create_code(name="rate_0.50", lifting_size=lift, seed=seed)
         H = code.H_X
         _, n = H.shape
 
         for p in sorted(p_values):
-            sub_seed = _derive_subseed(seed, f"qec_native_d{distance}_p{p}")
+            sub_seed = _derive_subseed(seed, f"qec_native_d{lift}_p{p}")
             rng = np.random.default_rng(sub_seed)
 
             frame_errors = 0
@@ -91,7 +91,7 @@ def run_qec_native(
             mean_iters = float(total_iters) / trials
 
             record_config = {
-                "distance": distance,
+                "distance": lift,
                 "max_iters": max_iters,
                 "p": p,
                 "seed": seed,
