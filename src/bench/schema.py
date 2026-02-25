@@ -188,6 +188,14 @@ def validate_interop_record(record: Any) -> None:
             f"determinism missing required keys: {sorted(missing_det)}"
         )
 
+    # Validate optional channel_model field (if present, must be string).
+    if "channel_model" in record:
+        if not isinstance(record["channel_model"], str):
+            raise ValueError(
+                f"channel_model must be str, "
+                f"got {type(record['channel_model']).__name__}"
+            )
+
     # Validate results has logical_error_rate.
     results = record["results"]
     if "logical_error_rate" not in results:

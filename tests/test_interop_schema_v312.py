@@ -164,6 +164,35 @@ class TestSubDictValidation:
             validate_interop_record(rec)
 
 
+class TestOptionalChannelModel:
+    """Test the optional channel_model field."""
+
+    def test_record_without_channel_model_passes(self):
+        """Interop record without channel_model is valid."""
+        rec = _make_valid_interop_record()
+        assert "channel_model" not in rec
+        validate_interop_record(rec)  # Must not raise
+
+    def test_record_with_channel_model_oracle_passes(self):
+        """Interop record with channel_model='oracle' is valid."""
+        rec = _make_valid_interop_record()
+        rec["channel_model"] = "oracle"
+        validate_interop_record(rec)  # Must not raise
+
+    def test_record_with_channel_model_string_passes(self):
+        """Any string channel_model is accepted."""
+        rec = _make_valid_interop_record()
+        rec["channel_model"] = "estimated"
+        validate_interop_record(rec)  # Must not raise
+
+    def test_record_with_channel_model_non_string_fails(self):
+        """Non-string channel_model must be rejected."""
+        rec = _make_valid_interop_record()
+        rec["channel_model"] = 42
+        with pytest.raises(ValueError, match="channel_model must be str"):
+            validate_interop_record(rec)
+
+
 class TestAllValidCodeFamilies:
     """Test that all valid code families are accepted."""
 
