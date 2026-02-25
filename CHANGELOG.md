@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
-## [2.9.1] - 2026-02-XX
+## [2.9.1] - 2026-02-25
 
 ### Added
 - Opt-in residual metric instrumentation:

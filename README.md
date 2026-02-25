@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Latest Release](https://img.shields.io/github/v/release/QSOLKCB/QEC?color=blue)](https://github.com/QSOLKCB/QEC/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/QSOLKCB/QEC?color=blue&cacheSeconds=300)](https://github.com/QSOLKCB/QEC/releases/latest)
 
 License: CC-BY-4.0
 
@@ -9,6 +9,97 @@ Deterministic quantum error correction framework for QLDPC CSS codes with algebr
 Release Lineage
 
 ### v2.9.1 — Deterministic Residual Instrumentation Hardening
+
+Highlights
+
+Opt-In Residual Metric Instrumentation
+
+residual_metrics=True
+
+Per-iteration residual tracking for:
+
+residual_linf — per-check L∞ norm
+
+residual_l2 — per-check L2 norm
+
+residual_energy — scalar iteration energy
+
+Single delta computation per iteration
+
+No redundant passes or recomputation
+
+Return Contract Finalization
+
+Explicit typing of all valid return variants:
+
+(hard, iters)
+
+(hard, iters, history)
+
+(hard, iters, metrics)
+
+(hard, iters, history, metrics)
+
+ResidualMetrics type alias introduced
+
+Docstring contract updated and clarified
+
+No breaking API changes
+
+Option A Semantics (Intentional Scope)
+
+Residual metrics collected only in direct:
+
+schedule="residual"
+
+schedule="hybrid_residual"
+
+Ensemble and adaptive wrappers:
+
+Return a metrics dict
+
+Metric lists intentionally empty
+
+No forwarding of instrumentation through wrappers
+
+No behavioral drift from v2.9.0
+
+Determinism & Stability
+
+Default (residual_metrics=False) bit-identical to v2.9.0
+
+No scheduling logic changes
+
+No adaptive logic changes
+
+No ensemble selection changes
+
+No control-flow refactors
+
+No RNG
+
+No new dependencies
+
+Validation & Invariants
+
+Metric length == executed iterations (direct residual modes)
+
+Per-check vectors validated for correct shape
+
+Scalar energy invariant enforced
+
+No mutation after return
+
+Deterministic repeatability verified
+
+Test Status
+
+378 passed
+7 skipped
+0 failed
+
+CI green
+Regression verified
 
 ### v2.9.0 — Deterministic Adaptive Scheduling
 
