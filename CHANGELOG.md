@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
+## [2.9.1] - 2026-02-XX
+
+### Added
+- Opt-in residual metric instrumentation:
+  - residual_linf (per-check L∞ norm)
+  - residual_l2 (per-check L2 norm)
+  - residual_energy (per-iteration scalar)
+
+### Guarantees
+- Default decode behavior bit-identical to v2.9.0
+- No scheduling logic changes
+- No adaptive changes
+- No API breaking changes
+- Determinism preserved
+
+## [2.9.0] - 2026-02-24
+
+### Added
+- Deterministic adaptive schedule controller (`schedule="adaptive"`):
+  - Phase 1: `flooding` for `k1` iterations
+  - Phase 2: `hybrid_residual` for remaining iterations
+  - Default `k1 = max(1, max_iters // 4)`
+- Cumulative iteration accounting (total iterations across phases)
+- Strict validation of adaptive parameters:
+  - `adaptive_k1` must satisfy `1 ≤ k1 < max_iters`
+  - `adaptive_rule` explicitly validated
+- Edge-case guard for small budgets (`max_iters = 1`)
+- Comprehensive test coverage for adaptive behavior
+
+### Behavior Guarantees
+- Strictly one-way switching (no dynamic residual-based switching)
+- No internal message state shared between phases
+- Deterministic tie-breaking:
+  - Converged solution preferred
+  - Lower syndrome weight
+  - Fewer total iterations
+  - Phase order as final deterministic tie-break
+- No randomness introduced
+- No global state
+
+### Unchanged
+- No modifications to existing schedules:
+  - `flooding`
+  - `layered`
+  - `residual`
+  - `hybrid_residual`
+- No changes to ensemble decoding behavior
+- No breaking API changes
+- Default decoder calls remain bit-stable
+
+### Test Status
+- 364 passed
+- 7 skipped
+- 0 failed
+- CI green
+
 [2.8.0] - 2026-02-23
 
 Deterministic Scheduling & State-Aware Enhancements

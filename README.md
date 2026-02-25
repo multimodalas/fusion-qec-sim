@@ -1,15 +1,146 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Latest](https://img.shields.io/badge/version-v2.8.0-blue)](https://github.com/QSOLKCB/QEC/releases/latest)
-&nbsp;&nbsp;
-[![License](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/QSOLKCB/QEC?color=blue)](https://github.com/QSOLKCB/QEC/releases/latest)
 
-Latest Version: v2.8.0  
 License: CC-BY-4.0
 
 Deterministic quantum error correction framework for QLDPC CSS codes with algebraic construction guarantees, numerically stable belief propagation, statistically rigorous FER simulation, and modular decoder utilities.
 
 Release Lineage
+
+### v2.9.1 — Deterministic Residual Instrumentation Hardening
+
+### v2.9.0 — Deterministic Adaptive Scheduling
+
+**Highlights**
+
+Deterministic Adaptive Schedule Controller
+
+- `schedule="adaptive"`
+- Two-phase, strictly one-way controller:
+  - Phase 1: `flooding` for k1 iterations
+  - Phase 2: `hybrid_residual` for remaining iterations
+- Default `k1 = max(1, max_iters // 4)`
+- No dynamic backtracking
+- No residual-triggered switching
+- No internal message state shared between phases
+
+Cumulative Iteration Accounting
+
+- Public iteration count reflects total iterations across phases
+- Deterministic tie-breaking:
+  - Converged solution preferred
+  - Lower syndrome weight
+  - Fewer total iterations
+  - Phase order as final deterministic tie-break
+
+Strict Validation
+
+- `adaptive_k1` must satisfy `1 ≤ k1 < max_iters`
+- `adaptive_rule` explicitly validated
+- Guarded small-budget behavior (`max_iters = 1` handled cleanly)
+
+Design Constraints (Intentional)
+
+- Strictly one-way switching in v2.9.0
+- No residual-dynamic or feedback-based adaptation
+- No ensemble integration inside adaptive
+- No changes to existing schedule behavior
+
+Determinism & Stability
+
+- No RNG
+- No new global state
+- No vectorization or refactoring of core loops
+- No changes to:
+  - `flooding`
+  - `layered`
+  - `residual`
+  - `hybrid_residual`
+  - `ensemble_k`
+- Fully reproducible across runs
+
+Test Status
+
+364 passed  
+7 skipped  
+0 failed  
+
+CI green  
+Regression verified  
+
+---
+
+### v2.8.0 — Deterministic Ensemble & State-Aware Scheduling
+
+**Highlights**
+
+Dual-parameter min-sum variants
+
+- `mode="improved_norm"`
+- `mode="improved_offset"`
+- `alpha1` applies to first minimum
+- `alpha2` applies to second minimum
+- Consistent across flooding and layered schedules
+- Deterministic mapping verified
+
+Hybrid Residual Scheduling
+
+- `schedule="hybrid_residual"`
+- Deterministic even/odd check partition
+- Within each layer: descending residual ordering
+- Optional `hybrid_residual_threshold`
+- Threshold validation scoped to hybrid schedule only
+- Lexicographic tie-breaking preserved
+- No randomness introduced
+- Default behavior unchanged
+
+Deterministic Ensemble Decoding
+
+- `ensemble_k >= 1`
+- Member 0 uses exact baseline LLR
+- Additional members use deterministic zero-mean alternating perturbations
+- No RNG
+- No global state
+- Selection priority:
+  - Converged solution
+  - Lowest syndrome weight
+  - Lowest member index
+- Precomputed H32 avoids repeated casting
+- Fully reproducible across runs
+
+State-Aware Residual Weighting
+
+- `state_aware_residual=True`
+- Residual weights:
+  - `weight = s_by_state[label] * |cos(phi_by_state[label])|`
+- Multiplicative modulation of residual ordering
+- Strict validation:
+  - Integer labels
+  - Non-negative
+  - In-range
+  - Length must equal number of checks
+- Weights precomputed once per decode call
+- Disabled by default (zero behavior change when off)
+
+Determinism & Stability
+
+- Exactly one residual update block
+- Float64 discipline preserved
+- No change to default `schedule="flooding"`
+- No return signature changes
+- No breaking API changes
+- Bit-stable for default calls
+- Ensemble and state-aware paths fully deterministic
+
+Test Status
+
+339 passed  
+7 skipped  
+0 failed  
+
+CI green  
+Static review issues resolved
 
 v2.8.0 — Deterministic Ensemble & State-Aware Scheduling
 Highlights
