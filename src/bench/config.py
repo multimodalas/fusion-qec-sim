@@ -52,6 +52,7 @@ class BenchmarkConfig:
     runtime_mode: str = "off"
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     collect_iter_hist: bool = False
+    deterministic_metadata: bool = False
 
     def __post_init__(self) -> None:
         self.distances = sorted(self.distances)

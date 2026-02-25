@@ -9,6 +9,8 @@ deterministic order.
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 import platform
 import sys
 from typing import Any
@@ -64,6 +66,32 @@ def _make_code(distance: int, seed: int) -> Any:
     return code.H_X
 
 
+# ── Deterministic sub-seed derivation ───────────────────────────────
+
+def _derive_subseed(
+    base_seed: int,
+    decoder_identity: dict[str, Any],
+    distance: int,
+    p: float,
+) -> int:
+    """Derive a deterministic sub-seed from sweep coordinates.
+
+    The seed depends only on the logical parameters — NOT on loop
+    iteration order — so reordering decoders in config does not
+    change per-record results.
+
+    Uses SHA-256 over a JSON payload with sorted keys.
+    """
+    payload = json.dumps({
+        "base_seed": base_seed,
+        "decoder": decoder_identity,
+        "distance": distance,
+        "p": p,
+    }, sort_keys=True)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
+
+
 # ── Main entry point ────────────────────────────────────────────────
 
 def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
@@ -80,7 +108,6 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
     """
     from ..qec_qldpc_codes import channel_llr, syndrome
 
-    rng = np.random.default_rng(config.seed)
     results: list[dict[str, Any]] = []
 
     # Deterministic sweep order: decoders → distances → p_values.
@@ -98,9 +125,13 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
             adapter.initialize(config=init_params)
 
             for p in config.p_values:
-                # Per-(decoder, distance, p) sub-seed for reproducibility.
-                sub_seed = int(
-                    rng.integers(0, 2**31)
+                # Per-(decoder, distance, p) sub-seed derived from
+                # logical coordinates — independent of loop ordering.
+                sub_seed = _derive_subseed(
+                    config.seed,
+                    adapter.serialize_identity(),
+                    distance,
+                    p,
                 )
                 sub_rng = np.random.default_rng(sub_seed)
 
@@ -198,11 +229,18 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
     except Exception:
         qec_version = "unknown"
 
+    if config.deterministic_metadata:
+        created_utc = "1970-01-01T00:00:00+00:00"
+    else:
+        created_utc = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        )
+
     result_obj: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
-        "created_utc": datetime.datetime.now(
-            datetime.timezone.utc
-        ).isoformat(),
+        "created_utc": created_utc,
         "qec_version": str(qec_version),
         "environment": env,
         "config": config.to_dict(),
