@@ -8,62 +8,84 @@ Deterministic QLDPC CSS quantum error correction framework with invariant-safe a
 
 ---
 
-## Current Release
+Current Release
+v3.0.2 — Canonicalization Determinism Hardening
 
-**v3.0.1 — Legacy Compatibility & High-Dimensional Readiness**
+Fuzz-style determinism testing for canonicalization
 
-- Optional dimension-aware `QuditSpec`
-- Deterministic analytical gate-cost modeling
-- Centralized canonicalization
-- Schema version preservation invariant
-- Backward compatibility guaranteed
-- No new dependencies
-- No decoder behavior changes
+Idempotence validation on randomized nested metadata
 
----
+JSON roundtrip stability verification
 
-## Determinism Guarantees
+Byte-stable artifact guarantees reinforced
 
-- No hidden randomness
-- Explicit seed control
-- Order-independent SHA-256 sub-seeds
-- Canonical JSON serialization
-- Stable sweep ordering
-- `runtime_mode="off"` → reproducible artifacts
+No decoder behavior changes
+
+No new dependencies
+
+Backward compatible with schema 3.0.1
+
+v3.0.2 strengthens the artifact reproducibility contract without modifying any production decoding logic.
+
+Determinism Guarantees
 
 Determinism is a first-class architectural invariant.
 
----
+No hidden randomness
 
-## Architecture
+Explicit seed control
 
-Core decoding layer:
-- Additive invariant QLDPC CSS construction
-- Multi-mode BP (sum-product, min-sum, norm, offset)
-- Flooding, layered, residual, hybrid schedules
-- Ensemble decoding
-- OSD-0 / OSD-1 / OSD-CS
-- Deterministic decimation
+Order-independent SHA-256 sub-seeds
 
-Benchmarking layer (isolated under `src/bench/`):
-- Config-driven execution
-- Schema-validated results
-- Canonical JSON output
-- Threshold and runtime analysis
+Canonical JSON serialization
+
+Canonicalization idempotence (fuzz-validated)
+
+Stable sweep ordering
+
+runtime_mode="off" → byte-identical artifacts
+
+Reproducibility is enforced structurally, not probabilistically.
+
+Architecture
+Core Decoding Layer
+
+Additive invariant QLDPC CSS construction
+
+Multi-mode BP (sum-product, min-sum, norm, offset)
+
+Flooding, layered, residual, hybrid schedules
+
+Ensemble decoding
+
+OSD-0 / OSD-1 / OSD-CS
+
+Deterministic decimation
+
+Benchmarking Layer (src/bench/)
+
+Config-driven execution
+
+Schema-validated results
+
+Canonical JSON output
+
+Determinism verification mode
+
+Threshold and runtime analysis
 
 Core decoding logic is not modified by benchmarking features.
 
----
+Documentation
 
-## Documentation
+Full release history: CHANGELOG.md
 
-- Full release history: **CHANGELOG.md**
-- Forward direction: **ROADMAP.md**
+Forward direction: ROADMAP.md
 
----
+Benchmark artifacts: /bench/
 
-Author: Trent Slade  
-ORCID: https://orcid.org/0009-0002-4515-9237  
+Author: Trent Slade
+ORCID: https://orcid.org/0009-0002-4515-9237
 
-Small is beautiful.  
+Small is beautiful.
 Determinism is holy.
