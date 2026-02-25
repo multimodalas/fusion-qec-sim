@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The project follows semantic versioning.
 Each release reflects structural, numerical, or architectural maturity improvements in the QLDPC CSS construction and decoding stack.
 
+## [2.9.1] - 2026-02-XX
+
+### Added
+- Opt-in residual metric instrumentation:
+  - residual_linf (per-check L∞ norm)
+  - residual_l2 (per-check L2 norm)
+  - residual_energy (per-iteration scalar)
+
+### Guarantees
+- Default decode behavior bit-identical to v2.9.0
+- No scheduling logic changes
+- No adaptive changes
+- No API breaking changes
+- Determinism preserved
+
 ## [2.9.0] - 2026-02-24
 
 ### Added

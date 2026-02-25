@@ -8,6 +8,8 @@ Deterministic quantum error correction framework for QLDPC CSS codes with algebr
 
 Release Lineage
 
+### v2.9.1 — Deterministic Residual Instrumentation Hardening
+
 ### v2.9.0 — Deterministic Adaptive Scheduling
 
 **Highlights**
