@@ -144,8 +144,28 @@ def validate_interop_record(record: Any) -> None:
     if not isinstance(record, dict):
         raise ValueError(f"Record must be a dict, got {type(record).__name__}")
 
-    # Skipped records are valid (tool unavailable).
+    # Skipped records require a lightweight set of fields.
     if record.get("status") == "skipped":
+        if "reason" not in record or not isinstance(record["reason"], str):
+            raise ValueError(
+                "Skipped record must contain 'reason' (str)"
+            )
+        if "tool" not in record or not isinstance(record["tool"], dict):
+            raise ValueError(
+                "Skipped record must contain 'tool' (dict)"
+            )
+        if "name" not in record["tool"] or not isinstance(record["tool"]["name"], str):
+            raise ValueError(
+                "Skipped record tool must contain 'name' (str)"
+            )
+        if "benchmark_kind" not in record or not isinstance(record["benchmark_kind"], str):
+            raise ValueError(
+                "Skipped record must contain 'benchmark_kind' (str)"
+            )
+        if "code_family" not in record or not isinstance(record["code_family"], str):
+            raise ValueError(
+                "Skipped record must contain 'code_family' (str)"
+            )
         return
 
     for key, expected in _REQUIRED_INTEROP_KEYS.items():

@@ -90,7 +90,90 @@ class TestValidInteropRecord:
         validate_interop_record(rec)
 
     def test_skipped_record_accepted(self):
-        rec = {"status": "skipped", "reason": "stim not installed"}
+        rec = {
+            "status": "skipped",
+            "reason": "stim not installed",
+            "tool": {"name": "stim", "version": None, "category": "third_party"},
+            "benchmark_kind": "reference_baseline",
+            "code_family": "repetition",
+        }
+        validate_interop_record(rec)  # Must not raise
+
+
+class TestSkippedRecordValidation:
+    """Test that skipped records require lightweight structure."""
+
+    def test_bare_skipped_record_fails(self):
+        """Skipped record with only status is rejected."""
+        rec = {"status": "skipped"}
+        with pytest.raises(ValueError, match="reason"):
+            validate_interop_record(rec)
+
+    def test_skipped_missing_reason_fails(self):
+        """Skipped record without reason is rejected."""
+        rec = {
+            "status": "skipped",
+            "tool": {"name": "stim", "version": None, "category": "third_party"},
+            "benchmark_kind": "reference_baseline",
+            "code_family": "repetition",
+        }
+        with pytest.raises(ValueError, match="reason"):
+            validate_interop_record(rec)
+
+    def test_skipped_missing_tool_name_fails(self):
+        """Skipped record with tool missing name is rejected."""
+        rec = {
+            "status": "skipped",
+            "reason": "stim not installed",
+            "tool": {"version": None, "category": "third_party"},
+            "benchmark_kind": "reference_baseline",
+            "code_family": "repetition",
+        }
+        with pytest.raises(ValueError, match="tool.*name"):
+            validate_interop_record(rec)
+
+    def test_skipped_missing_tool_entirely_fails(self):
+        """Skipped record without tool dict is rejected."""
+        rec = {
+            "status": "skipped",
+            "reason": "stim not installed",
+            "benchmark_kind": "reference_baseline",
+            "code_family": "repetition",
+        }
+        with pytest.raises(ValueError, match="tool"):
+            validate_interop_record(rec)
+
+    def test_skipped_missing_benchmark_kind_fails(self):
+        """Skipped record without benchmark_kind is rejected."""
+        rec = {
+            "status": "skipped",
+            "reason": "stim not installed",
+            "tool": {"name": "stim", "version": None, "category": "third_party"},
+            "code_family": "repetition",
+        }
+        with pytest.raises(ValueError, match="benchmark_kind"):
+            validate_interop_record(rec)
+
+    def test_skipped_missing_code_family_fails(self):
+        """Skipped record without code_family is rejected."""
+        rec = {
+            "status": "skipped",
+            "reason": "stim not installed",
+            "tool": {"name": "stim", "version": None, "category": "third_party"},
+            "benchmark_kind": "reference_baseline",
+        }
+        with pytest.raises(ValueError, match="code_family"):
+            validate_interop_record(rec)
+
+    def test_proper_skipped_record_passes(self):
+        """Well-formed skipped record passes validation."""
+        rec = {
+            "status": "skipped",
+            "reason": "pymatching not installed",
+            "tool": {"name": "pymatching", "version": None, "category": "third_party"},
+            "benchmark_kind": "reference_baseline",
+            "code_family": "surface_code",
+        }
         validate_interop_record(rec)  # Must not raise
 
 
