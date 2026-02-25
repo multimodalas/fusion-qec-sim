@@ -106,6 +106,12 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
     -------
     dict conforming to schema version 3.0.0.
     """
+    if config.schema_version != SCHEMA_VERSION:
+        raise ValueError(
+            f"Config schema_version {config.schema_version!r} does not match "
+            f"expected {SCHEMA_VERSION!r}"
+        )
+
     from ..qec_qldpc_codes import channel_llr, syndrome
 
     results: list[dict[str, Any]] = []

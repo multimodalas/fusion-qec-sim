@@ -129,6 +129,21 @@ class TestRuntimeScaling:
         r2 = compute_runtime_scaling(records, "d")
         assert r1 == r2
 
+    def test_zero_latency_point_does_not_block_slope(self):
+        """A zero-latency point should be skipped, not prevent slope
+        estimation when sufficient positive-latency points remain."""
+        records = [
+            {"decoder": "d", "distance": 3, "p": 0.01, "fer": 0.1,
+             "runtime": {"average_latency_us": 0}},
+            {"decoder": "d", "distance": 5, "p": 0.01, "fer": 0.1,
+             "runtime": {"average_latency_us": 300}},
+            {"decoder": "d", "distance": 7, "p": 0.01, "fer": 0.1,
+             "runtime": {"average_latency_us": 700}},
+        ]
+        result = compute_runtime_scaling(records, "d")
+        assert len(result["points"]) == 3
+        assert result["slope"] is not None
+
 
 class TestIterationHistogram:
 

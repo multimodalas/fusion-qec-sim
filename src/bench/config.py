@@ -12,6 +12,8 @@ import json
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from .schema import SCHEMA_VERSION
+
 
 @dataclass
 class RuntimeConfig:
@@ -35,7 +37,7 @@ class BenchmarkConfig:
     All sweep lists (``distances``, ``p_values``) are sorted on
     construction to guarantee deterministic sweep ordering.
     """
-    schema_version: str = "3.0.0"
+    schema_version: str = SCHEMA_VERSION
     seed: int = 12345
     distances: list[int] = field(default_factory=lambda: [3, 5, 7])
     p_values: list[float] = field(default_factory=lambda: [0.001, 0.002, 0.003])

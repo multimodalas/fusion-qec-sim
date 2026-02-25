@@ -56,7 +56,7 @@ schedule="hybrid_residual"
 
 Ensemble and adaptive wrappers:
 
-Return metrics dict
+Return a metrics dict
 
 Metric lists intentionally empty
 

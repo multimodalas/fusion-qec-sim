@@ -152,18 +152,14 @@ def compute_runtime_scaling(
         points.append({"distance": d, "average_latency_us": round(mean_lat, 2)})
 
     slope: float | None = None
-    if len(points) >= 2:
-        log_d = np.array([math.log(pt["distance"]) for pt in points])
-        log_l = np.array([
-            math.log(pt["average_latency_us"])
-            for pt in points
-            if pt["average_latency_us"] > 0
-        ])
-        if len(log_d) == len(log_l) and len(log_l) >= 2:
-            # Least-squares: log_l = slope * log_d + intercept
-            A = np.vstack([log_d, np.ones(len(log_d))]).T
-            result, _, _, _ = np.linalg.lstsq(A, log_l, rcond=None)
-            slope = round(float(result[0]), 4)
+    valid_points = [pt for pt in points if pt["average_latency_us"] > 0]
+    if len(valid_points) >= 2:
+        log_d = np.array([math.log(pt["distance"]) for pt in valid_points])
+        log_l = np.array([math.log(pt["average_latency_us"]) for pt in valid_points])
+        # Least-squares: log_l = slope * log_d + intercept
+        A = np.vstack([log_d, np.ones(len(log_d))]).T
+        result, _, _, _ = np.linalg.lstsq(A, log_l, rcond=None)
+        slope = round(float(result[0]), 4)
 
     notes = (
         f"Log-log slope from {len(points)} distance point(s)"
