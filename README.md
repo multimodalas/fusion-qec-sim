@@ -1,160 +1,154 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.0.0](https://img.shields.io/badge/release-v3.0.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.0.0)
+[![Release v3.0.1](https://img.shields.io/badge/release-v3.0.1-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.0.1)
 
 License: CC-BY-4.0
 
 Deterministic QLDPC CSS quantum error correction framework with invariant-safe algebraic construction, multi-mode belief propagation, ensemble and dual-parameter min-sum decoding, statistically rigorous FER simulation, and a schema-validated deterministic benchmarking framework.
 
-Release Lineage
+---
 
-v3.0.0 — Deterministic Benchmark Standardization Framework
+## Release Lineage
 
-Highlights
+### v3.0.1 — Legacy Compatibility & High-Dimensional Readiness
 
-Deterministic Benchmark Engine
+A strictly additive hardening release introducing dimension-aware scaffolding and analytical resource modeling without altering core decoder behavior or benchmark semantics.
 
-Config-driven sweep over:
+#### Highlights
 
-Decoders
+**Dimension-Aware Scaffolding (QuditSpec)**  
+- Optional `qudit` configuration block  
+- JSON-safe, validated `QuditSpec` (dimension, encoding, metadata)  
+- Defaults to qubit mode (dimension=2)  
+- No changes to decoder or simulation logic  
+- Fully isolated from core decoding layer  
 
-Code distances
+**Deterministic Analytical Gate-Cost Modeling**  
+- Optional `resource_model` configuration block  
+- Deterministic analytical cost estimates  
+- Canonicalized, traceable `assumptions` included in output  
+- No simulation impact  
+- Pure stdlib + numpy  
 
-Physical error probabilities
+**Canonicalization Centralization**  
+- Single shared `canonicalize()` utility  
+- Eliminates duplicated serialization logic  
+- Deterministic, JSON-safe normalization  
+- Drift-resistant design  
 
-Strict sweep ordering
+**Backward Compatibility Guarantees**  
+- v3.0.0 configs load and run unchanged  
+- Schema version preserved exactly as provided  
+- Top-level and config `schema_version` always match  
+- No new required fields  
+- No public API changes  
 
-Canonical JSON output (stable key ordering)
+**Determinism Contract Maintained**  
+- `runtime_mode="off"` → byte-identical JSON across runs  
+- Stable ordering across sweeps  
+- Canonical serialization  
+- Smoke-test verified  
 
-Schema-validated result objects
+**Import Hygiene Preserved**  
+- Core decoder modules do not import:
+  - `src.analysis`
+  - `src.qudit`
+  - `src.nonbinary`
+  - `src.bench`
+- No circular dependencies introduced  
 
-No implicit RNG state dependence
+---
 
-Cryptographic Sub-Seed Derivation
+### v3.0.0 — Deterministic Benchmark Standardization Framework
 
-Functional sub-seed generation via SHA-256 over:
+#### Highlights
 
-base_seed
+**Deterministic Benchmark Engine**
+- Config-driven sweep over:
+  - Decoders
+  - Code distances
+  - Physical error probabilities
+- Strict sweep ordering
+- Canonical JSON output (stable key ordering)
+- Schema-validated result objects
+- No implicit RNG state dependence
 
-decoder identity
+**Cryptographic Sub-Seed Derivation**
+- Functional sub-seed generation via SHA-256 over:
+  - base_seed
+  - decoder identity
+  - distance
+  - physical error rate
+- Order-independent seed derivation
+- No sweep-order coupling
+- 32-bit seed normalization
+- No reliance on Python hash()
+- Deterministic repeatability guaranteed
 
-distance
-
-physical error rate
-
-Order-independent seed derivation
-
-No sweep-order coupling
-
-32-bit seed normalization
-
-No reliance on Python hash()
-
-Deterministic repeatability guaranteed
-
-Versioned Result Schema (3.0.0)
-
-Single canonical SCHEMA_VERSION constant
-
-Config schema version bound to schema constant
-
-Early mismatch validation guard in runner
-
-Numpy-safe canonicalization
-
-Stable JSON serialization:
-
-sort_keys=True
-
-compact separators
-
-deterministic formatting
+**Versioned Result Schema (3.0.0)**
+- Single canonical `SCHEMA_VERSION`
+- Early mismatch validation guard in runner
+- Numpy-safe canonicalization
+- Stable JSON serialization:
+  - `sort_keys=True`
+  - Compact separators
+  - Deterministic formatting
 
 Optional:
+- `deterministic_metadata=True`
+- Fixed epoch timestamp
+- Fully byte-identical artifacts
+- Microsecond-free timestamps by default
 
-deterministic_metadata=True
+**Structured Comparison & Analysis**
+- Threshold estimation via FER crossing interpolation
+- Log–log runtime scaling slope computation
+- Zero-latency filtering correction
+- Iteration distribution histograms
+- Pure numpy + stdlib (no pandas, no matplotlib)
 
-Fixed epoch timestamp
+**Runtime Measurement Module**
+- `perf_counter_ns`-based latency tracking
+- Average latency (µs)
+- 95% confidence interval
+- Optional `tracemalloc` peak memory tracking
+- Fully isolated from core decoder logic
 
-Fully byte-identical artifacts
+**Decoder Adapter Abstraction**
+- Formal `DecoderAdapter` interface
+- BP adapter wrapping existing `bp_decode`
+- No import contamination of core modules
+- Core decoding layer remains untouched
 
-Microsecond-free timestamps by default
+---
 
-Structured Comparison & Analysis
-
-Threshold estimation via FER crossing interpolation
-
-Log–log runtime scaling slope computation
-
-Zero-latency filtering correction (aligned regression inputs)
-
-Iteration distribution histograms
-
-No pandas
-
-No matplotlib
-
-Pure numpy + stdlib
-
-Runtime Measurement Module
-
-perf_counter_ns-based latency tracking
-
-Average latency (µs)
-
-95% confidence interval
-
-Optional tracemalloc peak memory tracking
-
-Fully isolated from core decoder logic
-
-Decoder Adapter Abstraction
-
-Formal DecoderAdapter interface
-
-BP adapter wrapping existing bp_decode
-
-No import contamination of core modules
-
-Core decoding layer remains untouched
-
-Architectural Scope (Intentional)
+## Architectural Scope (Intentional)
 
 All benchmarking logic isolated under:
 
-src/bench/
+    src/bench/
 
 Zero modifications to:
+- Code construction
+- Belief propagation
+- Scheduling
+- Ensemble logic
+- Adaptive logic
+- RNG in core decoders
 
-Code construction
+No new external dependencies.  
+Backward compatibility preserved.
 
-Belief propagation
+---
 
-Scheduling
+## Determinism & Stability
 
-Ensemble logic
-
-Adaptive logic
-
-RNG in core decoders
-
-No new external dependencies
-
-Backward compatibility preserved
-
-Determinism & Stability
-
-runtime_mode="off" → statistically deterministic outputs
-
-deterministic_metadata=True → fully byte-identical JSON
-
-Order-independent sub-seeds
-
-Schema drift eliminated
-
-Import hygiene verified
-
-No circular dependencies introduced
+- `runtime_mode="off"` → statistically deterministic outputs  
+- Deterministic canonical serialization  
+- Order-independent sub-seeds  
+- Schema drift eliminated  
+- Import hygiene verified  
+- No circular dependencies introduced  
 
 No behavioral regression from v2.9.1
 
