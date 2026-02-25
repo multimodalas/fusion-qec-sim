@@ -37,7 +37,7 @@ _GOLDEN_CONFIG = {
 # The expected artifact hash for the golden config.
 # Updated whenever the golden config or deterministic behavior changes.
 _GOLDEN_ARTIFACT_HASH = (
-    "9fdfc79f2f1f61991e88dfadb5613c436257b673788ae39af282e0342c21461e"
+    "86babd2ec81daa165d3ce778b9eb71a3766667484e1c51a2000642ae08ec9569"
 )
 
 
@@ -184,6 +184,8 @@ class TestGoldenVector:
         assert rec["benchmark_kind"] == "direct_comparison"
         assert rec["code_family"] == "qldpc_css"
         assert rec["representation"] == "pcm"
+        assert rec["noise_model"] == "bsc_bitflip"
+        assert rec["channel_model"] == "oracle"
         assert rec["tool"]["name"] == "qec_bp"
         assert rec["tool"]["category"] == "native"
         assert rec["seed"] == 42

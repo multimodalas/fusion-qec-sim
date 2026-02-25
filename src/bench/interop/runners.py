@@ -109,7 +109,8 @@ def run_qec_native(
                 "code_family": "qldpc_css",
                 "representation": "pcm",
                 "seed": seed,
-                "noise_model": "independent_depolarizing",
+                "noise_model": "bsc_bitflip",
+                "channel_model": "oracle",
                 "trials": trials,
                 "results": {
                     "logical_error_rate": round(fer, 8),
