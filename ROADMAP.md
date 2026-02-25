@@ -1,160 +1,229 @@
 QEC Roadmap
 
-This document outlines the architectural trajectory of the QEC toolkit.
+This document defines the architectural trajectory and governance principles of the QEC toolkit.
 
-The roadmap prioritizes:
+QEC evolves under a stability-first philosophy.
+Experimental expansion is permitted — destabilization is not.
 
-Determinism as a first-class invariant
+1. Core Principles (Non-Negotiable)
 
-Backward compatibility by default
+The following invariants apply to all future releases:
 
-Strict import hygiene
-
-Zero hidden randomness
-
-Minimal dependency surface
-
-Controlled, opt-in research expansion
-
-Core decoding logic is never destabilized for experimental additions.
-
-Current State (Completed Releases)
-v2.9.0 — Deterministic Adaptive Control
-
-Formalized adaptive scheduling while preserving bit-stable defaults.
-
-Deterministic adaptive schedule (schedule="adaptive")
-
-Strict one-way phase switching
-
-Deterministic tie-breaking
-
-No behavioral drift in default modes
-
-v2.9.1 — Deterministic Instrumentation Expansion
-
-Expanded internal observability without modifying decoding semantics.
-
-Opt-in residual metrics (linf, l2, energy)
-
-JSON-safe measurement outputs
-
-No API breakage
-
-Bit-identical default behavior
-
-v3.0.0 — Deterministic Benchmark Standardization
-
-Established schema-validated, reproducible benchmarking.
-
-Config-driven benchmark framework (src/bench/)
-
-Canonical JSON schema (SCHEMA_VERSION)
-
-Order-independent SHA-256 sub-seed derivation
-
-DecoderAdapter abstraction
-
-Structured threshold and runtime analysis
-
-Byte-identical artifact support
-
-Core decoding layer remained untouched.
-
-v3.0.1 — Legacy Compatibility & High-Dimensional Readiness
-
-Introduced forward-compatible scaffolding without altering decoder behavior.
-
-Optional QuditSpec (dimension-aware configuration)
-
-Deterministic analytical gate-cost modeling
-
-Centralized canonicalization utility
-
-Schema version preservation invariant
-
-Backward compatibility audit suite
-
-Import hygiene verification
-
-No nonbinary decoding implemented
-
-No public API changes.
-No new dependencies.
-Determinism preserved.
-
-Determinism Contract (Permanent)
-
-Across all releases:
+Determinism as Architecture
 
 No hidden randomness
 
 Explicit seed control
 
-Order-independent sub-seed derivation
-
-Stable key ordering
+Order-independent SHA-256 sub-seed derivation
 
 Canonical JSON serialization
 
-runtime_mode="off" → reproducible artifacts
+Stable sweep ordering
 
-Backward compatibility unless explicitly version-bumped
+runtime_mode="off" → byte-identical artifacts
 
-Determinism is a non-negotiable architectural invariant.
+Determinism is not a feature. It is a structural constraint.
 
-Near-Term Direction (v3.0.x Line)
+Backward Compatibility by Default
 
-Short-term releases will focus on:
+Public API stability across minor releases
 
-Determinism hardening (test-layer reinforcement)
+Schema evolution must be versioned
 
-Canonicalization stability guarantees
+Behavioral drift requires explicit version bump
 
-Benchmark contract enforcement
+Legacy configs remain runnable
 
-Controlled analytical expansion (opt-in only)
+Import Hygiene
 
-Continued import isolation discipline
+No circular dependencies
 
-No changes to core decoding semantics are planned in the v3.0.x line.
+Clear separation between decoding and benchmarking layers
 
-Medium-Term Direction (v3.1+)
+No leakage from experimental modules into core
 
-Future major/minor directions may include:
+Minimal Dependency Surface
 
-Controlled introduction of nonbinary decoding implementations
+No dependency expansion without architectural justification
 
-GF(q) message-passing support (opt-in)
+Prefer stdlib
+
+Prefer deterministic primitives
+
+2. Architectural Layers
+
+QEC evolves in controlled layers.
+
+Layer 1 — Core Decoding Stability (Foundation)
+
+Additive invariant QLDPC CSS construction
+
+Deterministic BP variants
+
+Controlled scheduling mechanisms
+
+OSD family
+
+Deterministic decimation
+
+This layer must remain stable across the entire v3.x line.
+
+No benchmarking or research feature may modify decoding semantics implicitly.
+
+Layer 2 — Deterministic Benchmark & Validation Infrastructure
+
+Schema-validated benchmark configs
+
+Canonical JSON artifacts
+
+Reproducible sweep orchestration
+
+Determinism verification modes
+
+Threshold/runtime analysis tooling
+
+This layer may expand — but never alter Layer 1 behavior.
+
+Layer 3 — Analytical & Dimensional Expansion (Opt-In)
+
+Qudit-aware scaffolding
+
+Analytical gate-cost modeling
+
+Resource estimation
+
+Controlled GF(q) exploration
+
+Nonbinary decoding (future)
+
+All such features must:
+
+Be opt-in
+
+Preserve qubit defaults
+
+Maintain reproducibility
+
+Avoid semantic mutation of existing decoders
+
+3. Current State (v3.0.x Line)
+
+The v3.0.x line is a determinism hardening cycle.
+
+Established Foundations
+
+Adaptive schedule formalization (v2.9.0)
+
+Deterministic instrumentation (v2.9.1)
+
+Schema-validated benchmarking framework (v3.0.0)
+
+Canonicalization centralization (v3.0.1)
+
+Fuzz-validated canonicalization determinism (v3.0.2)
+
+v3.0.x Objectives
+
+Strengthen determinism guarantees
+
+Harden canonicalization invariants
+
+Expand reproducibility testing
+
+Preserve decoding semantics entirely
+
+Maintain zero new dependencies
+
+No decoder behavior changes are planned in the remainder of v3.0.x.
+
+4. Medium-Term Direction (v3.1+)
+
+Future releases may introduce controlled expansion:
+
+Nonbinary Exploration (Opt-In Only)
+
+GF(q) message passing
 
 Qudit-aware syndrome modeling
 
-Extended analytical resource modeling
+Dimension-aware decoders
 
-Expanded deterministic comparison tooling
+Advanced Decoding Research (Strictly Isolated)
 
-Any such expansion will:
+Extended BP variants
 
-Remain opt-in
+Hybrid classical post-processing
 
-Preserve existing qubit behavior
+Structured comparison harnesses
 
-Avoid destabilizing the decoding core
+Comparative Infrastructure
 
-Maintain strict reproducibility guarantees
+Deterministic industry comparison harness
 
-Architectural Philosophy
+Structured reproducibility certification
 
-The toolkit evolves in controlled layers:
+Scaling audits across code families
 
-Core decoding stability
+All such work must:
 
-Deterministic validation and benchmarking
+Be version-scoped
 
-Analytical expansion
+Preserve qubit behavior
 
-Dimensional and structural extensibility
+Remain optional
 
-Each release must expand capability without destabilizing the deterministic core.
+Maintain reproducibility guarantees
 
-This roadmap is a living document and will evolve as research and benchmarking results inform future priorities.
+5. What Will Not Happen
+
+The following are explicitly out of scope:
+
+Hidden randomness in decoding
+
+Silent behavior changes
+
+Schema drift without versioning
+
+Experimental code merged into core paths
+
+Dependency bloat
+
+Benchmark tooling modifying decoder logic
+
+6. Evolution Philosophy
+
+QEC evolves by strengthening invariants first, expanding capability second.
+
+Each release must satisfy:
+
+Determinism preserved
+
+Backward compatibility respected
+
+Core decoding semantics unchanged (unless major version bump)
+
+Clear separation between production logic and research tooling
+
+Reproducibility demonstrated, not assumed
+
+Capability grows.
+Stability does not regress.
+
+7. Living Document Policy
+
+This roadmap governs architectural direction.
+It evolves only when:
+
+A new invariant is introduced
+
+A new architectural layer is formalized
+
+A major version transition is planned
+
+Release notes belong in CHANGELOG.md.
+Strategic direction belongs here.
+
+Small is beautiful.
+Determinism is holy.
+Stability is engineered.
