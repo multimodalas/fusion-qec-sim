@@ -56,6 +56,11 @@ Randomness is permitted only under strict controls.
 - Sub-seed derivation must use SHA-256 or an equivalent deterministic mapping.
 - Functions that accept a seed must propagate it to all internal stochastic
   operations without loss.
+- Python's built-in `hash()` is strictly forbidden for any structural, ordering,
+  or seed-derivation logic. It is salted per-session and breaks determinism.
+- Always use `hashlib.sha256` (or equivalent cryptographic hash) for seed
+  derivation, sweep hashing, or artifact identity.
+- No reliance on object hash stability across runs or Python versions.
 
 ---
 
@@ -124,6 +129,12 @@ Schema changes are high-risk. Treat them accordingly.
 - Backward compatibility is the default. Breaking changes require major bumps.
 - Validation must remain strict. Do not loosen validators to accommodate drift.
 - All schema fields must be documented at the point of introduction.
+- All JSON serialization and schema output must use the centralized
+  canonicalization logic in `src/utils/canonicalize.py`.
+- Do not implement ad-hoc `json.dumps(sort_keys=True)` logic elsewhere.
+- Do not duplicate canonicalization behavior. Serialization format is locked
+  and fuzz-validated.
+- Any change to canonicalization requires explicit user approval.
 
 ---
 
@@ -136,6 +147,12 @@ Benchmarking and interop code must not leak into core logic.
   optional and gated behind feature flags or lazy imports.
 - Benchmark harnesses must not modify global state.
 - Interop adapters must not introduce implicit dependencies on external formats.
+- Claude must strictly adhere to the policies defined in
+  `docs/INTEROP_POLICY.md` and `docs/LEGAL_THIRD_PARTY.md`.
+- No proprietary decoders, reverse-engineering, or unapproved dependencies may
+  be introduced through interop or benchmarking paths.
+- Third-party tools must remain optional, gated, and policy-compliant.
+- Legal compliance constraints are binding architectural rules, not advisory.
 
 ---
 
@@ -282,6 +299,19 @@ reasoned about, not assumed.
 
 - Do not push speculative or partially audited work.
 - Do not push changes justified only by "tests are green."
+
+### Revert / Abort Protocol
+
+If an implementation causes any of the following:
+
+- Core decoder tests to fail.
+- Determinism invariants to break.
+- Schema validation to fail.
+- Canonicalization invariants to drift.
+
+Claude must immediately revert to the last known-good state (via `git revert` or
+`git checkout`), halt further speculative fixes, and request explicit user
+guidance. Do not attempt multi-step speculative repairs on protected subsystems.
 
 ### Push Escalation Rule
 
