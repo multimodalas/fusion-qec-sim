@@ -224,7 +224,34 @@ Untested code is unshipped code.
 
 ---
 
-## 15. Release Discipline
+## 15. Test Integrity and Specification Discipline
+
+Tests define the contract of the system. They are not negotiable scaffolding.
+
+- Tests must not be modified solely to make them pass. A failing test indicates
+  incorrect code or an intentional behavioral change — not a test defect by
+  default.
+- Intentional behavioral changes that require test updates must satisfy all of
+  the following:
+  - Explicit user instruction authorizing the change.
+  - A corresponding `CHANGELOG.md` update documenting the new behavior.
+  - A clear rationale explaining why the prior behavior was incorrect or
+    superseded.
+
+The following are explicitly prohibited without direct user request:
+
+- Weakening assertions (e.g., replacing exact checks with range checks).
+- Broadening tolerances to mask numerical or behavioral drift.
+- Changing expected artifact hashes without a justified behavioral change.
+- Replacing strict equality with approximate comparisons.
+- Removing regression tests to silence failures.
+- Disabling determinism checks or hash verification to make CI pass.
+
+Correct code makes tests pass. Tests do not adapt to accidental behavior.
+
+---
+
+## 16. Release Discipline
 
 Releases are commitments, not milestones.
 
@@ -236,7 +263,7 @@ Releases are commitments, not milestones.
 
 ---
 
-## 16. Pre-Release Checklist
+## 17. Pre-Release Checklist
 
 Before Claude may tag or propose a release, every item must be verified:
 
@@ -251,7 +278,7 @@ Before Claude may tag or propose a release, every item must be verified:
 
 ---
 
-## 17. When in Doubt
+## 18. When in Doubt
 
 If a proposed change is ambiguous, follow these defaults:
 
