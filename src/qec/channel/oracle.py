@@ -28,10 +28,9 @@ class OracleChannel(ChannelModel):
     ) -> np.ndarray:
         if error_vector is None:
             raise ValueError("Oracle channel requires error_vector.")
-        if not (0.0 < p < 1.0):
-            raise ValueError(f"p must be in (0, 1), got {p}")
+        self._validate_probability(p)
 
-        eps = 1e-30
+        eps = self._EPSILON
         base_llr = np.log((1.0 - p + eps) / (p + eps))
         sign = 1 - 2 * np.asarray(error_vector, dtype=np.float64)
         return base_llr * sign

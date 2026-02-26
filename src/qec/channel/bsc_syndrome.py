@@ -27,9 +27,8 @@ class BSCSyndromeChannel(ChannelModel):
         n: int,
         error_vector: np.ndarray | None = None,
     ) -> np.ndarray:
-        if not (0.0 < p < 1.0):
-            raise ValueError(f"p must be in (0, 1), got {p}")
+        self._validate_probability(p)
 
-        eps = 1e-30
+        eps = self._EPSILON
         base_llr = np.log((1.0 - p + eps) / (p + eps))
         return np.full(n, base_llr, dtype=np.float64)

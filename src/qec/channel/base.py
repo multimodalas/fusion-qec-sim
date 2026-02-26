@@ -14,6 +14,12 @@ class ChannelModel:
     per-variable log-likelihood ratio vector of shape ``(n,)``.
     """
 
+    _EPSILON = 1e-30
+
+    def _validate_probability(self, p: float) -> None:
+        if not (0.0 < p < 1.0):
+            raise ValueError(f"p must be in (0, 1), got {p}")
+
     def compute_llr(
         self,
         p: float,

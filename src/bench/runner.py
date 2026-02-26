@@ -113,19 +113,9 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
         )
 
     from ..qec_qldpc_codes import syndrome
-    from ..qec.channel import OracleChannel, BSCSyndromeChannel
+    from ..qec.channel import get_channel_model
 
-    _CHANNEL_REGISTRY = {
-        "oracle": OracleChannel,
-        "bsc_syndrome": BSCSyndromeChannel,
-    }
-    channel_cls = _CHANNEL_REGISTRY.get(config.channel_model)
-    if channel_cls is None:
-        raise ValueError(
-            f"Unknown channel_model {config.channel_model!r}. "
-            f"Available: {sorted(_CHANNEL_REGISTRY)}"
-        )
-    channel = channel_cls()
+    channel = get_channel_model(config.channel_model)
 
     results: list[dict[str, Any]] = []
 

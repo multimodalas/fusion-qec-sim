@@ -115,6 +115,10 @@ class BenchmarkConfig:
             d.pop("resource_model", None)
         # Omit channel_model when default ("oracle") so that pre-v3.1.3
         # configs produce identical serialized output.
+        # Technical debt: suppression of "channel_model": "oracle" preserves
+        # v3.1.2 artifact hashes.  This implicit default may be made explicit
+        # in v4.0.0.  This is intentional backward-compatibility behavior —
+        # do NOT change serialization logic without a major version bump.
         if d.get("channel_model") == "oracle":
             d.pop("channel_model", None)
         return d
