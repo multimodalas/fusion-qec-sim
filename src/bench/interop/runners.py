@@ -52,8 +52,10 @@ def run_qec_native(
     Returns a list of schema-compliant interop records with
     ``benchmark_kind="direct_comparison"``.
     """
-    from ...qec_qldpc_codes import create_code, bp_decode, channel_llr, syndrome
+    from ...qec_qldpc_codes import create_code, bp_decode, syndrome
+    from ...qec.channel import OracleChannel
 
+    channel = OracleChannel()
     records: list[dict[str, Any]] = []
 
     for lift in sorted(distances):
@@ -71,7 +73,7 @@ def run_qec_native(
             for _ in range(trials):
                 e = (rng.random(n) < p).astype(np.uint8)
                 s = syndrome(H, e)
-                llr = channel_llr(e, p)
+                llr = channel.compute_llr(p=p, n=n, error_vector=e)
 
                 result = bp_decode(
                     H, llr,

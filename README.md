@@ -1,34 +1,33 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.0.1](https://img.shields.io/badge/release-v3.0.2-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.0.2) 
+[![Release v3.1.3](https://img.shields.io/badge/release-v3.1.3-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.1.3)
 
 License: CC-BY-4.0
 
 Deterministic QLDPC CSS quantum error correction framework featuring invariant-safe algebraic construction, multi-mode belief propagation, ensemble and residual scheduling, statistically rigorous FER simulation, and a schema-validated deterministic benchmarking and interop system.
 
 Current Release
-v3.1.2 — Deterministic Interop Baseline & Schema Hardening
+v3.1.3 — Syndrome-Only Channel Inference
 
-v3.1.2 formalizes the benchmarking and interop layer as a deterministic, reproducible baseline suitable for controlled comparative research.
+v3.1.3 introduces a pluggable channel abstraction layer that eliminates degenerate 0.0 FER caused by oracle LLR sign leakage.
 
-This release:
+New in this release:
 
-Establishes a deterministic benchmark artifact anchor
+Pluggable channel model interface (`src/qec/channel/`)
 
-Enforces strict schema validation for interop records
+`OracleChannel` — backward-compatible oracle LLR (byte-identical to v3.1.2)
 
-Hardens artifact hashing and canonical JSON guarantees
+`BSCSyndromeChannel` — syndrome-only BSC with uniform LLR (realistic FER)
 
-Removes post-hash mutation risks
+Optional `channel_model` config field (default: `"oracle"`)
 
-Aligns documentation with validation rules
-
-Preserves all core decoder logic
+Deterministic baseline preserved across all channel modes
 
 No decoder architecture changes.
 No new dependencies.
 Core SCHEMA_VERSION remains 3.0.1.
-INTEROP_SCHEMA_VERSION is 3.1.2.
+INTEROP_SCHEMA_VERSION remains 3.1.2.
+Oracle mode byte-identical to v3.1.2 artifacts.
 
 Reproducibility Anchor
 
@@ -105,7 +104,7 @@ OSD-0 / OSD-1 / OSD-CS
 
 Deterministic decimation
 
-Explicit channel LLR modeling
+Pluggable channel LLR modeling (oracle / bsc_syndrome)
 
 Finite-field lifting with invariant safety
 
