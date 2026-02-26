@@ -4,6 +4,72 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.1.3] — 2026-02-26
+
+### Syndrome-Only Channel Inference
+
+This release introduces a pluggable channel abstraction layer that eliminates
+degenerate 0.0 FER behavior caused by oracle LLR sign leakage.
+
+No decoder core logic was modified.
+
+---
+
+### Added
+
+**Channel Abstraction Layer (`src/qec/channel/`)**
+
+- `ChannelModel` abstract base class with `compute_llr()` interface
+- `OracleChannel` — backward-compatible oracle LLR (sign from error vector)
+- `BSCSyndromeChannel` — syndrome-only BSC channel (uniform LLR, no sign leakage)
+- Channel models are pluggable via `channel_model` config field
+
+**BenchmarkConfig Extension**
+
+- Optional `channel_model` field (default: `"oracle"`)
+- Validated against allowed values: `"oracle"`, `"bsc_syndrome"`
+- Omitted from serialized config when default — preserves pre-v3.1.3 byte-identity
+- Backward-compatible: configs without `channel_model` load as `"oracle"`
+
+**Comprehensive Test Coverage**
+
+- Oracle identity: `OracleChannel` output matches `channel_llr()` exactly
+- Oracle benchmark byte-identity: oracle mode produces identical JSON to v3.1.2
+- Non-degenerate FER: `bsc_syndrome` produces `0 < FER < 1` at moderate noise
+- BSC determinism: two runs with identical config produce byte-identical JSON
+- LLR structural: oracle sign depends on error vector; BSC is uniform
+- Config backward compatibility: legacy configs without `channel_model` work unchanged
+
+---
+
+### Changed
+
+- Bench runner LLR construction now dispatches through channel model interface
+- Interop runner uses `OracleChannel` class (output unchanged)
+
+---
+
+### Guarantees
+
+- No changes to core decoding logic
+- No changes to scheduling or ensemble behavior
+- No API breaking changes
+- No new required dependencies
+- SCHEMA_VERSION remains `3.0.1`
+- INTEROP_SCHEMA_VERSION remains `3.1.2`
+- Oracle mode byte-identical to v3.1.2 artifacts
+- Determinism preserved (`runtime_mode="off"`, `deterministic_metadata=True`, fixed seed)
+
+---
+
+### Test Status
+
+629 passed
+7 skipped
+0 failed
+
+Syndrome-only channel inference release.
+
 ## [3.1.2] — 2026-02-26
 
 ### Deterministic Interop Baseline & Schema Hardening

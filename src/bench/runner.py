@@ -112,7 +112,20 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
             f"supported set {sorted(_SUPPORTED_SCHEMA_VERSIONS)}"
         )
 
-    from ..qec_qldpc_codes import channel_llr, syndrome
+    from ..qec_qldpc_codes import syndrome
+    from ..qec.channel import OracleChannel, BSCSyndromeChannel
+
+    _CHANNEL_REGISTRY = {
+        "oracle": OracleChannel,
+        "bsc_syndrome": BSCSyndromeChannel,
+    }
+    channel_cls = _CHANNEL_REGISTRY.get(config.channel_model)
+    if channel_cls is None:
+        raise ValueError(
+            f"Unknown channel_model {config.channel_model!r}. "
+            f"Available: {sorted(_CHANNEL_REGISTRY)}"
+        )
+    channel = channel_cls()
 
     results: list[dict[str, Any]] = []
 
@@ -148,7 +161,7 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
                 for _ in range(config.trials):
                     e = (sub_rng.random(n) < p).astype(np.uint8)
                     s = syndrome(H, e)
-                    llr = channel_llr(e, p)
+                    llr = channel.compute_llr(p=p, n=n, error_vector=e)
 
                     dec_result = adapter.decode(
                         syndrome=s, llr=llr, error_vector=e,
@@ -185,7 +198,7 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
                     rt_rng = np.random.default_rng(sub_seed)
                     e_rt = (rt_rng.random(n) < p).astype(np.uint8)
                     s_rt = syndrome(H, e_rt)
-                    llr_rt = channel_llr(e_rt, p)
+                    llr_rt = channel.compute_llr(p=p, n=n, error_vector=e_rt)
                     workload = {
                         "llr": llr_rt,
                         "syndrome": s_rt,

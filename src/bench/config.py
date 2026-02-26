@@ -71,6 +71,8 @@ class BenchmarkConfig:
     # v3.0.1 optional fields — absent by default for backward compat.
     qudit: dict[str, Any] | None = None
     resource_model: ResourceModelConfig | None = None
+    # v3.1.3 channel model — defaults to "oracle" for backward compat.
+    channel_model: str = "oracle"
 
     def __post_init__(self) -> None:
         self.distances = sorted(self.distances)
@@ -94,6 +96,13 @@ class BenchmarkConfig:
         # Ensure resource_model is ResourceModelConfig or None.
         if isinstance(self.resource_model, dict):
             self.resource_model = ResourceModelConfig(**self.resource_model)
+        # Validate channel_model.
+        _VALID_CHANNEL_MODELS = {"oracle", "bsc_syndrome"}
+        if self.channel_model not in _VALID_CHANNEL_MODELS:
+            raise ValueError(
+                f"channel_model must be one of {sorted(_VALID_CHANNEL_MODELS)}, "
+                f"got {self.channel_model!r}"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dict suitable for JSON serialization."""
@@ -104,6 +113,10 @@ class BenchmarkConfig:
             d.pop("qudit", None)
         if d.get("resource_model") is None:
             d.pop("resource_model", None)
+        # Omit channel_model when default ("oracle") so that pre-v3.1.3
+        # configs produce identical serialized output.
+        if d.get("channel_model") == "oracle":
+            d.pop("channel_model", None)
         return d
 
     def to_json(self) -> str:
