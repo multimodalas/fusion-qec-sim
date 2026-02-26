@@ -263,7 +263,44 @@ Releases are commitments, not milestones.
 
 ---
 
-## 17. Pre-Release Checklist
+## 17. Commit and Push Discipline
+
+Commits and pushes are controlled actions, not routine automation.
+
+Claude may only commit and push when ALL of the following are true:
+
+- All tests pass without weakening or modifying assertions to force success.
+- Determinism guarantees remain intact.
+- No protected subsystems were modified without explicit user instruction.
+- No schema versions were bumped without instruction.
+- No dependency changes were introduced without approval.
+- No silent behavior change occurred in default configurations.
+- A scope audit confirms changes are limited to the intended feature.
+
+Passing tests alone are necessary but not sufficient. Correctness must be
+reasoned about, not assumed.
+
+- Do not push speculative or partially audited work.
+- Do not push changes justified only by "tests are green."
+
+### Push Escalation Rule
+
+If a change affects any of the following, Claude must request explicit user
+authorization before pushing:
+
+- Decoder internals.
+- Scheduling logic.
+- Serialization.
+- Hashing.
+- Schema validation.
+- Artifact structure.
+- Determinism guarantees.
+
+Push only after invariant verification and structural audit.
+
+---
+
+## 18. Pre-Release Checklist
 
 Before Claude may tag or propose a release, every item must be verified:
 
@@ -278,7 +315,7 @@ Before Claude may tag or propose a release, every item must be verified:
 
 ---
 
-## 18. When in Doubt
+## 19. When in Doubt
 
 If a proposed change is ambiguous, follow these defaults:
 
