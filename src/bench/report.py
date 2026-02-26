@@ -43,17 +43,21 @@ def to_markdown_tables(result_obj: dict[str, Any]) -> str:
     if results:
         lines.append("## FER Results\n")
         has_runtime = any(r.get("runtime") is not None for r in results)
-        header = "| Decoder | Distance | p | FER | WER | Mean Iters |"
-        sep = "|---------|----------|---|-----|-----|------------|"
+        header = "| Decoder | Distance | p | FER | Fidelity | Syndrome Consistency | WER | Mean Iters |"
+        sep = "|---------|----------|---|-----|----------|----------------------|-----|------------|"
         if has_runtime:
             header += " Latency (us) |"
             sep += "--------------|"
         lines.append(header)
         lines.append(sep)
         for r in results:
+            fidelity = r.get("fidelity", 1.0 - r["fer"])
+            scr = r.get("syndrome_success_rate", "N/A")
+            scr_str = f"{scr:.6f}" if isinstance(scr, (int, float)) else scr
             row = (
                 f"| {r['decoder']} | {r['distance']} | {r['p']} "
-                f"| {r['fer']:.6f} | {r['wer']:.6f} | {r['mean_iters']:.2f} |"
+                f"| {r['fer']:.6f} | {fidelity:.6f} | {scr_str} "
+                f"| {r['wer']:.6f} | {r['mean_iters']:.2f} |"
             )
             if has_runtime:
                 rt = r.get("runtime")
