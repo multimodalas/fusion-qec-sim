@@ -136,7 +136,7 @@ v3.1.2 establishes the deterministic interop baseline.
 
 Layer 3 — Channel & Noise Modeling (Next Expansion Frontier)
 
-Planned starting v3.1.3+.
+Established in v3.1.3 and hardened in v3.1.4.
 
 Scope:
 
@@ -198,9 +198,9 @@ Must preserve reproducibility guarantees
 
 Dimensional expansion must not destabilize binary baseline behavior.
 
-3. Current State — v3.1.3
+3. Current State — v3.1.4
 
-The v3.1.3 release establishes:
+The v3.1.4 release establishes:
 
 Deterministic interop benchmarking layer (v3.1.2 baseline preserved)
 
@@ -218,6 +218,8 @@ Schedule differentiation observable under realistic noise
 
 Non-zero FER at small physical error rates
 
+Channel abstraction hardening (centralized validation, shared constants, registry isolation)
+
 629+ passing tests
 
 No decoder core modifications
@@ -226,11 +228,9 @@ No schema version bump
 
 No dependency expansion
 
-v3.1.3 marks the transition from infrastructure maturity
-(v3.1.2 deterministic interop baseline)
-to scientifically realistic channel modeling.
+v3.1.4 completes the stabilization of Layer 3 (Channel & Noise Modeling).
 
-Layer 3 is now formally established.
+Layer 3 is now formally established and structurally hardened.
 
 4. Near-Term Direction (v3.1.x → v3.2)
 
