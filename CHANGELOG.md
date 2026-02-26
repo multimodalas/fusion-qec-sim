@@ -4,6 +4,106 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.1.2] — 2026-02-26
+
+### Deterministic Interop Baseline & Schema Hardening
+
+This release formalizes the benchmarking / interop layer as a deterministic,
+schema-validated baseline suitable for controlled comparative research.
+
+No decoder core logic was modified.
+
+---
+
+### Added
+
+**Deterministic Interop Benchmark Layer (`src/bench/interop/`)**
+
+- Isolated third-party interop namespace
+- Strict import hygiene (Stim / PyMatching optional and gated)
+- Canonical JSON serialization utilities:
+  - `sort_keys=True`
+  - compact separators
+- Artifact SHA-256 hashing over immutable record state
+- Stable sweep hash derived solely from configuration parameters
+- Deterministic report generation with stable ordering
+
+**Interop Schema v3.1.2**
+
+- Structured interop record validation
+- Required determinism block:
+  - canonical JSON configuration
+  - stable_sweep_hash (64-hex validated)
+  - artifact_hash (64-hex validated)
+- `mean_iters` required for `direct_comparison` records
+- Structured skipped-record validation:
+  - `reason` (str)
+  - `tool.name` (str)
+  - `benchmark_kind` (str)
+  - `code_family` (str)
+
+**Legal & Policy Documentation**
+
+- `LEGAL_THIRD_PARTY.md`
+- `INTEROP_POLICY.md`
+- `REPRODUCIBILITY.md`
+
+Explicit separation of:
+- Core decoding logic
+- Interop benchmarking layer
+- Reference baselines
+
+---
+
+### Changed
+
+- Removed post-hash mutation of benchmark records
+- Hardened interop record validation logic
+- Enforced canonical JSON configuration contract
+- Deterministic report ordering for stable Markdown output
+- Documentation updated to match schema requirements
+
+---
+
+### Guarantees
+
+- No changes to core decoding logic
+- No changes to scheduling or ensemble behavior
+- No API breaking changes
+- No new required dependencies
+- SCHEMA_VERSION remains `3.0.1`
+- INTEROP_SCHEMA_VERSION remains `3.1.2`
+- Byte-identical artifacts with:
+  - `runtime_mode="off"`
+  - `deterministic_metadata=True`
+  - fixed seed
+
+---
+
+### Reproducibility Anchor
+
+Deterministic Suite Artifact (SHA-256):
+
+
+431f7573a0ba8af4784b385f528cfe99d6169eb74798eabddd146def278b6d77
+
+
+Golden Vector Hash:
+
+
+86babd2ec81daa165d3ce778b9eb71a3766667484e1c51a2000642ae08ec9569
+
+
+---
+
+### Test Status
+
+608 passed  
+7 skipped  
+0 failed  
+
+Interop schema and determinism hardening release.
+
 ## [3.0.2] - 2026-02-25
 
 ### Added
