@@ -147,6 +147,7 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
                 frame_errors = 0
                 total_iters = 0
                 iter_counts: list[int] = []
+                syndrome_matches = 0
 
                 for _ in range(config.trials):
                     e = (sub_rng.random(n) < p).astype(np.uint8)
@@ -163,8 +164,17 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
                     if not dec_result["success"]:
                         frame_errors += 1
 
+                    # Syndrome consistency: does syndrome(H, c) == s?
+                    correction = dec_result.get("correction")
+                    if correction is not None:
+                        s_c = syndrome(H, np.asarray(correction, dtype=np.uint8))
+                        if np.array_equal(s_c, s):
+                            syndrome_matches += 1
+
                 fer = float(frame_errors) / config.trials
+                fidelity = 1.0 - fer
                 mean_iters = float(total_iters) / config.trials
+                syndrome_success_rate = float(syndrome_matches) / config.trials
 
                 record: dict[str, Any] = {
                     "decoder": adapter.name,
@@ -172,8 +182,10 @@ def run_benchmark(config: BenchmarkConfig) -> dict[str, Any]:
                     "distance": distance,
                     "p": p,
                     "fer": fer,
+                    "fidelity": fidelity,
                     "wer": fer,  # WER := FER in this project
                     "mean_iters": round(mean_iters, 4),
+                    "syndrome_success_rate": syndrome_success_rate,
                     "trials": config.trials,
                 }
 

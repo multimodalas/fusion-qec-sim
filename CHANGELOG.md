@@ -4,6 +4,57 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+[3.1.4] — 2026-02-26
+Channel Architecture Hardening
+
+This release tightens the structural integrity of the channel abstraction layer introduced in v3.1.3.
+
+No scientific behavior changes.
+No decoder modifications.
+No schema changes.
+
+Changed
+
+Channel Abstraction Layer Hardening
+
+Centralized probability validation in ChannelModel
+
+Introduced shared _EPSILON constant to prevent numeric drift
+
+Relocated channel registry into src/qec/channel/ (Layer 2 ownership)
+
+Removed inline registry from benchmarking runner
+
+Added explicit documentation of oracle default serialization compatibility in config layer
+
+Guarantees
+
+OracleChannel remains byte-identical to v3.1.2 artifacts
+
+BSCSyndromeChannel behavior unchanged from v3.1.3
+
+No decoder core modifications
+
+No scheduling or ensemble changes
+
+No API breaking changes
+
+No dependency expansion
+
+SCHEMA_VERSION remains 3.0.1
+
+INTEROP_SCHEMA_VERSION remains 3.1.2
+
+Determinism preserved (runtime_mode="off", deterministic_metadata=True, fixed seed)
+
+Test Status
+
+629 passed
+7 skipped
+0 failed
+
+Channel abstraction hardening release.
+
 ## [3.1.3] — 2026-02-26
 
 ### Syndrome-Only Channel Inference
