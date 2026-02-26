@@ -198,60 +198,93 @@ Must preserve reproducibility guarantees
 
 Dimensional expansion must not destabilize binary baseline behavior.
 
-3. Current State — v3.1.2
+3. Current State — v3.1.3
 
-The v3.1.2 release establishes:
+The v3.1.3 release establishes:
 
-Deterministic interop benchmarking layer
+Deterministic interop benchmarking layer (v3.1.2 baseline preserved)
 
-Schema v3.1.2 validation hardening
+Explicit channel abstraction layer under src/qec/channel/
 
-Structured skipped-record enforcement
+Supported channel modes:
 
-Canonical artifact hashing
+oracle (default, byte-identical to v3.1.2)
 
-Reproducibility anchor artifact
+bsc_syndrome (syndrome-only inference)
 
-600+ passing tests
+Realistic FER curves under syndrome-only conditions
 
-No decoder core modifications.
+Schedule differentiation observable under realistic noise
 
-v3.1.2 is the canonical deterministic baseline for future work.
+Non-zero FER at small physical error rates
 
-4. Near-Term Direction (v3.1.x)
-v3.1.3 — Realistic Channel Modes
+629+ passing tests
+
+No decoder core modifications
+
+No schema version bump
+
+No dependency expansion
+
+v3.1.3 marks the transition from infrastructure maturity
+(v3.1.2 deterministic interop baseline)
+to scientifically realistic channel modeling.
+
+Layer 3 is now formally established.
+
+4. Near-Term Direction (v3.1.x → v3.2)
+
+With channel abstraction now formalized, near-term work focuses on controlled channel expansion.
+
+Channel Expansion (Additive Only)
 
 Planned:
 
-channel_model = "oracle" | "bsc_syndrome"
+AWGN channel
 
-Syndrome-only inference mode
+Erasure channel
 
-Non-zero FER at small p
+Deterministic parameterized noise families
 
-Smooth threshold curve emergence
+Stim-compatible synthetic channel adapters
 
-Real schedule differentiation
+Hardware-injected noise interfaces (future)
 
-Minor version bump.
+Constraints:
 
-No architectural break.
+Channel layer must not mutate decoder logic
 
-No decoder modification.
+Oracle mode must remain byte-identical
 
-Deterministic Channel Architecture
+Determinism under fixed seed must be preserved
 
-Future work will:
+No schema drift
 
-Introduce pluggable channel layer
-
-Support AWGN and erasure channels
-
-Maintain byte-identical determinism under fixed seed
-
-Preserve oracle mode behavior exactly
+No silent behavior changes
 
 Channel realism must not undermine reproducibility.
+
+Decoder Research Under Realistic Noise
+
+Future improvements may include:
+
+Schedule refinement under syndrome-only inference
+
+Improved min-sum normalization strategies
+
+Structured post-processing comparisons
+
+Controlled ensemble behavior evaluation
+
+All decoder experimentation must:
+
+Be version-scoped
+
+Preserve deterministic guarantees
+
+Avoid implicit behavioral drift
+
+Maintain strict layering boundaries
 
 5. Long-Term Direction (v3.2+)
 
