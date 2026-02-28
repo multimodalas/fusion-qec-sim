@@ -4,6 +4,84 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.3.0] — 2026-02-28
+
+### Geometry-Aware Syndrome-Only Diagnostics
+
+This release adds a diagnostics-first reporting layer for explaining
+distance scaling inversion under `bsc_syndrome` channel inference.
+
+All metrics are computed post-hoc from existing benchmark results.
+No decoder behavior changes.  No schema changes.  Canonical benchmark
+artifacts are byte-identical when diagnostics are not invoked.
+
+---
+
+### Added
+
+**Geometry Diagnostics Module (`src/bench/geometry_diagnostics.py`)**
+
+- Distance Penalty Slope (DPS): slope of log10(FER + eps) vs distance
+  per (decoder, p) group — positive slope indicates inversion
+- False-Convergence Rate (FCR): P(syndrome=0 AND logical failure),
+  derived algebraically as SCR - Fidelity (equivalent to Inversion
+  Index from v3.2.1)
+- Budget Sensitivity Index (BSI): FER(base) - FER(2x) for comparing
+  iteration budget impact
+- Schedule Sensitivity Index (SSI): max(FER) - min(FER) across
+  schedules per (distance, p)
+- Per-iteration summary computation from existing `llr_history`:
+  syndrome_weight[t], check_satisfaction_ratio[t], delta_syndrome[t]
+- Aggregate stall metrics (stall fraction, trials with stalls)
+- Aggregate residual summaries (mean/max/var of linf, l2, energy)
+- Local inconsistency summary (syndrome weight increase events)
+- Standalone `collect_per_iteration_data()` using existing opt-in
+  `llr_history` and `residual_metrics` decoder parameters
+- Sidecar artifact builder with deterministic canonicalized output
+
+**Diagnostic Workflow Support**
+
+- BSI comparison: accepts base and 2x max_iters result sets
+- SSI comparison: accepts schedule-keyed result mapping
+- Grouping by distance, p, schedule, and channel
+- Deterministic config ordering in all aggregated outputs
+
+**Test Coverage**
+
+- Metric correctness tests for all seven diagnostics
+- Diagnostics-off baseline byte-identity verification
+- Deterministic sidecar serialization tests
+- Aggregation order stability tests (input-order independence)
+- Per-iteration instrumentation integration tests
+- Sidecar rerun byte-identity test
+
+---
+
+### Guarantees
+
+- No changes to core decoding logic
+- No changes to scheduling or ensemble behavior
+- No default decoder behavior changes
+- No channel modifications
+- No schema changes
+- SCHEMA_VERSION remains `3.0.1`
+- INTEROP_SCHEMA_VERSION remains `3.1.2`
+- No new external dependencies
+- No new randomness sources
+- Canonical benchmark artifacts unchanged when diagnostics are not invoked
+- All diagnostic outputs emitted as separate sidecar artifacts
+- Determinism preserved (`runtime_mode="off"`, `deterministic_metadata=True`, fixed seed)
+
+---
+
+### Test Status
+
+669 passed
+7 skipped
+0 failed
+
+Geometry-aware syndrome-only diagnostics release.
+
 [3.2.1] — 2026-02-28
 
 Inversion Index Formalization & Structural Channel Diagnostics
