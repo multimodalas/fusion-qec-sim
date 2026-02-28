@@ -4,6 +4,84 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+[3.2.1] — 2026-02-28
+
+Inversion Index Formalization & Structural Channel Diagnostics
+
+This release formalizes the Inversion Index (II) as a deterministic diagnostic metric and completes the structural comparison between oracle and syndrome-only channel models.
+
+This is a report-layer structural formalization release.
+
+No decoder behavior changes.
+No channel modifications.
+No schema changes.
+
+Added
+
+Inversion Index (II = SCR - Fidelity)
+
+Deterministic derived metric isolating syndrome-consistent but logically incorrect decoding outcomes
+
+Computed algebraically from existing FER and SCR fields
+
+No new stochastic sources
+
+No new artifact generation
+
+No schema expansion required
+
+Cross-Channel Structural Comparative Analysis
+
+Formal comparison between oracle and bsc_syndrome channel regimes
+
+Quantified threshold displacement (~0.48–0.49)
+
+Identified inversion regime under oracle (p > 0.50)
+
+Confirmed absence of inversion regime under syndrome-only
+
+Statistical Noise Bound Formalization
+
+Added theoretical bound for random syndrome matches:
+
+P[random syndrome match] ≈ 2^(−m)
+
+Expected matches ≈ T · 2^(−m)
+
+Demonstrated that observed small II values (~0.002–0.010) are consistent with statistical coincidence at 200–500 trial counts
+
+Closed interpretive gap between stochastic noise and structural inversion
+
+Guarantees
+
+Layer 1 decoder logic unchanged
+
+Channel implementations unchanged
+
+SCHEMA_VERSION remains 3.0.1
+
+INTEROP_SCHEMA_VERSION remains 3.1.2
+
+No dependency expansion
+
+No artifact hash drift
+
+No JSON canonicalization changes
+
+No runner modifications
+
+Inversion Index is derived from existing deterministic fields and inherits all determinism guarantees.
+
+Test Status
+
+629 passed
+7 skipped
+0 failed
+
+Determinism verified (runtime_mode="off", deterministic_metadata=True, fixed seed).
+
+Structural diagnostic formalization release.
+
 [3.1.4] — 2026-02-26
 Channel Architecture Hardening
 
