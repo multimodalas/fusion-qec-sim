@@ -193,6 +193,32 @@ class TestSSI:
             "flooding", "layered", "residual",
         ]
 
+    def test_ssi_multi_decoder_no_mixing(self):
+        """Two decoders at same (distance, p) produce separate SSI entries."""
+        dec_a = "bp_min_sum_flooding_none"
+        dec_b = "bp_sum_product_flooding_none"
+        by_sched = {
+            "flooding": [
+                _rec(decoder=dec_a, distance=3, p=0.05, fer=0.3),
+                _rec(decoder=dec_b, distance=3, p=0.05, fer=0.6),
+            ],
+            "layered": [
+                _rec(decoder=dec_a, distance=3, p=0.05, fer=0.1),
+                _rec(decoder=dec_b, distance=3, p=0.05, fer=0.5),
+            ],
+        }
+        result = compute_ssi(by_sched)
+        assert len(result) == 2
+        decoders = [r["decoder"] for r in result]
+        assert dec_a in decoders
+        assert dec_b in decoders
+        # Each decoder gets its own SSI.
+        for r in result:
+            if r["decoder"] == dec_a:
+                assert r["ssi"] == pytest.approx(0.2, abs=1e-9)
+            else:
+                assert r["ssi"] == pytest.approx(0.1, abs=1e-9)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Per-Iteration Summary

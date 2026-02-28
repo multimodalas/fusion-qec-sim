@@ -60,18 +60,22 @@ def compute_dps(
     for (decoder, p) in sorted(groups.keys()):
         group = sorted(groups[(decoder, p)], key=lambda r: r["distance"])
         distances = [r["distance"] for r in group]
-        log_fer = [round(math.log10(r["fer"] + eps), 10) for r in group]
+        log_fer_raw = [math.log10(r["fer"] + eps) for r in group]
 
         if len(distances) < 2:
             slope = 0.0
-            intercept = log_fer[0] if log_fer else 0.0
+            intercept = log_fer_raw[0] if log_fer_raw else 0.0
         else:
             d_arr = np.array(distances, dtype=np.float64)
-            lf_arr = np.array(log_fer, dtype=np.float64)
+            lf_arr = np.array(log_fer_raw, dtype=np.float64)
             A = np.vstack([d_arr, np.ones(len(d_arr))]).T
             coef, _, _, _ = np.linalg.lstsq(A, lf_arr, rcond=None)
-            slope = round(float(coef[0]), 10)
-            intercept = round(float(coef[1]), 10)
+            slope = float(coef[0])
+            intercept = float(coef[1])
+
+        log_fer = [round(v, 10) for v in log_fer_raw]
+        slope = round(slope, 10)
+        intercept = round(intercept, 10)
 
         results.append({
             "decoder": decoder,
@@ -184,7 +188,7 @@ def compute_bsi(
 def compute_ssi(
     records_by_schedule: dict[str, list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
-    """max(FER) - min(FER) across schedules for each (distance, p).
+    """max(FER) - min(FER) across schedules for each (decoder, distance, p).
 
     Parameters
     ----------
@@ -197,23 +201,21 @@ def compute_ssi(
     fer_max, fer_min, p, ssi.  Coordinates with only one schedule
     are omitted.
     """
-    by_coord: dict[tuple[int, float], dict[str, float]] = {}
-    decoder_for: dict[tuple[int, float], str] = {}
+    by_coord: dict[tuple[str, int, float], dict[str, float]] = {}
 
     for sched in sorted(records_by_schedule.keys()):
         for rec in records_by_schedule[sched]:
-            key = (rec["distance"], rec["p"])
+            key = (rec["decoder"], rec["distance"], rec["p"])
             by_coord.setdefault(key, {})[sched] = rec["fer"]
-            decoder_for.setdefault(key, rec["decoder"])
 
     results: list[dict[str, Any]] = []
-    for (distance, p) in sorted(by_coord.keys()):
-        fer_map = by_coord[(distance, p)]
+    for (decoder, distance, p) in sorted(by_coord.keys()):
+        fer_map = by_coord[(decoder, distance, p)]
         if len(fer_map) < 2:
             continue
         fer_vals = list(fer_map.values())
         results.append({
-            "decoder": decoder_for[(distance, p)],
+            "decoder": decoder,
             "distance": distance,
             "fer_by_schedule": {k: fer_map[k] for k in sorted(fer_map)},
             "fer_max": max(fer_vals),
