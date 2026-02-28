@@ -225,6 +225,29 @@ By contrast, the near-threshold syndrome-only data shows **no such phenomenon**:
 
 The BSC syndrome-only channel provides a uniform LLR magnitude with no position-specific sign information. At p >= 0.45, the LLR magnitude is small (`|log((1-p)/p)| <= 0.20`), providing minimal directional prior. The decoder cannot converge to any specific solution — correct or incorrect but syndrome-consistent. Without the oracle's LLR sign to guide it toward a specific (wrong) answer, the decoder's output at failure is structurally random and almost never satisfies the syndrome constraints.
 
+### Statistical Noise Bound for Random Syndrome Matches
+
+Under the syndrome-only channel in the high-p regime, decoder outputs at failure are effectively unconstrained binary vectors. For a linear code with m independent parity checks, the probability that a uniformly random binary vector satisfies the syndrome constraints is approximately:
+
+```
+P[random syndrome match] ≈ 2^(−m)
+```
+
+For T independent trials:
+
+```
+Expected random matches ≈ T · 2^(−m)
+```
+
+In the near-threshold sweeps:
+
+- **Trials** = 500
+- **Observed II** ≈ 0.002–0.010
+- This corresponds to approximately **1–5 syndrome-consistent outcomes per 500 trials**
+- These rates are consistent with rare random syndrome matches and do not indicate a structured inversion mechanism
+
+Therefore, the small non-zero Inversion Index values under the syndrome-only channel are statistically consistent with random structural coincidence, not systematic decoder behavior.
+
 ### Contrast with Oracle Near-Threshold Behavior
 
 ```
