@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.3.0](https://img.shields.io/badge/release-v3.3.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.3.0)
+[![Release v3.3.0](https://img.shields.io/badge/release-v3.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.4.0)
 
 License: CC-BY-4.0
 
@@ -10,9 +10,11 @@ Deterministic QLDPC CSS quantum error correction framework featuring:
 
 Invariant-safe algebraic construction
 
-Multi-mode belief propagation (min-sum)
+Multi-mode belief propagation (sum-product / min-sum family)
 
 Flooding, layered, hybrid-residual, and adaptive scheduling
+
+Deterministic guided decimation (v3.4.0)
 
 Syndrome-only and oracle channel models
 
@@ -25,85 +27,145 @@ Structural regime diagnostics via Inversion Index
 This project is engineered for reproducibility, interpretability, and controlled experimentation.
 
 Current Release
-v3.2.1 — Inversion Index Formalization & Structural Channel Diagnostics
+v3.4.0 — Deterministic Guided Decimation
 
-v3.2.1 introduces the Inversion Index (II) as a deterministic diagnostic metric and completes the formal structural comparison between oracle and syndrome-only channel models.
+v3.4.0 introduces an opt-in structural intervention for syndrome-only decoding:
 
-This is a report-layer structural formalization release.
+postprocess="guided_decimation"
 
-No decoder, channel, or schema behavior was modified.
+This release adds deterministic belief-propagation–guided variable freezing without modifying:
 
-What’s New in v3.2.1
-Inversion Index (II)
+BP message-passing semantics
+
+Scheduling logic
+
+_bp_postprocess() behavior
+
+Schema versions
+
+Default decoder behavior
+
+This is a decoder-layer structural extension — not a reporting-layer formalization.
+
+What’s New in v3.4.0
+Deterministic Guided Decimation
+
+For each decimation round:
+
+Run BP for decimation_inner_iters
+
+If syndrome satisfied → return immediately
+
+Select unfrozen variable with maximal |posterior LLR|
+
+Tie-break by lowest index (deterministic)
+
+Zero-posterior convention → freeze positive (hard = 0)
+
+Clamp LLR to ±decimation_freeze_llr
+
+Repeat up to decimation_rounds
+
+Fallback ranking (if convergence fails):
+
+(syndrome_weight, hamming_weight, round_index)
+
+All operations are fully deterministic.
+
+Added Parameters
+
+(Validated only when enabled)
+
+decimation_rounds (default: 10)
+
+decimation_inner_iters (default: 10)
+
+decimation_freeze_llr (default: 1000.0)
+
+Baseline decoder calls ignore these parameters.
+
+Structural Guarantees (v3.4.0)
+
+Flooding schedule loop unchanged
+
+Layered schedule loop unchanged
+
+_bp_postprocess() unchanged
+
+SCHEMA_VERSION unchanged (3.0.1)
+
+INTEROP_SCHEMA_VERSION unchanged (3.1.2)
+
+No identity/hash drift for baseline decoders
+
+No new dependencies
+
+No randomness introduced
+
+All tests passing at release time:
+
+701 passed, 7 skipped
+Inversion Index (v3.2.1)
+
+The Inversion Index (II) remains the primary scalar diagnostic for structural channel artifacts.
+
 II = SCR - Fidelity
    = syndrome_consistency_rate - (1 - FER)
-
-The Inversion Index isolates syndrome-consistent but logically incorrect decoding outcomes.
 
 Interpretation:
 
 II = 0 → no systematic inversion
 
-II > 0 → syndrome-consistent but logically wrong corrections exist
+II > 0 → syndrome-consistent but logically incorrect corrections
 
 II = 1.0 → maximal inversion regime (oracle p > 0.50)
 
-The metric is an exact algebraic derivative of existing deterministic fields.
-No new stochastic sources were introduced.
+The metric is algebraically derived from existing deterministic fields.
+No stochastic sources are introduced.
 
 Cross-Channel Structural Analysis
-
-The release completes the formal comparison between:
-
-Oracle channel (v3.1.4 baseline)
-
-BSC syndrome-only channel (v3.2.0 baseline)
-
-Key structural differences:
-
-Property	Oracle	Syndrome-Only
-Effective threshold	~0.50 (degenerate)	~0.01–0.02
+Property	Oracle Channel	Syndrome-Only
+Effective threshold	~0.50	~0.01–0.02
 Inversion regime	Yes (p > 0.50)	None
 Inversion Index peak	1.0	~0.0
 SCR/FER divergence	Yes	No
 Distance scaling	Positive	Negative
 Schedule differentiation	Masked	Real
 
-The Inversion Index is the clearest scalar separating channel-model artifacts from genuine decoder behavior.
+The Inversion Index remains the clearest scalar separating channel-model artifacts from genuine decoder behavior.
 
 Statistical Noise Bound
-
-Small non-zero II values under the syndrome-only channel are now formally bounded.
 
 For a linear code with m independent parity checks:
 
 P[random syndrome match] ≈ 2^(−m)
 Expected matches ≈ T · 2^(−m)
 
-Observed II values (~0.002–0.010) correspond to 1–5 events per 500 trials — consistent with random structural coincidence, not a hidden inversion mechanism.
+Observed II values (~0.002–0.010) under the syndrome-only channel correspond to random structural coincidence, not a hidden inversion mechanism.
 
-Behavioral Guarantees (v3.2.1)
+Architecture Overview
 
-Decoder logic unchanged (Layer 1 untouched)
+Layered system:
 
-Channel implementations unchanged
+Layer 1 — Decoder Core
 
-SCHEMA_VERSION remains 3.0.1
+Layer 2 — Channel Models
 
-INTEROP_SCHEMA_VERSION remains 3.1.2
+Layer 3 — Benchmark & Reporting
 
-No dependency expansion
+Interop Layer — Canonical JSON + hash verification
 
-No artifact hash drift
+Strict ownership boundaries are enforced.
 
-Determinism preserved
+No layer mutates another layer’s invariants.
 
-All tests passing at release time:
-
-629 passed, 7 skipped
 Reproducibility Anchor
 
-The deterministic interop baseline remains anchored to v3.1.2.
+Deterministic interop baseline:
+
+SCHEMA_VERSION = 3.0.1
+
+INTEROP_SCHEMA_VERSION = 3.1.2
 
 Deterministic Suite Artifact (SHA-256):
 
@@ -120,28 +182,6 @@ deterministic_metadata=True
 seed=12345
 
 If it cannot be reproduced byte-for-byte, it is not a baseline.
-
-Architecture Overview
-
-Layered system:
-
-Layer 1 — Decoder Core
-Layer 2 — Channel Models
-Layer 3 — Benchmark & Reporting
-Interop Layer — Canonical JSON + hash verification
-
-Strict ownership boundaries are enforced.
-
-No layer mutates another layer’s invariants.
-
-Documentation
-
-Release history: CHANGELOG.md
-Forward direction: ROADMAP.md
-Determinism contract: docs/REPRODUCIBILITY.md
-Interop policy: docs/INTEROP_POLICY.md
-Legal tool matrix: docs/LEGAL_THIRD_PARTY.md
-Release artifacts: release_artifacts/
 
 Design Philosophy
 
