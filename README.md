@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.5.0](https://img.shields.io/badge/release-v3.5.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.5.0)
+[![Release v3.6.0](https://img.shields.io/badge/release-v3.6.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.6.0)
 
 License: CC-BY-4.0
 
@@ -8,7 +8,7 @@ QEC — Deterministic QLDPC CSS Framework
 
 Deterministic QLDPC CSS quantum error correction toolkit with invariant-safe algebraic construction, multi-mode belief propagation (sum-product / min-sum family), flooding/layered/hybrid/adaptive scheduling, posterior-aware and decimation-based postprocessing, pluggable deterministic channel modeling, and rigorous FER benchmarking.
 
-This project is engineered for:
+Engineered for:
 
 Reproducibility
 
@@ -19,18 +19,20 @@ Structural experimentation
 Controlled decoder intervention research
 
 Current Release
-v3.5.0 — Posterior-Aware OSD-1 & Structural Inversion Mitigation
+v3.6.0 — Deterministic Posterior-Aware Combination-Sweep OSD
 
-v3.5.0 introduces an opt-in posterior-aware postprocess mode:
+v3.6.0 completes the ordering-tier escalation of the decoder layer by introducing:
 
-postprocess="mp_osd1"
+postprocess="mp_osd_cs"
 
-This extends the decoder layer without modifying baseline behavior.
+This extends combination-sweep OSD (osd_cs) by using posterior LLR magnitude (abs(L_post)) instead of channel LLR magnitude for reliability ordering.
 
-What’s New in v3.5.0
-Deterministic MP-Aware OSD-1
+Baseline behavior remains bit-identical.
 
-Unlike standard osd1, which orders candidate flips using channel LLR magnitude, mp_osd1 uses posterior LLR magnitude (abs(L_post)) derived from belief propagation.
+What’s New in v3.6.0
+Deterministic Posterior-Aware OSD-CS
+
+Unlike standard osd_cs, which orders candidate pivots using channel LLR magnitude, mp_osd_cs uses posterior magnitude derived from belief propagation.
 
 Implementation pattern:
 
@@ -42,96 +44,96 @@ llr_history=1
 
 If syndrome satisfied → return immediately
 
-Otherwise apply OSD-1 with reliability ordering based on posterior magnitude
+Otherwise apply OSD-CS using ordering based on abs(L_post)
 
 Deterministic tie-breaking (ascending index)
 
 Enforce never-degrade guarantee
 
-No BP message-passing semantics are altered.
+Key properties:
 
-No scheduling logic is modified.
+No BP loop modifications
 
-_bp_postprocess() remains untouched.
+No scheduling changes
 
-Schema versions remain unchanged.
+_bp_postprocess() untouched
 
-Structural DPS Probe (v3.5.0 Validation)
+No schema changes
 
-Before tagging, a controlled structural probe was executed under:
+No new parameters (reuses osd_cs_lam)
+
+Fully deterministic
+
+This is a strictly additive feature.
+
+Structural Ordering Probe (v3.6.0 Validation)
+
+A controlled lam-sensitivity probe was executed under:
 
 channel_model="bsc_syndrome"
 
-distances [5, 7]
+distances [8, 12, 16]
 
-p = 0.015
+p ∈ [0.01, 0.02, 0.03, 0.04]
 
-150 trials
+lam ∈ {1, 2, 3}
 
-min-sum flooding schedule
+10,800 total trials
 
-Four decoders were compared:
+Results:
 
-None
+osd_cs and mp_osd_cs produced byte-identical corrections in all trials
 
-osd1
+No ordering sensitivity observed
 
-mp_osd1
+DPS inversion persists under syndrome-only inference
 
-guided_decimation
+Increasing lam did not alter candidate selection
 
-Distance Performance Slope (DPS)
-Decoder	DPS
-osd1	+0.0673
-guided_decimation	+0.0552
-none	+0.0513
-mp_osd1	+0.0410
+Interpretation:
 
-All decoders remain in the positive-slope (inverted) regime under syndrome-only inference.
+Under uniform channel LLR (BSC-syndrome), ordering differences do not change the selected coset leader at tested scales. Posterior-aware ordering is structurally verified but not expressive in this regime.
 
-However:
+This isolates inversion behavior as an upstream inference or information-model phenomenon rather than an ordering deficiency.
 
-mp_osd1 produces the lowest inversion magnitude
+Posterior-Aware OSD-1 (v3.5.0)
 
-It reduces FER growth between distances
+v3.5.0 introduced:
 
-Posterior-aware ordering outperforms channel-LLR ordering under syndrome-only conditions
+postprocess="mp_osd1"
 
-Inversion is reduced but not eliminated.
+A deterministic posterior-aware single-bit OSD variant.
 
-This establishes posterior magnitude as a structurally superior reliability metric in this regime.
+Structural probe under BSC-syndrome showed:
+
+Reduced inversion magnitude compared to osd1
+
+Lower FER growth across distances
+
+Posterior magnitude superior to channel LLR in syndrome-only regime
+
+Inversion reduced but not eliminated.
 
 Deterministic Guided Decimation (v3.4.0)
-
-v3.4.0 introduced:
-
 postprocess="guided_decimation"
 
-Deterministic belief-propagation–guided variable freezing:
+Belief-propagation–guided deterministic variable freezing:
 
-For each decimation round:
+Iterative BP refinement
 
-Run BP for decimation_inner_iters
-
-If syndrome satisfied → return immediately
-
-Select unfrozen variable with maximal |posterior LLR|
+Freeze variable with maximal |posterior LLR|
 
 Deterministic tie-breaking
 
-Clamp LLR to ±decimation_freeze_llr
+Clamp LLR to fixed magnitude
 
-Repeat up to decimation_rounds
+Never-degrade fallback ordering
 
-Fallback ranking:
+All operations deterministic.
 
-(syndrome_weight, hamming_weight, round_index)
+Inversion Index (II)
 
-All operations are fully deterministic.
-
-Inversion Index (v3.2.1)
-
-The Inversion Index (II) remains the primary scalar diagnostic for structural channel artifacts.
+Primary scalar diagnostic for structural channel artifacts:
 
 II = SCR - Fidelity
    = syndrome_consistency_rate - (1 - FER)
@@ -142,11 +144,9 @@ II = 0 → no systematic inversion
 
 II > 0 → syndrome-consistent but logically incorrect corrections
 
-II = 1.0 → maximal inversion regime (oracle p > 0.50)
+II = 1.0 → maximal inversion regime
 
-The metric is algebraically derived from deterministic benchmark fields.
-
-No stochastic sources are introduced.
+Derived strictly from deterministic benchmark outputs.
 
 Channel Regime Comparison
 Property	Oracle	Syndrome-Only
@@ -154,22 +154,27 @@ Effective threshold	~0.50	~0.01–0.02
 Inversion regime	Yes (p > 0.50)	No
 Inversion Index peak	1.0	~0.0
 SCR/FER divergence	Yes	No
-Distance scaling	Positive	Negative
+Distance scaling	Positive	Inverted
 Schedule differentiation	Masked	Real
 
-The Inversion Index cleanly separates channel-model artifacts from decoder behavior.
+The Inversion Index separates channel-model artifacts from decoder behavior.
 
 Architecture Overview
 
 Layered system:
 
 Layer 1 — Decoder Core
+Belief propagation + deterministic postprocessing.
+
 Layer 2 — Channel Models
+Pluggable, deterministic LLR generators.
+
 Layer 3 — Benchmark & Reporting
-Interop Layer — Canonical JSON + hash verification
+FER, DPS, inversion diagnostics.
 
-Strict ownership boundaries are enforced.
+Interop Layer — Canonical JSON + Hash Verification
 
+Strict ownership boundaries enforced.
 No layer mutates another layer’s invariants.
 
 Reproducibility Anchor
@@ -213,7 +218,7 @@ No identity/hash drift for baseline decoders
 
 Determinism verified across repeated runs
 
-All tests passing at release time.
+Full test suite passing at release
 
 Design Philosophy
 
