@@ -9,7 +9,7 @@ decimation : Deterministic threshold-based bit commitment.
 """
 
 from .gf2 import binary_rank_dense, gf2_row_echelon
-from .osd import osd0, osd1, osd_cs
+from .osd import osd0, osd1, osd_cs, mp_osd1_postprocess
 from .decimation import decimate, decimation_round
 
 __all__ = [
@@ -18,6 +18,7 @@ __all__ = [
     "osd0",
     "osd1",
     "osd_cs",
+    "mp_osd1_postprocess",
     "decimate",
     "decimation_round",
 ]
