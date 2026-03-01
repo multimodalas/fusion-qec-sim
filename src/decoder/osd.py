@@ -370,3 +370,71 @@ def osd_cs(H, llr, hard_decision, syndrome_vec=None, lam=1):
         return hard_decision.copy()
 
     return best_candidate
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MP-aware OSD-1 (v3.5.0)
+# ═══════════════════════════════════════════════════════════════════════
+
+def mp_osd1_postprocess(H, llr, hard_bp, L_post, syndrome_vec):
+    """MP-aware OSD-1: orders flips by posterior LLR magnitude.
+
+    Unlike standard OSD-1 which sorts columns by channel LLR magnitude,
+    this variant uses the BP posterior beliefs ``abs(L_post)`` as the
+    reliability metric.  This exploits the message-passing information
+    to produce a more informed information-set selection.
+
+    The algorithm is identical to OSD-1 except for the reliability
+    ordering source.  All operations are deterministic.
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        llr: Channel LLR vector, length n (unused for ordering but
+            kept for API consistency).
+        hard_bp: BP hard-decision vector, length n, dtype uint8.
+        L_post: Posterior LLR vector from BP, length n.
+        syndrome_vec: Target syndrome, length m, dtype uint8.
+
+    Returns:
+        Corrected binary vector, length n, dtype uint8.
+        Satisfies the never-degrade guarantee: if neither OSD-0 nor
+        OSD-1 produces a valid syndrome match, *hard_bp* is returned.
+    """
+    H = np.asarray(H)
+    L_post = np.asarray(L_post, dtype=np.float64)
+    hard_bp = np.asarray(hard_bp, dtype=np.uint8)
+    m, n = H.shape
+
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    # Use _osd0_core with posterior LLR as the reliability metric.
+    result_0, reliability_order, pivot_cols, rank, osd0_valid = \
+        _osd0_core(H, L_post, hard_bp, syndrome_vec)
+
+    if rank == 0:
+        return hard_bp.copy()
+
+    # OSD-1 phase: flip the single least-reliable pivot bit.
+    flip_col_perm = pivot_cols[0]
+    flip_col_orig = reliability_order[flip_col_perm]
+
+    result_1 = result_0.copy()
+    result_1[flip_col_orig] ^= 1
+
+    osd1_syn = (
+        (H.astype(np.int32) @ result_1.astype(np.int32)) % 2
+    ).astype(np.uint8)
+    osd1_valid = np.array_equal(osd1_syn, syndrome_vec)
+
+    # Select best valid candidate.
+    candidates = []
+    if osd0_valid:
+        candidates.append((int(np.sum(result_0)), 0, result_0))
+    if osd1_valid:
+        candidates.append((int(np.sum(result_1)), 1, result_1))
+
+    if not candidates:
+        return hard_bp.copy()
+
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    return candidates[0][2]
