@@ -247,3 +247,151 @@ def decimation_round(
 
     # Max rounds exhausted; return last correction.
     return correction, total_bp_iters, max_rounds
+
+
+def guided_decimation(
+    H: np.ndarray,
+    llr: np.ndarray,
+    *,
+    syndrome_vec: Optional[np.ndarray] = None,
+    decimation_rounds: int = 10,
+    decimation_inner_iters: int = 10,
+    decimation_freeze_llr: float = 1000.0,
+    bp_kwargs: Optional[dict] = None,
+) -> Tuple[np.ndarray, int]:
+    """Deterministic belief-propagation guided decimation.
+
+    Each round:
+        1. Run BP for *decimation_inner_iters* iterations with current
+           (possibly frozen) LLRs.
+        2. If syndrome is satisfied, return the solution immediately.
+        3. Otherwise, obtain posterior LLRs from BP and select the
+           unfrozen variable with maximal ``|posterior LLR|``.
+        4. Ties are broken by lowest variable index (deterministic).
+        5. If the selected posterior LLR is zero, the variable is frozen
+           to ``+decimation_freeze_llr`` (hard decision = 0).  This is
+           the repository's deterministic zero-LLR convention.
+        6. Freeze the selected variable by clamping its channel LLR to
+           ``sign(posterior LLR) * decimation_freeze_llr``.
+        7. Continue to the next round.
+
+    If all rounds are exhausted without satisfying the syndrome, the
+    fallback candidate is selected deterministically:
+
+        Ranking key (ascending, i.e., best first):
+            ``(syndrome_weight, hamming_weight, round_index)``
+
+        - ``syndrome_weight``: number of unsatisfied checks
+          (H @ correction XOR syndrome_vec).
+        - ``hamming_weight``: Hamming weight of the correction vector.
+        - ``round_index``: order in which the candidate was produced
+          (earlier rounds preferred).
+
+    No randomness is introduced.  All operations are fully
+    reproducible across runs.
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        llr: Channel LLR vector, length n.
+        syndrome_vec: Binary target syndrome, length m.  Defaults to
+            all-zeros.
+        decimation_rounds: Maximum number of decimation rounds.
+        decimation_inner_iters: BP iterations per round.
+        decimation_freeze_llr: Magnitude used to clamp frozen variables.
+        bp_kwargs: Additional keyword arguments forwarded to
+            :func:`bp_decode` for each inner call (e.g. ``mode``,
+            ``schedule``, ``damping``).  Must NOT contain ``max_iters``,
+            ``postprocess``, ``llr_history``, or ``syndrome_vec``.
+
+    Returns:
+        ``(correction, total_bp_iters)``:
+            *correction* — hard-decision binary vector, dtype uint8.
+            *total_bp_iters* — cumulative BP iterations across all rounds.
+    """
+    from ..qec_qldpc_codes import bp_decode, syndrome
+
+    H = np.asarray(H, dtype=np.uint8)
+    llr = np.asarray(llr, dtype=np.float64)
+    m, n = H.shape
+
+    if syndrome_vec is None:
+        syndrome_vec = np.zeros(m, dtype=np.uint8)
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    if bp_kwargs is None:
+        bp_kwargs = {}
+
+    frozen = np.zeros(n, dtype=bool)
+    clamped_llr = llr.copy()
+    total_bp_iters = 0
+
+    # Candidate tracking for fallback ranking.
+    # Each entry: (syndrome_weight, hamming_weight, round_index, correction)
+    candidates: List[Tuple[int, int, int, np.ndarray]] = []
+
+    for rnd in range(decimation_rounds):
+        # ── Inner BP pass ──
+        # Use llr_history=1 to capture the final-iteration posterior.
+        # postprocess=None prevents recursion.
+        result = bp_decode(
+            H, clamped_llr,
+            max_iters=decimation_inner_iters,
+            syndrome_vec=syndrome_vec,
+            postprocess=None,
+            llr_history=1,
+            **bp_kwargs,
+        )
+        correction, iters, history = result[0], result[1], result[2]
+        total_bp_iters += iters
+
+        # Check convergence.
+        residual_syn = syndrome(H, correction)
+        if np.array_equal(residual_syn, syndrome_vec):
+            return correction, total_bp_iters
+
+        # Record candidate for fallback ranking.
+        syn_weight = int(np.sum(residual_syn != syndrome_vec))
+        ham_weight = int(np.sum(correction))
+        candidates.append((syn_weight, ham_weight, rnd, correction.copy()))
+
+        # ── Extract posterior LLRs from history ──
+        # history has shape (k, n) where k >= 1; take the last snapshot.
+        posterior = history[-1]  # shape (n,)
+
+        # ── Select variable to freeze ──
+        # Among unfrozen variables, pick maximal |posterior LLR|.
+        # Tie-break: lowest variable index.
+        best_v = -1
+        best_abs = -1.0
+        for v in range(n):
+            if frozen[v]:
+                continue
+            abs_post = abs(posterior[v])
+            if abs_post > best_abs:
+                best_abs = abs_post
+                best_v = v
+
+        if best_v == -1:
+            # All variables frozen; no further progress possible.
+            break
+
+        # ── Determine freeze sign ──
+        # Zero-LLR convention: freeze to +decimation_freeze_llr (hard = 0).
+        if posterior[best_v] >= 0.0:
+            freeze_sign = 1.0
+        else:
+            freeze_sign = -1.0
+
+        # ── Freeze the selected variable ──
+        frozen[best_v] = True
+        clamped_llr[best_v] = freeze_sign * decimation_freeze_llr
+
+    # ── Fallback: all rounds exhausted without convergence ──
+    # Rank candidates by (syndrome_weight, hamming_weight, round_index).
+    # All three components are explicit and deterministic.
+    if not candidates:
+        # Edge case: zero rounds (should not happen with valid params).
+        return np.zeros(n, dtype=np.uint8), total_bp_iters
+
+    candidates.sort(key=lambda c: (c[0], c[1], c[2]))
+    return candidates[0][3], total_bp_iters

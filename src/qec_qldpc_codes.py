@@ -668,7 +668,7 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
 _BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum",
              "improved_norm", "improved_offset"}
 _BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual", "adaptive"}
-_BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs"}
+_BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs", "guided_decimation"}
 
 
 def bp_decode(
@@ -704,6 +704,10 @@ def bp_decode(
     adaptive_log: bool = False,
     # ── v2.9.1 opt-in residual instrumentation ──
     residual_metrics: bool = False,
+    # ── v3.4.0 guided decimation parameters ──
+    decimation_rounds: int = 10,
+    decimation_inner_iters: int = 10,
+    decimation_freeze_llr: float = 1000.0,
     **kwargs,
 ) -> BpDecodeReturnType:
     """
@@ -968,6 +972,88 @@ def bp_decode(
         raise NotImplementedError(
             "lift_braided is reserved for a future release and not yet implemented"
         )
+
+    # ── v3.4.0: guided decimation early dispatch ──
+    # This is a separate decode path that orchestrates its own BP sub-calls.
+    # It exits before the main iteration loop and never touches
+    # _bp_postprocess() or any existing schedule/postprocess logic.
+    if postprocess == "guided_decimation":
+        if not isinstance(decimation_rounds, int) or decimation_rounds < 1:
+            raise ValueError(
+                f"decimation_rounds must be a positive integer, "
+                f"got {decimation_rounds}"
+            )
+        if not isinstance(decimation_inner_iters, int) or decimation_inner_iters < 1:
+            raise ValueError(
+                f"decimation_inner_iters must be a positive integer, "
+                f"got {decimation_inner_iters}"
+            )
+        if not isinstance(decimation_freeze_llr, (int, float)) or decimation_freeze_llr <= 0.0:
+            raise ValueError(
+                f"decimation_freeze_llr must be a positive number, "
+                f"got {decimation_freeze_llr}"
+            )
+
+        from .decoder.decimation import guided_decimation
+
+        _H = np.asarray(H, dtype=np.uint8)
+        _llr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (_H.shape[1],)
+        ).copy()
+
+        if syndrome_vec is None:
+            _syn = np.zeros(_H.shape[0], dtype=np.uint8)
+        else:
+            _syn = np.asarray(syndrome_vec, dtype=np.uint8)
+
+        # Build bp_kwargs for the inner BP calls — pass through all
+        # schedule/mode params but NOT postprocess, max_iters, llr_history,
+        # syndrome_vec, or the decimation params themselves.
+        _inner_bp_kwargs = {
+            "mode": mode,
+            "damping": damping,
+            "norm_factor": norm_factor,
+            "offset": offset,
+            "schedule": schedule,
+            "alpha1": alpha1,
+            "alpha2": alpha2,
+        }
+        if clip is not None:
+            _inner_bp_kwargs["clip"] = clip
+        if hybrid_residual_threshold is not None:
+            _inner_bp_kwargs["hybrid_residual_threshold"] = hybrid_residual_threshold
+
+        correction, total_iters = guided_decimation(
+            _H, _llr,
+            syndrome_vec=_syn,
+            decimation_rounds=decimation_rounds,
+            decimation_inner_iters=decimation_inner_iters,
+            decimation_freeze_llr=decimation_freeze_llr,
+            bp_kwargs=_inner_bp_kwargs,
+        )
+
+        # ── Assemble return tuple matching bp_decode output-shape rules ──
+        # The caller may have requested llr_history or residual_metrics.
+        # Guided decimation does not produce these internally, so return
+        # empty/neutral values that match the expected shapes.
+        if llr_history > 0:
+            _empty_hist = np.empty((0, _H.shape[1]), dtype=np.float64)
+            if residual_metrics:
+                _empty_metrics = {
+                    "residual_linf": [],
+                    "residual_l2": [],
+                    "residual_energy": [],
+                }
+                return correction, total_iters, _empty_hist, _empty_metrics
+            return correction, total_iters, _empty_hist
+        if residual_metrics:
+            _empty_metrics = {
+                "residual_linf": [],
+                "residual_l2": [],
+                "residual_energy": [],
+            }
+            return correction, total_iters, _empty_metrics
+        return correction, total_iters
 
     # ── v2.9.1: residual metric collection (opt-in) ──
     if residual_metrics:
