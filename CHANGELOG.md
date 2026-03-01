@@ -10,7 +10,8 @@ This project follows semantic versioning (SemVer).
 
 - SSI grouping hardened to include decoder identity
 - DPS regression now fits full-precision log values
-- BSI now raises on unmatched 2x configuration
+- BSI now raises `BSIConfigError` (specific subtype of `ValueError`)
+- `compute_bsi` docstring clarifies handling of extra 2x-only records
 - README badge corrected
 
 No decoder behavior changes.
