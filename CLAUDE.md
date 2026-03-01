@@ -1,368 +1,392 @@
-# CLAUDE.md — Architectural Governance Contract
+CLAUDE.md — QEC Architectural Constitution (v3.x Hardened)
 
-This file defines binding architectural and behavioral constraints for Claude
-when working in the QEC repository. It is NOT a README. It is a constitution
-that must be respected in every code generation, refactor, review, and release
-action performed by Claude.
+This document is binding.
+It governs all code generation, modification, refactor, testing, release, and push actions performed by Claude inside this repository.
 
-Goals: determinism, decoder stability, strict layering, schema governance,
-minimal dependency surface, and reproducibility guarantees.
+This is not guidance.
+It is a contract.
 
----
+Core values:
 
-## 1. Architectural Layering Model
+Determinism
 
-The codebase enforces a strict dependency hierarchy. Violations are forbidden.
+Decoder stability
 
-| Layer | Path             | Role                        |
-|-------|------------------|-----------------------------|
-| 1     | `src/qec/`       | Core decoding (protected)   |
-| 2     | `src/qec/channel/`| Channel abstraction          |
-| 3     | `src/bench/`     | Benchmarking and interop    |
+Strict layering
+
+Schema governance
+
+Minimal dependency surface
+
+Reproducibility guarantees
+
+1. Layering Model (Non-Negotiable)
+
+Dependency direction is strictly enforced.
+
+Layer	Path	Role
+1	src/qec/	Decoder core (protected)
+1a	src/qec/decoder/	Opt-in structural extensions
+2	src/qec/channel/	Channel abstraction
+3	src/bench/	Benchmarking & interop
 
 Rules:
 
-- Lower layers must never depend on higher layers.
-- `src/qec/` must never import from `src/bench/` or interop tooling.
-- `src/qec/channel/` is a consumer of Layer 1 — it must not mutate decoder
-  internals, alter scheduling, or inject state into the decoder.
-- `src/bench/` is a consumer only — it must not alter decoding semantics.
-- No upward dependency leakage. If a dependency direction is ambiguous, it is
-  forbidden until clarified.
+Lower layers must never depend on higher layers.
 
----
+src/qec/ must never import from src/bench/.
 
-## 2. Determinism as Architecture
+Channel code must not mutate decoder internals.
 
-Determinism is not a feature. It is a structural invariant.
+Benchmarking code must not alter decoding semantics.
 
-- No hidden randomness. All stochastic operations must use an explicit seed.
-- `runtime_mode="off"` must produce byte-identical artifacts across runs.
-- Canonical JSON serialization must not change between versions.
-- Sweep hash must derive exclusively from config — no ambient state.
-- Never introduce floating-point non-determinism (e.g., unordered reductions).
-- If a function is deterministic today, it must remain deterministic tomorrow.
+Ambiguous dependency direction is forbidden until clarified.
 
----
+Layer boundaries are architectural invariants.
 
-## 3. Seed Discipline
+2. Determinism is Architecture
 
-Randomness is permitted only under strict controls.
+Determinism is not a feature. It is structural.
 
-- All randomness must be explicitly seeded at the call site.
-- No use of global RNG state. No implicit `random.seed()` or `np.random.seed()`.
-- No use of `random` or `np.random` without explicit seed injection.
-- Seed derivation must remain order-independent.
-- Sub-seed derivation must use SHA-256 or an equivalent deterministic mapping.
-- Functions that accept a seed must propagate it to all internal stochastic
-  operations without loss.
-- Python's built-in `hash()` is strictly forbidden for any structural, ordering,
-  or seed-derivation logic. It is salted per-session and breaks determinism.
-- Always use `hashlib.sha256` (or equivalent cryptographic hash) for seed
-  derivation, sweep hashing, or artifact identity.
-- No reliance on object hash stability across runs or Python versions.
+Required invariants:
 
----
+No hidden randomness.
 
-## 4. Artifact Immutability
+Explicit seed injection at call site.
 
-Artifacts, once hashed, are immutable records.
+No global RNG state.
 
-- Artifact hash must reflect the final immutable record state and nothing else.
-- No post-hash mutation of any artifact field.
-- Deterministic metadata (timestamps excluded) must remain stable across
-  identical runs.
-- Report generation must not reorder data nondeterministically.
-- Serialization order must be canonical and reproducible.
+No use of Python hash().
 
----
+Sub-seed derivation must use SHA-256 or equivalent.
 
-## 5. Decoder Core Protection
+Canonical JSON serialization is centralized and immutable.
 
-The decoder is the most critical subsystem. Treat it as frozen unless told
-otherwise.
+Sweep hash derives strictly from config.
 
-- Files under `src/qec/` must NOT be modified unless explicitly requested.
-- No refactors to belief-propagation (BP) logic.
-- No changes to scheduling semantics (e.g., iteration order, message passing).
-- No performance "optimizations" without explicit instruction.
-- Minor releases must preserve bit-identical decoding behavior.
-- Do not introduce new code paths into the decoder without approval.
-- Do not alter function signatures in decoder modules.
+runtime_mode="off" → byte-identical artifacts.
 
----
+No unordered reductions that introduce floating drift.
 
-## 6. Protected Subsystems
+Identity and hash derivation must be pure functions of config.
 
-The following subsystems require explicit user instruction before any
-modification:
+If a function is deterministic today, it must remain deterministic tomorrow.
 
-- `src/qec/decoder` — Decoder core and BP logic.
-- `src/qec/scheduling` — Iteration order and message-passing schedule.
-- `canonicalize()` — Canonical serialization function.
-- Schema validation logic — Field validators, type enforcers.
-- Sweep hashing logic — Config-to-hash derivation.
+3. Artifact & Identity Stability
 
-If a proposed change touches any of these, Claude must ask the user before
-proceeding. No exceptions.
+Artifacts are immutable records.
 
----
+Artifact hash must reflect final canonical state only.
 
-## 7. Channel Layer Discipline
+No post-hash mutation.
 
-Channel models are consumers of the decoder, not peers.
+Serialization order must remain canonical.
 
-- Channel models must not mutate decoder internals or state.
-- `"oracle"` mode must remain backward-compatible across all versions.
-- New channel modes must be strictly additive — no removal, no renaming.
-- No silent behavior drift. If channel output changes, it must be documented.
-- Channel configuration must not alter decoder scheduling or convergence.
+Decoder identity must be stable across identical configs.
 
----
+Baseline identity must not include opt-in parameters unless enabled.
 
-## 8. Schema Governance Rules
+Identity serialization must not depend on object memory layout.
 
-Schema changes are high-risk. Treat them accordingly.
+Identity drift without version bump is forbidden.
 
-- Do NOT bump `SCHEMA_VERSION` without explicit instruction from the user.
-- Minor versions allow additive fields only — no removals, no type changes.
-- Backward compatibility is the default. Breaking changes require major bumps.
-- Validation must remain strict. Do not loosen validators to accommodate drift.
-- All schema fields must be documented at the point of introduction.
-- All JSON serialization and schema output must use the centralized
-  canonicalization logic in `src/utils/canonicalize.py`.
-- Do not implement ad-hoc `json.dumps(sort_keys=True)` logic elsewhere.
-- Do not duplicate canonicalization behavior. Serialization format is locked
-  and fuzz-validated.
-- Any change to canonicalization requires explicit user approval.
+4. Decoder Core Protection
 
----
+The decoder is the most protected subsystem.
 
-## 9. Benchmark / Interop Isolation
+Default rule: do not modify src/qec/ internals.
 
-Benchmarking and interop code must not leak into core logic.
+Prohibited without explicit instruction:
 
-- Code in `src/bench/` must not alter decoding semantics in any way.
-- Third-party tools (e.g., external decoders, plotting libraries) must remain
-  optional and gated behind feature flags or lazy imports.
-- Benchmark harnesses must not modify global state.
-- Interop adapters must not introduce implicit dependencies on external formats.
-- Claude must strictly adhere to the policies defined in
-  `docs/INTEROP_POLICY.md` and `docs/LEGAL_THIRD_PARTY.md`.
-- No proprietary decoders, reverse-engineering, or unapproved dependencies may
-  be introduced through interop or benchmarking paths.
-- Third-party tools must remain optional, gated, and policy-compliant.
-- Legal compliance constraints are binding architectural rules, not advisory.
+Modifying BP message passing.
 
----
+Changing scheduling semantics.
 
-## 10. Minimal Diff and Refactor Discipline
+Changing iteration order.
 
-Every diff must justify its existence. The following are explicitly prohibited
-without direct user request:
+Refactoring for style.
 
-- Large refactors or structural reorganizations.
-- Variable or function renaming unless functionally required.
-- Style-only rewrites (whitespace, import order, quote style).
-- Renaming modules or packages.
-- Collapsing or splitting abstraction layers.
-- "Improving structure" without explicit request.
-- Reformatting entire files.
-- Reordering imports globally.
-- Adding docstrings, type annotations, or comments to unchanged code.
-- Moving code between modules.
-- Introducing abstraction layers preemptively.
+Performance “optimizations.”
 
-Commit in small, logical increments — one concern per commit.
+Altering function signatures.
 
----
+Introducing new internal code paths.
 
-## 11. Dependency Policy
+Opt-In Structural Extensions (Layer 1a)
 
-The dependency surface must remain minimal.
+Permitted only if ALL conditions hold:
 
-- No new external dependencies without explicit user approval.
-- Prefer the Python standard library and NumPy for all operations.
-- Avoid convenience packages (e.g., `attrs`, `pydantic`, `click`) unless
-  already present in the project.
-- Do not upgrade existing dependencies without instruction.
-- All dependencies must be pinned or bounded in version specifications.
+Explicitly enabled via configuration.
 
----
+Default behavior remains bit-identical.
 
-## 12. Versioning Policy
+BP loops remain untouched.
 
-Version numbers encode architectural meaning.
+No randomness introduced.
 
-- Format: `vArchitecture.Major.Minor` (e.g., `v1.2.3`).
-- **Architecture** increments are reserved for foundational redesigns.
-- **Major** increments signal breaking changes or decoder behavior changes.
-- **Minor** increments are additive only.
-- Never bump a version number without explicit instruction.
+No schedule mutation.
 
-### Minor Version Constraints
+No baseline identity drift.
 
-- May add new features and configuration options.
-- Must not change default behavior of existing configurations.
-- Must not alter decoding outputs for the same config and seed.
-- Must not introduce schema-breaking changes.
+Fully deterministic.
 
-### Major Version Requirements
+Structural extension must be additive, not invasive.
 
-- Required for any change to decoder behavior.
-- Required for any schema-breaking change.
-- Required for removal or renaming of public interfaces.
+5. Channel Layer Discipline
 
----
+Channel models are consumers, not peers.
 
-## 13. Performance Stability
+Must not mutate decoder state.
 
-Performance is a correctness property in minor releases.
+Must not alter scheduling or convergence logic.
 
-- Minor versions must not introduce measurable decoding slowdown unless
-  explicitly requested.
-- No algorithmic complexity changes in minor releases.
-- Performance regressions must be documented and justified.
-- Benchmarking comparisons against the prior release are expected before
-  tagging.
+"oracle" mode must remain backward-compatible.
 
----
+Channel changes must be documented.
 
-## 14. Testing Requirements
+Deterministic under fixed seed.
+
+Additive only — no renaming, no removal.
+
+Channel realism must not destabilize decoder invariants.
+
+6. Schema Governance
+
+Schema is high-risk.
+
+Do not bump SCHEMA_VERSION without instruction.
+
+Minor releases: additive fields only.
+
+No type changes.
+
+No removals.
+
+Validation must remain strict.
+
+Canonicalization must use centralized logic only.
+
+No duplicate serialization pathways.
+
+No loosening validators to accommodate drift.
+
+Schema changes require explicit architectural justification.
+
+7. Minimal Diff Discipline
+
+Every line changed must justify itself.
+
+Forbidden without instruction:
+
+Large refactors.
+
+Renaming functions or variables.
+
+Style-only edits.
+
+Import reordering.
+
+File-wide formatting.
+
+Abstraction reshuffling.
+
+Adding comments to untouched code.
+
+Moving code between modules.
+
+Small commits. Single concern per change.
+
+8. Dependency Policy
+
+Dependency surface must remain minimal.
+
+No new dependencies without approval.
+
+Prefer stdlib + NumPy.
+
+No dependency upgrades without instruction.
+
+No convenience frameworks.
+
+All dependencies must be version-bounded.
+
+No architectural bloat.
+
+9. Versioning Discipline
+
+Version numbers encode meaning.
+
+Format: vArchitecture.Major.Minor
+
+Architecture → foundational redesign.
+
+Major → decoder or schema behavior change.
+
+Minor → additive only.
+
+Minor releases must:
+
+Preserve baseline decoding outputs.
+
+Preserve identity stability.
+
+Preserve determinism.
+
+Avoid performance regression.
+
+Any default behavior change requires major bump.
+
+10. Performance Stability
+
+Performance is correctness in minor releases.
+
+No measurable slowdown unless requested.
+
+No algorithmic complexity changes.
+
+No silent regressions.
+
+Benchmark comparison against prior release required before tag.
+
+11. Test Discipline
 
 Untested code is unshipped code.
 
-- All new features require accompanying unit tests.
-- Determinism must be verified: run the same config twice, compare outputs.
-- Oracle behavior must remain unchanged across minor version boundaries.
-- Tests must not depend on network access, wall-clock time, or randomness.
-- Regression tests must accompany every bug fix.
-- Do not delete or weaken existing tests without explicit approval.
+Required:
 
----
+Unit tests for all new features.
 
-## 15. Test Integrity and Specification Discipline
+Determinism tests (run twice, compare output).
 
-Tests define the contract of the system. They are not negotiable scaffolding.
+Oracle invariance across minor releases.
 
-- Tests must not be modified solely to make them pass. A failing test indicates
-  incorrect code or an intentional behavioral change — not a test defect by
-  default.
-- Intentional behavioral changes that require test updates must satisfy all of
-  the following:
-  - Explicit user instruction authorizing the change.
-  - A corresponding `CHANGELOG.md` update documenting the new behavior.
-  - A clear rationale explaining why the prior behavior was incorrect or
-    superseded.
+No network or time dependencies.
 
-The following are explicitly prohibited without direct user request:
+Regression tests for bug fixes.
 
-- Weakening assertions (e.g., replacing exact checks with range checks).
-- Broadening tolerances to mask numerical or behavioral drift.
-- Changing expected artifact hashes without a justified behavioral change.
-- Replacing strict equality with approximate comparisons.
-- Removing regression tests to silence failures.
-- Disabling determinism checks or hash verification to make CI pass.
+Tests define contract.
 
-Correct code makes tests pass. Tests do not adapt to accidental behavior.
+Prohibited:
 
----
+Weakening assertions.
 
-## 16. Release Discipline
+Broadening tolerances.
 
-Releases are commitments, not milestones.
+Removing regression tests.
 
-- No silent behavior changes. Every observable change must be documented.
-- All changes must be recorded in `CHANGELOG.md` before release.
-- Deterministic baselines must remain reproducible after any release.
-- Release artifacts must be hash-verifiable against their generating config.
-- Do not tag a release without confirming test suite passage.
+Changing expected hashes without behavioral justification.
 
----
+Replacing equality with approximate comparisons to hide drift.
 
-## 17. Commit and Push Discipline
+Correct code makes tests pass. Tests do not adapt to drift.
 
-Commits and pushes are controlled actions, not routine automation.
+12. Release Discipline
 
-Claude may only commit and push when ALL of the following are true:
+Releases are commitments.
 
-- All tests pass without weakening or modifying assertions to force success.
-- Determinism guarantees remain intact.
-- No protected subsystems were modified without explicit user instruction.
-- No schema versions were bumped without instruction.
-- No dependency changes were introduced without approval.
-- No silent behavior change occurred in default configurations.
-- A scope audit confirms changes are limited to the intended feature.
+Before tagging:
 
-Passing tests alone are necessary but not sufficient. Correctness must be
-reasoned about, not assumed.
+All tests pass.
 
-- Do not push speculative or partially audited work.
-- Do not push changes justified only by "tests are green."
+Determinism verified.
 
-### Revert / Abort Protocol
+Oracle unchanged (minor release).
 
-If an implementation causes any of the following:
+Schema unchanged unless approved.
 
-- Core decoder tests to fail.
-- Determinism invariants to break.
-- Schema validation to fail.
-- Canonicalization invariants to drift.
+CHANGELOG.md updated.
 
-Claude must immediately revert to the last known-good state (via `git revert` or
-`git checkout`), halt further speculative fixes, and request explicit user
-guidance. Do not attempt multi-step speculative repairs on protected subsystems.
+No decoder drift.
 
-### Push Escalation Rule
+No dependency drift.
 
-If a change affects any of the following, Claude must request explicit user
-authorization before pushing:
+No performance regression.
 
-- Decoder internals.
-- Scheduling logic.
-- Serialization.
-- Hashing.
-- Schema validation.
-- Artifact structure.
-- Determinism guarantees.
+No silent behavioral change.
 
-Push only after invariant verification and structural audit.
+13. Commit & Push Escalation
 
----
+Claude may commit/push only if:
 
-## 18. Pre-Release Checklist
+All invariants preserved.
 
-Before Claude may tag or propose a release, every item must be verified:
+Protected subsystems untouched unless authorized.
 
-- [ ] All tests pass.
-- [ ] Determinism verified (identical config + seed produces identical output).
-- [ ] Oracle behavior unchanged (if minor release).
-- [ ] Schema unchanged unless explicitly approved.
-- [ ] `CHANGELOG.md` updated with all observable changes.
-- [ ] No decoder drift from prior release baseline.
-- [ ] No new external dependencies introduced without approval.
-- [ ] No performance regressions in minor releases.
+No schema change without approval.
 
----
+No identity drift.
 
-## 19. When in Doubt
+No determinism break.
 
-If a proposed change is ambiguous, follow these defaults:
+Scope limited to intended feature.
 
-- **Preserve stability.** Do not change what works.
-- **Avoid refactoring.** Leave structure alone unless instructed.
-- **Prefer doing nothing** over introducing speculative improvements.
-- **Read before writing.** Understand existing code before proposing changes.
+Passing tests alone are insufficient.
 
-### Escalation Rule
+Push Escalation Required If Change Touches:
 
-If a change touches any of the following, Claude must ask the user before
-proceeding:
+Decoder internals.
 
-- Decoder logic or scheduling.
-- Schema structure or validation.
-- Serialization or canonicalization.
-- Hashing (sweep hash, artifact hash, sub-seed derivation).
-- Artifact structure or immutability guarantees.
+Scheduling logic.
 
-No silent modifications to protected subsystems. Ever.
+Serialization.
+
+Hash derivation.
+
+Schema validation.
+
+Artifact structure.
+
+Determinism guarantees.
+
+If invariants break:
+
+Revert immediately.
+
+Halt speculative fixes.
+
+Request user instruction.
+
+No multi-step guesswork on protected subsystems.
+
+14. Escalation Rule
+
+If a proposed change affects:
+
+Decoder semantics
+
+Scheduling
+
+Schema
+
+Serialization
+
+Hashing
+
+Identity
+
+Artifact structure
+
+Determinism guarantees
+
+Claude must pause and request explicit instruction.
+
+Silence is not consent.
+
+15. Governing Principle
+
+When uncertain:
+
+Preserve stability.
+
+Avoid refactoring.
+
+Prefer doing nothing.
+
+Read before writing.
+
+Maintain invariants.
+
+Capability grows.
+Stability does not regress.
+
+If it cannot be reproduced byte-for-byte, it is not a baseline.
