@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.3.1] — 2026-03-01
+
+### v3.3.1 — Geometry Diagnostics Hardening
+
+- SSI grouping hardened to include decoder identity
+- DPS regression now fits full-precision log values
+- BSI now raises on unmatched 2x configuration
+- README badge corrected
+
+No decoder behavior changes.
+No schema changes.
+Determinism preserved.
+
+---
+
 ## [3.3.0] — 2026-02-28
 
 ### Geometry-Aware Syndrome-Only Diagnostics

@@ -154,7 +154,7 @@ def compute_bsi(
     Returns
     -------
     list of matched dicts with: bsi, decoder, distance, fer_2x, fer_base, p.
-    Unmatched records are silently omitted.
+    Raises ValueError if any base record has no matching 2x record.
     """
     lookup: dict[tuple[str, int, float], float] = {}
     for rec in records_2x:
@@ -167,7 +167,7 @@ def compute_bsi(
         key = (rec["decoder"], rec["distance"], rec["p"])
         fer_2x = lookup.get(key)
         if fer_2x is None:
-            continue
+            raise ValueError(f"BSI mismatch: no 2x record for {key}")
 
         results.append({
             "bsi": round(rec["fer"] - fer_2x, 10),
