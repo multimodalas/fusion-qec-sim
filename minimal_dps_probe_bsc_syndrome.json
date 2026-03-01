@@ -1,9 +1,9 @@
 {
   "schema_version": "3.0.1",
   "seed": 42,
-  "distances": [3, 5],
-  "p_values": [0.01],
-  "trials": 1000,
+  "distances": [5, 7],
+  "p_values": [0.015],
+  "trials": 150,
   "max_iters": 50,
   "decoders": [
     {
