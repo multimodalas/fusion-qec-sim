@@ -666,7 +666,7 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
 
 
 _BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum",
-             "improved_norm", "improved_offset"}
+             "improved_norm", "improved_offset", "min_sum_urw"}
 _BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual", "adaptive"}
 _BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs", "guided_decimation", "mp_osd1", "mp_osd_cs"}
 
@@ -708,6 +708,8 @@ def bp_decode(
     decimation_rounds: int = 10,
     decimation_inner_iters: int = 10,
     decimation_freeze_llr: float = 1000.0,
+    # ── v3.7.0 URW-BP parameter ──
+    urw_rho: float = 1.0,
     **kwargs,
 ) -> BpDecodeReturnType:
     """
@@ -895,6 +897,13 @@ def bp_decode(
         raise ValueError(
             f"hybrid_residual_threshold must be >= 0.0, got {hybrid_residual_threshold}"
         )
+
+    # ── v3.7.0 URW-BP validation ──
+    if mode == "min_sum_urw":
+        if not (0.0 < urw_rho <= 1.0):
+            raise ValueError(
+                f"urw_rho must be in the interval (0.0, 1.0], got {urw_rho}"
+            )
 
     # ── v2.9.0 adaptive schedule validation ──
     _ADAPTIVE_RULES = {"one_way"}
@@ -1508,7 +1517,7 @@ def bp_decode(
         _L_total = np.empty(n, dtype=np.float64)
 
     use_min_sum = mode in ("min_sum", "norm_min_sum", "offset_min_sum",
-                           "improved_norm", "improved_offset")
+                           "improved_norm", "improved_offset", "min_sum_urw")
 
     if schedule == "flooding":
         # ══════════════════════════════════════════════════════════════
@@ -1566,6 +1575,8 @@ def bp_decode(
                         elif mode == "improved_norm":
                             alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_msg[c, v] = alpha * sign_excl * min_excl
+                        elif mode == "min_sum_urw":
+                            c2v_msg[c, v] = urw_rho * sign_excl * min_excl
                         else:  # improved_offset
                             alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_msg[c, v] = sign_excl * max(alpha * min_excl - offset, 0.0)
@@ -1756,6 +1767,8 @@ def bp_decode(
                         elif mode == "improved_norm":
                             alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_raw = alpha * sign_excl * min_excl
+                        elif mode == "min_sum_urw":
+                            c2v_raw = urw_rho * sign_excl * min_excl
                         else:  # improved_offset
                             alpha = alpha1 if idx == min1_idx else alpha2
                             c2v_raw = sign_excl * max(alpha * min_excl - offset, 0.0)

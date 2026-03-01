@@ -4,6 +4,58 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.7.0] — 2026-03-01
+
+### Uniformly Reweighted BP (URW-BP)
+
+Adds a new opt-in BP mode `mode="min_sum_urw"` that applies a uniform
+scalar reweighting factor `urw_rho` to check-to-variable messages,
+reducing loop overcounting in loopy Tanner graphs.
+
+The URW reweighting scales each check-to-variable message by a constant
+`rho in (0, 1]`:
+
+    R_j→i ← urw_rho * R_j→i
+
+This is algebraically equivalent to `min_sum` when `urw_rho=1.0`.
+
+### Added
+
+- `mode="min_sum_urw"` in `bp_decode()`:
+  - Applies `urw_rho` as a uniform scalar multiplier to check-to-variable
+    messages in the min-sum update rule
+  - Supported on all schedules: flooding, layered, residual,
+    hybrid_residual, adaptive
+  - Compatible with damping, clipping, llr_history, residual_metrics,
+    and all existing postprocessors (osd0, osd1, osd_cs, etc.)
+- `urw_rho` parameter in `bp_decode()`:
+  - Validated only when `mode="min_sum_urw"`: must satisfy `0 < urw_rho <= 1`
+  - Default value `1.0` (no-op for non-URW modes)
+- Comprehensive test suite in `tests/test_urw_bp_v370.py`:
+  - Baseline invariance across all existing modes and schedules
+  - `rho=1.0` bit-identity with `min_sum`
+  - Determinism across repeated runs
+  - Validation error tests for invalid `urw_rho`
+  - Identity inclusion tests via BPAdapter
+
+### Guarantees
+
+- No changes to default decoder behavior
+- No changes to baseline decoder identity/hash
+- No changes to `_bp_postprocess()` or BP iteration loops
+- No schema changes (SCHEMA_VERSION and INTEROP_SCHEMA_VERSION unchanged)
+- No new dependencies
+- No scheduling changes
+- No randomness introduced
+- Determinism verified across repeated runs
+- All existing modes unaffected: sum_product, min_sum, norm_min_sum,
+  offset_min_sum, improved_norm, improved_offset
+- All existing schedules unaffected
+- All existing postprocessors unaffected
+- All existing tests pass without modification
+
+---
+
 ## [3.6.0] — 2026-03-01
 
 ### Deterministic Posterior-Aware Combination-Sweep OSD Postprocess
