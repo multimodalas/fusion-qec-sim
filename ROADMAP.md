@@ -1,8 +1,7 @@
 QEC Roadmap
-
 Deterministic QLDPC CSS Toolkit — Architectural Governance Document
 
-This document defines the structural trajectory, invariants, and expansion boundaries of the QEC toolkit.
+This document defines the structural trajectory, invariants, and expansion boundaries of QEC.
 
 QEC evolves under a stability-first philosophy.
 Experimental expansion is permitted — destabilization is not.
@@ -48,8 +47,7 @@ No circular dependencies
 
 Strict separation:
 
-src/qec/ → core decoding
-
+src/qec/   → core decoding & channel layer
 src/bench/ → benchmarking & interop
 
 No experimental leakage into core modules
@@ -69,10 +67,9 @@ No hard dependency on third-party benchmarking tools
 2. Architectural Layers
 
 QEC evolves in controlled layers.
-
 Each layer may expand — but must not destabilize lower layers.
 
-Layer 1 — Core Decoding Stability (Foundation)
+Layer 1 — Decoder Core (Invariant Backbone)
 
 Scope:
 
@@ -86,7 +83,7 @@ Ensemble decoding
 
 OSD family (0 / 1 / CS)
 
-Deterministic decimation
+Deterministic guided decimation (v3.4.0)
 
 Constraints:
 
@@ -96,13 +93,17 @@ No benchmarking feature may modify decoding semantics
 
 No hidden adaptive behavior
 
-No randomness introduced implicitly
+No implicit randomness
+
+Structural interventions must be opt-in
+
+v3.4.0 establishes the first bounded structural intervention under syndrome-only decoding while preserving baseline semantics.
 
 This layer is the invariant backbone of QEC.
 
 Layer 2 — Deterministic Benchmark & Interop Infrastructure
 
-Formalized in v3.0.x → v3.1.2.
+Formalized in v3.0.x → v3.1.2 and extended in v3.2.x.
 
 Scope:
 
@@ -120,7 +121,7 @@ Optional reference baselines (Stim / PyMatching)
 
 Deterministic report generation
 
-Reproducibility certification anchor
+Inversion Index (II) formalization
 
 Constraints:
 
@@ -132,9 +133,10 @@ Must isolate third-party tooling
 
 Must enforce schema invariants structurally
 
-v3.1.2 establishes the deterministic interop baseline.
+v3.1.2 establishes deterministic interop baseline.
+v3.2.x formalizes structural diagnostics (II).
 
-Layer 3 — Channel & Noise Modeling (Next Expansion Frontier)
+Layer 3 — Channel & Noise Modeling
 
 Established in v3.1.3 and hardened in v3.1.4.
 
@@ -142,41 +144,59 @@ Scope:
 
 Pluggable channel abstraction
 
-channel_model modes:
-
 oracle
 
 bsc_syndrome
-
-AWGN (planned)
-
-erasure (planned)
 
 Deterministic channel parameterization
 
 Stim-compatible synthetic channel interfaces
 
-Hardware-injected noise adapters (future)
+Future: AWGN, erasure
 
 Constraints:
 
 Channel layer must not mutate decoder logic
 
-Channel behavior must be fully deterministic under fixed seed
+Channel behavior must be deterministic under fixed seed
 
 Channel metadata must be schema-validated
 
-No silent behavior changes to existing oracle mode
+No silent behavior changes to oracle mode
 
 Goal:
 
-Enable realistic FER curves without destabilizing decoder core.
+Enable realistic FER curves without destabilizing the decoder core.
 
-Layer 4 — Analytical & Dimensional Expansion (Opt-In Only)
+Layer 4 — Structural Diagnostics & Regime Analysis
+
+Formalized in v3.2.x and extended in v3.3.x.
 
 Scope:
 
-Qudit-aware scaffolding
+Inversion Index (II)
+
+Geometry-aware diagnostics
+
+DPS, BSI, SSI metrics
+
+Structural regime classification
+
+Constraints:
+
+Diagnostics must not alter decoder semantics
+
+Metrics must be algebraically derived from deterministic fields
+
+No stochastic diagnostic sources
+
+This layer distinguishes structural channel artifacts from genuine decoder behavior.
+
+Layer 5 — Analytical & Dimensional Expansion (Opt-In Only)
+
+Future scope:
+
+Qudit scaffolding
 
 GF(q) exploration
 
@@ -184,7 +204,7 @@ Analytical gate-cost modeling
 
 Resource estimation tooling
 
-Nonbinary decoding research (future)
+Nonbinary decoding research
 
 Constraints:
 
@@ -192,105 +212,59 @@ Must be opt-in
 
 Must preserve qubit defaults
 
-Must not mutate existing decoder semantics
+Must not mutate binary decoder semantics
 
 Must preserve reproducibility guarantees
 
 Dimensional expansion must not destabilize binary baseline behavior.
 
-3. Current State — v3.1.4
+3. Current State — v3.4.0
 
-The v3.1.4 release establishes:
+v3.4.0 establishes:
 
-Deterministic interop benchmarking layer (v3.1.2 baseline preserved)
+Deterministic guided decimation (Layer 1 structural extension)
 
-Explicit channel abstraction layer under src/qec/channel/
+Fully preserved baseline decoder semantics
 
-Supported channel modes:
+No schedule mutation
 
-oracle (default, byte-identical to v3.1.2)
+No schema change
 
-bsc_syndrome (syndrome-only inference)
+No identity/hash drift
 
-Realistic FER curves under syndrome-only conditions
+700+ passing tests
 
-Schedule differentiation observable under realistic noise
+Complete isolation from _bp_postprocess() and BP loops
 
-Non-zero FER at small physical error rates
+Layer 1 now supports bounded structural intervention without compromising invariants.
 
-Channel abstraction hardening (centralized validation, shared constants, registry isolation)
+4. Near-Term Direction (v3.5.x)
 
-629+ passing tests
+Focus: Structural decoder refinement under syndrome-only noise.
 
-No decoder core modifications
+Possible candidates:
 
-No schema version bump
+Stabilizer Inactivation (opt-in, version-scoped)
 
-No dependency expansion
+MP-aware OSD fallback chaining
 
-v3.1.4 completes the stabilization of Layer 3 (Channel & Noise Modeling).
+Hybrid decimation + OSD sequencing
 
-Layer 3 is now formally established and structurally hardened.
+Posterior exposure as first-class API
 
-4. Near-Term Direction (v3.1.x → v3.2)
-
-With channel abstraction now formalized, near-term work focuses on controlled channel expansion.
-
-Channel Expansion (Additive Only)
-
-Planned:
-
-AWGN channel
-
-Erasure channel
-
-Deterministic parameterized noise families
-
-Stim-compatible synthetic channel adapters
-
-Hardware-injected noise interfaces (future)
+Early plateau detection in decimation rounds
 
 Constraints:
 
-Channel layer must not mutate decoder logic
+Must remain opt-in
 
-Oracle mode must remain byte-identical
+Must preserve baseline decoder behavior
 
-Determinism under fixed seed must be preserved
+Must maintain determinism
 
-No schema drift
+Must avoid implicit schedule mutation
 
-No silent behavior changes
-
-Channel realism must not undermine reproducibility.
-
-Decoder Research Under Realistic Noise
-
-Future improvements may include:
-
-Schedule refinement under syndrome-only inference
-
-Improved min-sum normalization strategies
-
-Structured post-processing comparisons
-
-Controlled ensemble behavior evaluation
-
-All decoder experimentation must:
-
-Be version-scoped
-
-Preserve deterministic guarantees
-
-Avoid implicit behavioral drift
-
-Maintain strict layering boundaries
-
-5. Long-Term Direction (v3.2+)
-
-Potential expansions:
-
-Controlled nonbinary message passing
+5. Medium-Term Direction (v3.6+)
 
 Cross-family scaling audits
 
@@ -298,15 +272,17 @@ Deterministic performance certification framework
 
 Structured comparative benchmarking across code families
 
+Regime transition mapping under channel perturbation
+
 All such work must:
 
 Be version-scoped
 
 Preserve baseline determinism
 
-Remain opt-in
-
 Maintain strict schema validation
+
+Avoid semantic drift
 
 6. What Will Not Happen
 
