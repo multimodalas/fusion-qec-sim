@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from src.bench.geometry_diagnostics import (
+    BSIConfigError,
     build_geometry_sidecar,
     collect_per_iteration_data,
     compute_bsi,
@@ -158,10 +159,11 @@ class TestBSI:
         result = compute_bsi(base, double)
         assert result[0]["bsi"] == 0.0
 
-    def test_missing_2x_record_omitted(self):
+    def test_missing_2x_record_raises(self):
         base = [_rec(distance=3, p=0.05, fer=0.3)]
         double = [_rec(distance=5, p=0.05, fer=0.2)]
-        assert len(compute_bsi(base, double)) == 0
+        with pytest.raises(BSIConfigError, match="BSI mismatch"):
+            compute_bsi(base, double)
 
 
 # ═══════════════════════════════════════════════════════════════════

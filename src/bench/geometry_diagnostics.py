@@ -20,6 +20,13 @@ from typing import Any
 import numpy as np
 
 
+# ── Exceptions ────────────────────────────────────────────────────
+
+class BSIConfigError(ValueError):
+    """Raised when BSI base/2x benchmark records are misaligned."""
+    pass
+
+
 # ── Epsilon for log-domain safety ─────────────────────────────────
 _LOG_EPS = 1e-30
 
@@ -154,7 +161,8 @@ def compute_bsi(
     Returns
     -------
     list of matched dicts with: bsi, decoder, distance, fer_2x, fer_base, p.
-    Unmatched records are silently omitted.
+    Raises BSIConfigError if any base record has no matching 2x record.
+    Extra 2x records without base match are ignored.
     """
     lookup: dict[tuple[str, int, float], float] = {}
     for rec in records_2x:
@@ -167,7 +175,7 @@ def compute_bsi(
         key = (rec["decoder"], rec["distance"], rec["p"])
         fer_2x = lookup.get(key)
         if fer_2x is None:
-            continue
+            raise BSIConfigError(f"BSI mismatch: no 2x record for {key}")
 
         results.append({
             "bsi": round(rec["fer"] - fer_2x, 10),
