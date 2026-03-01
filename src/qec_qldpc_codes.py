@@ -668,7 +668,7 @@ def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
 _BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum",
              "improved_norm", "improved_offset"}
 _BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual", "adaptive"}
-_BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs", "guided_decimation", "mp_osd1"}
+_BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs", "guided_decimation", "mp_osd1", "mp_osd_cs"}
 
 
 def bp_decode(
@@ -1116,6 +1116,99 @@ def bp_decode(
 
             corrected = mp_osd1_postprocess(
                 _H, _llr, hard_bp, L_post, _syn,
+            )
+
+            # Never-degrade rule: verify OSD result satisfies syndrome.
+            osd_syn = (
+                (_H.astype(np.int32) @ corrected.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            if np.array_equal(osd_syn, _syn):
+                correction = corrected
+            else:
+                correction = hard_bp
+
+        # Assemble return tuple matching bp_decode output-shape rules.
+        if llr_history > 0:
+            # Return the captured history from the inner call.
+            if residual_metrics:
+                _empty_metrics = {
+                    "residual_linf": [],
+                    "residual_l2": [],
+                    "residual_energy": [],
+                }
+                return correction, iters_bp, _history, _empty_metrics
+            return correction, iters_bp, _history
+        if residual_metrics:
+            _empty_metrics = {
+                "residual_linf": [],
+                "residual_l2": [],
+                "residual_energy": [],
+            }
+            return correction, iters_bp, _empty_metrics
+        return correction, iters_bp
+
+    # ── v3.6.0: mp_osd_cs early dispatch ──
+    # MP-aware combination-sweep OSD that uses posterior LLR magnitude
+    # for column ordering.  Follows the same early-return wrapper pattern
+    # as mp_osd1.  Runs BP with postprocess=None and llr_history=1 to
+    # obtain posterior, then applies mp_osd_cs_postprocess if syndrome
+    # is not satisfied.
+    if postprocess == "mp_osd_cs":
+        from .decoder.osd import mp_osd_cs_postprocess
+
+        _H = np.asarray(H, dtype=np.uint8)
+        _llr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (_H.shape[1],)
+        ).copy()
+
+        if syndrome_vec is None:
+            _syn = np.zeros(_H.shape[0], dtype=np.uint8)
+        else:
+            _syn = np.asarray(syndrome_vec, dtype=np.uint8)
+
+        # Inner BP call — same H, llr, max_iters, schedule, mode, etc.
+        # postprocess=None prevents recursion; llr_history=1 captures posterior.
+        _inner_result = bp_decode(
+            _H, _llr,
+            max_iters=max_iters,
+            mode=mode,
+            damping=damping,
+            norm_factor=norm_factor,
+            offset=offset,
+            clip=clip,
+            schedule=schedule,
+            postprocess=None,
+            seed=seed,
+            syndrome_vec=_syn,
+            llr_history=1,
+            alpha1=alpha1,
+            alpha2=alpha2,
+            hybrid_residual_threshold=hybrid_residual_threshold,
+            ensemble_k=ensemble_k,
+            state_aware_residual=state_aware_residual,
+            phi_by_state=phi_by_state,
+            s_by_state=s_by_state,
+            state_label_by_check=state_label_by_check,
+        )
+
+        hard_bp = _inner_result[0]
+        iters_bp = _inner_result[1]
+        _history = _inner_result[2]  # shape (k, n) from llr_history=1
+
+        # Check if BP already converged.
+        bp_syn = (
+            (_H.astype(np.int32) @ hard_bp.astype(np.int32)) % 2
+        ).astype(np.uint8)
+
+        if np.array_equal(bp_syn, _syn):
+            # BP converged — return immediately without OSD.
+            correction = hard_bp
+        else:
+            # Extract posterior LLR from history (last snapshot).
+            L_post = _history[-1]  # shape (n,)
+
+            corrected = mp_osd_cs_postprocess(
+                _H, _llr, hard_bp, L_post, _syn, lam=osd_cs_lam,
             )
 
             # Never-degrade rule: verify OSD result satisfies syndrome.

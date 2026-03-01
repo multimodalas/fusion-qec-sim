@@ -438,3 +438,113 @@ def mp_osd1_postprocess(H, llr, hard_bp, L_post, syndrome_vec):
 
     candidates.sort(key=lambda x: (x[0], x[1]))
     return candidates[0][2]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MP-aware OSD-CS (v3.6.0)
+# ═══════════════════════════════════════════════════════════════════════
+
+def mp_osd_cs_postprocess(H, llr, hard_bp, L_post, syndrome_vec, lam=1):
+    """MP-aware Combination Sweep OSD: orders by posterior LLR magnitude.
+
+    Unlike standard OSD-CS which sorts columns by channel LLR magnitude,
+    this variant uses the BP posterior beliefs ``abs(L_post)`` as the
+    reliability metric for information-set selection.  All other logic
+    (combination enumeration, candidate selection, never-degrade guard)
+    is identical to :func:`osd_cs`.
+
+    The algorithm is identical to OSD-CS except for the reliability
+    ordering source.  All operations are deterministic.
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        llr: Channel LLR vector, length n (unused for ordering but
+            kept for API consistency).
+        hard_bp: BP hard-decision vector, length n, dtype uint8.
+        L_post: Posterior LLR vector from BP, length n.
+        syndrome_vec: Target syndrome, length m, dtype uint8.
+        lam: Maximum number of pivot bits to flip simultaneously.
+            Default 1.  ``lam=0`` is equivalent to posterior-aware OSD-0.
+
+    Returns:
+        Corrected binary vector, length n, dtype uint8.
+        Satisfies the never-degrade guarantee: if no candidate produces
+        a valid syndrome match, *hard_bp* is returned.
+
+    Raises:
+        ValueError: If *lam* < 0.
+    """
+    H = np.asarray(H)
+    L_post = np.asarray(L_post, dtype=np.float64)
+    hard_bp = np.asarray(hard_bp, dtype=np.uint8)
+    m, n = H.shape
+    H_int = H.astype(np.int32)
+
+    if lam < 0:
+        raise ValueError(f"lam must be >= 0, got {lam}")
+
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    # ── Phase 1: OSD-0 core with posterior LLR as reliability metric ──
+    result_0, reliability_order, pivot_cols, rank, osd0_valid = \
+        _osd0_core(H, L_post, hard_bp, syndrome_vec)
+    result_0 = result_0.astype(np.uint8, copy=False)
+
+    if rank == 0:
+        return hard_bp.copy()
+
+    # Effective lambda: cannot flip more pivots than exist.
+    effective_lam = min(lam, rank)
+
+    # Performance guard: warn on large candidate counts.
+    n_cands = sum(math.comb(rank, k) for k in range(effective_lam + 1))
+    if n_cands > 10000:
+        warnings.warn(
+            f"MP-OSD-CS will evaluate {n_cands} candidates "
+            f"(rank={rank}, lam={effective_lam}). This may be slow.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    # ── Phase 2: Enumerate candidates ──
+    # Use posterior LLR magnitude for candidate metric (consistent with ordering).
+    llr_abs = np.abs(L_post)
+    best_key = None
+    best_candidate = None
+    combo_index = 0
+
+    # OSD-0 candidate (flip 0 pivots).
+    if osd0_valid:
+        key = _candidate_key(result_0, llr_abs, combo_index)
+        best_key = key
+        best_candidate = result_0
+    combo_index += 1
+
+    # Enumerate combinations of 1..effective_lam pivot flips.
+    for num_flips in range(1, effective_lam + 1):
+        for combo in itertools.combinations(range(rank), num_flips):
+            candidate = result_0.copy()
+            for pivot_idx in combo:
+                flip_col_perm = pivot_cols[pivot_idx]
+                flip_col_orig = reliability_order[flip_col_perm]
+                candidate[flip_col_orig] ^= 1
+
+            # Syndrome check.
+            cand_syn = (
+                (H_int @ candidate.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            cand_valid = np.array_equal(cand_syn, syndrome_vec)
+
+            if cand_valid:
+                key = _candidate_key(candidate, llr_abs, combo_index)
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best_candidate = candidate
+
+            combo_index += 1
+
+    # Never-degrade guard.
+    if best_candidate is None:
+        return hard_bp.copy()
+
+    return best_candidate
