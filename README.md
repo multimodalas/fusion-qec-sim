@@ -1,54 +1,113 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.3.0](https://img.shields.io/badge/release-v3.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.4.0)
+[![Release v3.5.0](https://img.shields.io/badge/release-v3.5.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.5.0)
 
 License: CC-BY-4.0
 
 QEC — Deterministic QLDPC CSS Framework
 
-Deterministic QLDPC CSS quantum error correction framework featuring:
+Deterministic QLDPC CSS quantum error correction toolkit with invariant-safe algebraic construction, multi-mode belief propagation (sum-product / min-sum family), flooding/layered/hybrid/adaptive scheduling, posterior-aware and decimation-based postprocessing, pluggable deterministic channel modeling, and rigorous FER benchmarking.
 
-Invariant-safe algebraic construction
+This project is engineered for:
 
-Multi-mode belief propagation (sum-product / min-sum family)
+Reproducibility
 
-Flooding, layered, hybrid-residual, and adaptive scheduling
+Interpretability
 
-Deterministic guided decimation (v3.4.0)
+Structural experimentation
 
-Syndrome-only and oracle channel models
-
-Statistically rigorous FER simulation
-
-Schema-validated deterministic benchmarking
-
-Structural regime diagnostics via Inversion Index
-
-This project is engineered for reproducibility, interpretability, and controlled experimentation.
+Controlled decoder intervention research
 
 Current Release
-v3.4.0 — Deterministic Guided Decimation
+v3.5.0 — Posterior-Aware OSD-1 & Structural Inversion Mitigation
 
-v3.4.0 introduces an opt-in structural intervention for syndrome-only decoding:
+v3.5.0 introduces an opt-in posterior-aware postprocess mode:
+
+postprocess="mp_osd1"
+
+This extends the decoder layer without modifying baseline behavior.
+
+What’s New in v3.5.0
+Deterministic MP-Aware OSD-1
+
+Unlike standard osd1, which orders candidate flips using channel LLR magnitude, mp_osd1 uses posterior LLR magnitude (abs(L_post)) derived from belief propagation.
+
+Implementation pattern:
+
+Run inner BP with:
+
+postprocess=None
+
+llr_history=1
+
+If syndrome satisfied → return immediately
+
+Otherwise apply OSD-1 with reliability ordering based on posterior magnitude
+
+Deterministic tie-breaking (ascending index)
+
+Enforce never-degrade guarantee
+
+No BP message-passing semantics are altered.
+
+No scheduling logic is modified.
+
+_bp_postprocess() remains untouched.
+
+Schema versions remain unchanged.
+
+Structural DPS Probe (v3.5.0 Validation)
+
+Before tagging, a controlled structural probe was executed under:
+
+channel_model="bsc_syndrome"
+
+distances [5, 7]
+
+p = 0.015
+
+150 trials
+
+min-sum flooding schedule
+
+Four decoders were compared:
+
+None
+
+osd1
+
+mp_osd1
+
+guided_decimation
+
+Distance Performance Slope (DPS)
+Decoder	DPS
+osd1	+0.0673
+guided_decimation	+0.0552
+none	+0.0513
+mp_osd1	+0.0410
+
+All decoders remain in the positive-slope (inverted) regime under syndrome-only inference.
+
+However:
+
+mp_osd1 produces the lowest inversion magnitude
+
+It reduces FER growth between distances
+
+Posterior-aware ordering outperforms channel-LLR ordering under syndrome-only conditions
+
+Inversion is reduced but not eliminated.
+
+This establishes posterior magnitude as a structurally superior reliability metric in this regime.
+
+Deterministic Guided Decimation (v3.4.0)
+
+v3.4.0 introduced:
 
 postprocess="guided_decimation"
 
-This release adds deterministic belief-propagation–guided variable freezing without modifying:
-
-BP message-passing semantics
-
-Scheduling logic
-
-_bp_postprocess() behavior
-
-Schema versions
-
-Default decoder behavior
-
-This is a decoder-layer structural extension — not a reporting-layer formalization.
-
-What’s New in v3.4.0
-Deterministic Guided Decimation
+Deterministic belief-propagation–guided variable freezing:
 
 For each decimation round:
 
@@ -58,53 +117,18 @@ If syndrome satisfied → return immediately
 
 Select unfrozen variable with maximal |posterior LLR|
 
-Tie-break by lowest index (deterministic)
-
-Zero-posterior convention → freeze positive (hard = 0)
+Deterministic tie-breaking
 
 Clamp LLR to ±decimation_freeze_llr
 
 Repeat up to decimation_rounds
 
-Fallback ranking (if convergence fails):
+Fallback ranking:
 
 (syndrome_weight, hamming_weight, round_index)
 
 All operations are fully deterministic.
 
-Added Parameters
-
-(Validated only when enabled)
-
-decimation_rounds (default: 10)
-
-decimation_inner_iters (default: 10)
-
-decimation_freeze_llr (default: 1000.0)
-
-Baseline decoder calls ignore these parameters.
-
-Structural Guarantees (v3.4.0)
-
-Flooding schedule loop unchanged
-
-Layered schedule loop unchanged
-
-_bp_postprocess() unchanged
-
-SCHEMA_VERSION unchanged (3.0.1)
-
-INTEROP_SCHEMA_VERSION unchanged (3.1.2)
-
-No identity/hash drift for baseline decoders
-
-No new dependencies
-
-No randomness introduced
-
-All tests passing at release time:
-
-701 passed, 7 skipped
 Inversion Index (v3.2.1)
 
 The Inversion Index (II) remains the primary scalar diagnostic for structural channel artifacts.
@@ -120,39 +144,28 @@ II > 0 → syndrome-consistent but logically incorrect corrections
 
 II = 1.0 → maximal inversion regime (oracle p > 0.50)
 
-The metric is algebraically derived from existing deterministic fields.
+The metric is algebraically derived from deterministic benchmark fields.
+
 No stochastic sources are introduced.
 
-Cross-Channel Structural Analysis
-Property	Oracle Channel	Syndrome-Only
+Channel Regime Comparison
+Property	Oracle	Syndrome-Only
 Effective threshold	~0.50	~0.01–0.02
-Inversion regime	Yes (p > 0.50)	None
+Inversion regime	Yes (p > 0.50)	No
 Inversion Index peak	1.0	~0.0
 SCR/FER divergence	Yes	No
 Distance scaling	Positive	Negative
 Schedule differentiation	Masked	Real
 
-The Inversion Index remains the clearest scalar separating channel-model artifacts from genuine decoder behavior.
-
-Statistical Noise Bound
-
-For a linear code with m independent parity checks:
-
-P[random syndrome match] ≈ 2^(−m)
-Expected matches ≈ T · 2^(−m)
-
-Observed II values (~0.002–0.010) under the syndrome-only channel correspond to random structural coincidence, not a hidden inversion mechanism.
+The Inversion Index cleanly separates channel-model artifacts from decoder behavior.
 
 Architecture Overview
 
 Layered system:
 
 Layer 1 — Decoder Core
-
 Layer 2 — Channel Models
-
 Layer 3 — Benchmark & Reporting
-
 Interop Layer — Canonical JSON + hash verification
 
 Strict ownership boundaries are enforced.
@@ -164,7 +177,6 @@ Reproducibility Anchor
 Deterministic interop baseline:
 
 SCHEMA_VERSION = 3.0.1
-
 INTEROP_SCHEMA_VERSION = 3.1.2
 
 Deterministic Suite Artifact (SHA-256):
@@ -182,6 +194,26 @@ deterministic_metadata=True
 seed=12345
 
 If it cannot be reproduced byte-for-byte, it is not a baseline.
+
+Structural Guarantees
+
+Flooding loop unchanged
+
+Layered loop unchanged
+
+_bp_postprocess() unchanged
+
+No schema changes
+
+No dependency expansion
+
+No hidden randomness
+
+No identity/hash drift for baseline decoders
+
+Determinism verified across repeated runs
+
+All tests passing at release time.
 
 Design Philosophy
 

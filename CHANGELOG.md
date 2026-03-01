@@ -4,6 +4,50 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.6.0] — 2026-03-01
+
+### Deterministic Posterior-Aware Combination-Sweep OSD Postprocess
+
+Adds a new opt-in postprocess mode `postprocess="mp_osd_cs"` that uses
+posterior LLR magnitude (`abs(L_post)`) instead of channel LLR to order
+columns for OSD-CS information-set selection and combination sweep.
+
+This extends the mp_osd1 approach (v3.5.0) from single-bit flip to
+multi-bit combination sweep, providing a higher-order posterior-aware
+search without altering BP semantics or default behavior.
+
+### Added
+
+- `postprocess="mp_osd_cs"` in `bp_decode()`:
+  - Runs inner BP with `postprocess=None` and `llr_history=1` to obtain
+    posterior beliefs
+  - If BP converges, returns immediately (no OSD needed)
+  - Otherwise, applies OSD-CS with reliability ordering based on
+    `abs(L_post)` instead of `abs(channel_llr)`
+  - Combination sweep depth controlled by existing `osd_cs_lam` parameter
+  - Tie-breaking: ascending variable index (deterministic)
+  - Never-degrade guarantee: if OSD result fails syndrome, returns BP
+    hard decision
+- `mp_osd_cs_postprocess()` function in `src/decoder/osd.py`
+- Comprehensive test suite in `tests/test_mp_osd_cs.py`
+
+### Guarantees
+
+- No changes to default decoder behavior
+- No changes to baseline decoder identity/hash
+- No changes to `_bp_postprocess()` or BP iteration loops
+- No schema changes (SCHEMA_VERSION and INTEROP_SCHEMA_VERSION unchanged)
+- No new dependencies
+- No new parameters (reuses existing `osd_cs_lam`)
+- No randomness introduced
+- Determinism verified across repeated runs
+- Baseline OSD postprocess modes (osd0, osd1, osd_cs) unaffected
+- MP-OSD-1 postprocess unaffected
+- Guided decimation postprocess unaffected
+- All existing tests pass without modification
+
+---
+
 ## [3.5.0] — 2026-03-01
 
 ### Deterministic MP-Aware OSD-1 Postprocess
