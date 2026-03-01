@@ -4,6 +4,63 @@ All notable changes to this project are documented in this file.
 
 This project follows semantic versioning (SemVer).
 
+## [3.4.0] — 2026-03-01
+
+### Deterministic Belief Propagation Guided Decimation
+
+Adds a new opt-in postprocess mode `postprocess="guided_decimation"` that
+performs iterative variable freezing guided by BP posterior beliefs.
+
+This is a minimal structural intervention designed to break degeneracy and
+trapping behavior in syndrome-only BP decoding, without altering BP
+semantics or default scheduling logic.
+
+### Added
+
+- `postprocess="guided_decimation"` in `bp_decode()`:
+  - Runs BP for `decimation_inner_iters` per round (up to `decimation_rounds`)
+  - After each round, selects the unfrozen variable with maximal |posterior LLR|
+  - Ties broken deterministically by lowest variable index
+  - Zero-posterior convention: freeze to +decimation_freeze_llr (hard = 0)
+  - Freezes the selected variable by clamping its LLR to
+    ±decimation_freeze_llr
+  - Returns immediately when syndrome is satisfied
+  - Non-convergence fallback ranks candidates by
+    (syndrome_weight, hamming_weight, round_index) — fully explicit
+- Three new parameters (only validated when `postprocess="guided_decimation"`):
+  - `decimation_rounds` (default 10)
+  - `decimation_inner_iters` (default 10)
+  - `decimation_freeze_llr` (default 1000.0)
+- `guided_decimation()` function in `src/decoder/decimation.py`
+- Comprehensive test suite in `tests/test_guided_decimation.py`
+
+### Guarantees
+
+- No changes to default decoder behavior
+- No changes to baseline decoder identity/hash
+- No changes to `_bp_postprocess()` or BP iteration loops
+- No schema changes (SCHEMA_VERSION and INTEROP_SCHEMA_VERSION unchanged)
+- No new dependencies
+- No randomness introduced
+- Determinism verified across repeated runs
+- Baseline OSD postprocess modes unaffected
+- All existing tests pass without modification
+
+### Structural techniques intentionally NOT implemented (out of scope)
+
+- Stabilizer Inactivation
+- MP-aware OSD
+- Check reweighting
+- Sequential CN scheduling variants
+- Graph surgery / Tanner graph modification
+- Directional LLR bias injection
+- Channel model modification
+- Learned / neural components
+- New schedule families
+- Automatic schedule switching
+
+---
+
 ## [3.3.1] — 2026-03-01
 
 ### v3.3.1 — Geometry Diagnostics Hardening
