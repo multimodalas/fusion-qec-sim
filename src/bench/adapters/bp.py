@@ -25,6 +25,7 @@ class BPAdapter(DecoderAdapter):
     def __init__(self) -> None:
         self._params: dict[str, Any] = {}
         self._H: np.ndarray | None = None
+        self._structural_config: Any | None = None
 
     @property
     def name(self) -> str:
@@ -37,6 +38,8 @@ class BPAdapter(DecoderAdapter):
         self._params = dict(config)
         # H is stored separately (not part of the identity block).
         self._H = self._params.pop("H", None)
+        # structural_config is consumed separately; not passed to bp_decode.
+        self._structural_config = self._params.pop("structural_config", None)
 
     def decode(
         self,
@@ -50,10 +53,26 @@ class BPAdapter(DecoderAdapter):
         if self._H is None:
             raise RuntimeError("Adapter not initialized (no H matrix)")
 
+        H_used = self._H
+        s_used = syndrome
+
+        if (self._structural_config is not None
+                and self._structural_config.rpc.enabled):
+            from ...qec.decoder.rpc import build_rpc_augmented_system
+
+            s_for_rpc = (
+                np.asarray(s_used, dtype=np.uint8)
+                if s_used is not None
+                else np.zeros(self._H.shape[0], dtype=np.uint8)
+            )
+            H_used, s_used = build_rpc_augmented_system(
+                self._H, s_for_rpc, self._structural_config.rpc,
+            )
+
         result = bp_decode(
-            self._H,
+            H_used,
             llr,
-            syndrome_vec=syndrome,
+            syndrome_vec=s_used,
             **self._params,
         )
         correction, iters = result[0], result[1]

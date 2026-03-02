@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.6.0](https://img.shields.io/badge/release-v3.6.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.6.0)
+[![Release v3.7.0](https://img.shields.io/badge/release-v3.7.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.7.0)
 
 License: CC-BY-4.0
 
@@ -19,38 +19,92 @@ Structural experimentation
 Controlled decoder intervention research
 
 Current Release
+v3.7.0 — Deterministic Uniformly Reweighted BP (URW) & Geometry Audit
+
+v3.7.0 introduces Uniformly Reweighted Belief Propagation (URW) as a strictly opt-in inference-geometry variant.
+
+mode="min_sum_urw"
+urw_rho ∈ (0, 1]
+
+URW applies a uniform scalar damping factor to check-to-variable messages:
+
+R_{j→i} ← ρ · R_{j→i}
+
+Where:
+
+ρ = 1.0 → bit-identical to baseline min_sum
+
+ρ < 1.0 → uniformly damped check influence
+
+Fully deterministic
+
+No adaptive behavior
+
+No stochastic elements
+
+Flooding and layered schedules are supported.
+
+Structural Guarantees
+
+Baseline decoders unchanged
+
+Golden artifact hash unchanged
+
+_bp_postprocess() untouched
+
+Scheduling semantics untouched
+
+Schema versions unchanged
+
+Identity stability preserved
+
+Determinism verified across repeated runs
+
+Full test suite passing
+
+URW is strictly opt-in and introduces zero drift when disabled.
+
+Geometry Probe — DPS Audit (v3.7.0)
+
+A controlled Distance Preservation Slope (DPS) sweep was executed under:
+
+channel_model="bsc_syndrome"
+
+distances [8, 12, 16]
+
+p [0.01, 0.02, 0.03, 0.04]
+
+300 trials per point
+
+ρ ∈ [1.0 … 0.6]
+
+Findings
+
+No ρ value produced negative DPS.
+
+DPS magnitude varied slightly but non-monotonically.
+
+No stable ρ window reduced inversion meaningfully.
+
+URW does not correct syndrome-only distance scaling inversion.
+
+Interpretation
+
+Uniform scalar reweighting of check influence is insufficient to alter the structural inversion regime under syndrome-only inference.
+
+The inversion is not attributable to simple loop overcount amplification and appears structural to the information geometry of syndrome-only decoding.
+
+v3.7.0 eliminates uniform reweighting as a viable correction mechanism.
+
 v3.6.0 — Deterministic Posterior-Aware Combination-Sweep OSD
 
-v3.6.0 completes the ordering-tier escalation of the decoder layer by introducing:
+v3.6.0 completed the ordering-tier escalation by introducing:
 
 postprocess="mp_osd_cs"
 
-This extends combination-sweep OSD (osd_cs) by using posterior LLR magnitude (abs(L_post)) instead of channel LLR magnitude for reliability ordering.
+This extends osd_cs by using posterior LLR magnitude (abs(L_post)) instead of channel LLR magnitude for reliability ordering.
 
-Baseline behavior remains bit-identical.
-
-What’s New in v3.6.0
-Deterministic Posterior-Aware OSD-CS
-
-Unlike standard osd_cs, which orders candidate pivots using channel LLR magnitude, mp_osd_cs uses posterior magnitude derived from belief propagation.
-
-Implementation pattern:
-
-Run inner BP with:
-
-postprocess=None
-
-llr_history=1
-
-If syndrome satisfied → return immediately
-
-Otherwise apply OSD-CS using ordering based on abs(L_post)
-
-Deterministic tie-breaking (ascending index)
-
-Enforce never-degrade guarantee
-
-Key properties:
+Key Properties
 
 No BP loop modifications
 
@@ -64,55 +118,39 @@ No new parameters (reuses osd_cs_lam)
 
 Fully deterministic
 
-This is a strictly additive feature.
+Ordering Sensitivity Probe
 
-Structural Ordering Probe (v3.6.0 Validation)
+Under bsc_syndrome:
 
-A controlled lam-sensitivity probe was executed under:
-
-channel_model="bsc_syndrome"
-
-distances [8, 12, 16]
-
-p ∈ [0.01, 0.02, 0.03, 0.04]
-
-lam ∈ {1, 2, 3}
-
-10,800 total trials
-
-Results:
-
-osd_cs and mp_osd_cs produced byte-identical corrections in all trials
+osd_cs and mp_osd_cs produced byte-identical corrections
 
 No ordering sensitivity observed
 
-DPS inversion persists under syndrome-only inference
+DPS inversion persisted
 
 Increasing lam did not alter candidate selection
 
 Interpretation:
 
-Under uniform channel LLR (BSC-syndrome), ordering differences do not change the selected coset leader at tested scales. Posterior-aware ordering is structurally verified but not expressive in this regime.
+Ordering differences are structurally verified but not expressive in the syndrome-only regime. Inversion is upstream of reliability ordering.
 
-This isolates inversion behavior as an upstream inference or information-model phenomenon rather than an ordering deficiency.
+v3.5.0 — Posterior-Aware OSD-1
 
-Posterior-Aware OSD-1 (v3.5.0)
-
-v3.5.0 introduced:
+Introduced:
 
 postprocess="mp_osd1"
 
-A deterministic posterior-aware single-bit OSD variant.
+Deterministic posterior-aware single-bit OSD.
 
-Structural probe under BSC-syndrome showed:
+Probe results under syndrome-only channel:
 
 Reduced inversion magnitude compared to osd1
 
 Lower FER growth across distances
 
-Posterior magnitude superior to channel LLR in syndrome-only regime
+Posterior magnitude superior to channel LLR ordering
 
-Inversion reduced but not eliminated.
+Inversion reduced but not eliminated
 
 Deterministic Guided Decimation (v3.4.0)
 postprocess="guided_decimation"
@@ -125,7 +163,7 @@ Freeze variable with maximal |posterior LLR|
 
 Deterministic tie-breaking
 
-Clamp LLR to fixed magnitude
+Fixed-magnitude LLR clamp
 
 Never-degrade fallback ordering
 
@@ -151,7 +189,7 @@ Derived strictly from deterministic benchmark outputs.
 Channel Regime Comparison
 Property	Oracle	Syndrome-Only
 Effective threshold	~0.50	~0.01–0.02
-Inversion regime	Yes (p > 0.50)	No
+Inversion regime	Yes (p>0.50)	Structural
 Inversion Index peak	1.0	~0.0
 SCR/FER divergence	Yes	No
 Distance scaling	Positive	Inverted
@@ -218,7 +256,7 @@ No identity/hash drift for baseline decoders
 
 Determinism verified across repeated runs
 
-Full test suite passing at release
+Full test suite passing at release.
 
 Design Philosophy
 
@@ -226,14 +264,11 @@ Small is beautiful.
 Determinism is holy.
 Stability is engineered.
 
-No hidden state.
-No accidental randomness.
-No silent schema drift.
+Negative results are data.
 
 If it cannot be reproduced byte-for-byte, it is not a baseline.
 
 Author
-
 Trent Slade
 QSOL-IMC
 ORCID: https://orcid.org/0009-0002-4515-9237
