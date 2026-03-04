@@ -218,71 +218,216 @@ Must preserve reproducibility guarantees
 
 Dimensional expansion must not destabilize binary baseline behavior.
 
-3. Current State — v3.4.0
+3. Current State — v3.9.0
 
-v3.4.0 establishes:
+v3.9.0 establishes the first deterministic inference-geometry interventions and introduces belief propagation energy diagnostics for structural regime analysis.
 
-Deterministic guided decimation (Layer 1 structural extension)
+The release expands the deterministic experimentation framework introduced in v3.8.x.
 
-Fully preserved baseline decoder semantics
+Major Additions
 
-No schedule mutation
+Channel Geometry Interventions
 
-No schema change
+Two opt-in structural interventions were introduced:
 
-No identity/hash drift
+Centered Syndrome Field
 
-700+ passing tests
+Pseudo-Prior Injection
 
-Complete isolation from _bp_postprocess() and BP loops
+These construct decoder likelihood fields directly from parity-check structure and syndrome information.
 
-Layer 1 now supports bounded structural intervention without compromising invariants.
+Purpose:
 
-4. Near-Term Direction (v3.5.x)
+analyze syndrome-only inference geometry
 
-Focus: Structural decoder refinement under syndrome-only noise.
+explore decoder behavior without oracle channel information
 
-Possible candidates:
+maintain deterministic experimentation
 
-Stabilizer Inactivation (opt-in, version-scoped)
+Both interventions are strictly adapter-layer features and do not modify baseline decoder behavior.
 
-MP-aware OSD fallback chaining
+Belief Propagation Energy Diagnostics
 
-Hybrid decimation + OSD sequencing
+v3.9.0 introduces deterministic per-iteration BP energy tracing:
 
-Posterior exposure as first-class API
+E = − Σ (LLR_i · belief_i)
 
-Early plateau detection in decimation rounds
+This enables analysis of:
 
-Constraints:
+BP convergence regimes
 
-Must remain opt-in
+oscillatory decoding behavior
 
-Must preserve baseline decoder behavior
+likelihood alignment across iterations
 
-Must maintain determinism
+free-energy landscape structure
 
-Must avoid implicit schedule mutation
+Energy tracing is diagnostic only and does not alter decoder outputs.
 
-5. Medium-Term Direction (v3.6+)
+Expanded DPS Evaluation Harness
 
-Cross-family scaling audits
+The deterministic DPS harness introduced in v3.8.1 now supports geometry-intervention modes.
 
-Deterministic performance certification framework
+Evaluation modes now include:
 
-Structured comparative benchmarking across code families
+baseline
+rpc_only
+geom_v1_only
+rpc_geom
+centered
+prior
+centered_prior
+geom_centered
+geom_centered_prior
+rpc_centered
+rpc_centered_prior
 
-Regime transition mapping under channel perturbation
+All modes reuse identical deterministic error instances.
 
-All such work must:
+Stability Guarantees
 
-Be version-scoped
+Despite these additions:
 
-Preserve baseline determinism
+baseline decoder outputs remain byte-identical
 
-Maintain strict schema validation
+BP schedules are unchanged
 
-Avoid semantic drift
+_bp_postprocess() remains unchanged
+
+decoder semantics are preserved
+
+all structural features remain opt-in
+
+Test Suite
+
+Current test coverage:
+
+904+ passing tests
+0 failures
+
+The test suite now includes validation for:
+
+geometry LLR construction
+
+BP energy tracing
+
+deterministic mode invariance
+
+DPS harness expansion
+
+adapter-layer intervention safety
+
+4. Near-Term Direction (v3.9.x)
+
+Focus: decoder regime exploration under syndrome-only inference
+
+v3.9.x continues the structural experimentation framework introduced in v3.8.x and v3.9.0.
+
+Candidate investigations include:
+
+DPS Sign-Flip Interventions
+
+Goal:
+
+Attempt to induce negative DPS scaling under controlled structural perturbations.
+
+Potential strategies:
+
+inference-geometry reweighting
+
+stabilizer clustering
+
+local field smoothing
+
+deterministic parity-density transforms
+
+BP initialization heuristics
+
+All experiments must:
+
+remain opt-in
+
+preserve deterministic behavior
+
+leave baseline decoder unchanged
+
+Geometry-Aware Scheduling
+
+Possible schedule extensions:
+
+geometry-weighted BP updates
+
+deterministic field annealing
+
+convergence-aware update ordering
+
+All scheduling changes must:
+
+be opt-in
+
+preserve flooding baseline behavior
+
+maintain deterministic iteration ordering
+
+Regime Mapping
+
+Use the expanded DPS harness and energy diagnostics to classify decoding regimes.
+
+Potential outputs:
+
+energy descent profiles
+
+convergence topology
+
+scaling regime transitions
+
+failure surface characterization
+
+5. Medium-Term Direction (v4.0+)
+
+v4.0 will transition from decoder engineering toward decoder regime analysis.
+
+Primary goal:
+
+Formalize BP free-energy landscape analysis for QLDPC codes.
+
+Planned Capabilities
+
+Energy-landscape mapping
+
+per-iteration BP energy profiles
+
+attractor basin detection
+
+convergence topology analysis
+
+Regime classification
+
+stable decoding basins
+
+oscillatory regimes
+
+failure plateaus
+
+Deterministic scaling analysis
+
+DPS regime mapping across code families
+
+structural perturbation sensitivity
+
+topology-dependent decoding behavior
+
+Research Direction
+
+v4.0 moves QEC toward a deterministic experimental platform for decoding physics rather than only a decoder implementation.
+
+Focus shifts from:
+
+"How do we improve decoding?"
+
+to
+
+"What regimes does BP occupy on QLDPC energy landscapes?"
 
 6. What Will Not Happen
 
