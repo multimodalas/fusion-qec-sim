@@ -37,6 +37,7 @@ import numpy as np
 
 from src.qec_qldpc_codes import bp_decode, syndrome, channel_llr, create_code
 from src.qec.decoder.rpc import RPCConfig, StructuralConfig, build_rpc_augmented_system
+
 from src.qec.channel.geometry import (
     centered_syndrome_field,
     syndrome_field,
@@ -44,6 +45,7 @@ from src.qec.channel.geometry import (
     apply_pseudo_prior,
 )
 
+from src.qec.channel.geometry_post import apply_geometry_postprocessing
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -238,7 +240,7 @@ def run_mode(
                 H, s, structural.rpc,
             )
 
-        # ── Channel geometry interventions ──
+          # ── Channel geometry interventions ──
         llr_used = llr
         if structural.centered_field:
             llr_used = centered_syndrome_field(H_used, s_used)
@@ -251,6 +253,8 @@ def run_mode(
                 llr_used, bias, structural.pseudo_prior_strength,
             )
 
+        llr_used = apply_geometry_postprocessing(llr_used, structural)
+      
         # Decode.
         use_energy = enable_energy_trace or structural.energy_trace
         result = bp_decode(
