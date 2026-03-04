@@ -1526,6 +1526,19 @@ def bp_decode(
         from src.qec.decoder.energy import bp_energy as _bp_energy
         _energy_trace: list[float] = []
 
+    def _build_return(pp_result, hist=None, res_met=None, etrace=None):
+        """Assemble return tuple in canonical order:
+        (correction, iters[, llr_history][, residual_metrics][, energy_trace])
+        """
+        result = [pp_result[0], pp_result[1]]
+        if hist is not None:
+            result.append(hist)
+        if res_met is not None:
+            result.append(res_met)
+        if etrace is not None:
+            result.append(etrace)
+        return tuple(result)
+
     if schedule == "flooding":
         # ══════════════════════════════════════════════════════════════
         # Flooding schedule: update ALL check nodes, then ALL variable
@@ -1640,29 +1653,23 @@ def bp_decode(
                     H, llr, hard, it + 1, syndrome_vec, postprocess,
                     osd_cs_lam=osd_cs_lam,
                 )
-                if energy_trace:
-                    return pp_result[0], pp_result[1], _energy_trace
-                if llr_history > 0:
-                    if residual_metrics:
-                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
-                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
-                if residual_metrics:
-                    return pp_result[0], pp_result[1], _res_metrics
-                return pp_result
+                return _build_return(
+                    pp_result,
+                    hist=_assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history) if llr_history > 0 else None,
+                    res_met=_res_metrics if residual_metrics else None,
+                    etrace=_energy_trace if energy_trace else None,
+                )
 
         pp_result = _bp_postprocess(
             H, llr, hard, max_iters, syndrome_vec, postprocess,
             osd_cs_lam=osd_cs_lam,
         )
-        if energy_trace:
-            return pp_result[0], pp_result[1], _energy_trace
-        if llr_history > 0:
-            if residual_metrics:
-                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
-            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
-        if residual_metrics:
-            return pp_result[0], pp_result[1], _res_metrics
-        return pp_result
+        return _build_return(
+            pp_result,
+            hist=_assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history) if llr_history > 0 else None,
+            res_met=_res_metrics if residual_metrics else None,
+            etrace=_energy_trace if energy_trace else None,
+        )
 
     elif schedule == "geom_v1":
         # ══════════════════════════════════════════════════════════════
@@ -1791,29 +1798,23 @@ def bp_decode(
                     H, llr, hard, it + 1, syndrome_vec, postprocess,
                     osd_cs_lam=osd_cs_lam,
                 )
-                if energy_trace:
-                    return pp_result[0], pp_result[1], _energy_trace
-                if llr_history > 0:
-                    if residual_metrics:
-                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
-                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
-                if residual_metrics:
-                    return pp_result[0], pp_result[1], _res_metrics
-                return pp_result
+                return _build_return(
+                    pp_result,
+                    hist=_assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history) if llr_history > 0 else None,
+                    res_met=_res_metrics if residual_metrics else None,
+                    etrace=_energy_trace if energy_trace else None,
+                )
 
         pp_result = _bp_postprocess(
             H, llr, hard, max_iters, syndrome_vec, postprocess,
             osd_cs_lam=osd_cs_lam,
         )
-        if energy_trace:
-            return pp_result[0], pp_result[1], _energy_trace
-        if llr_history > 0:
-            if residual_metrics:
-                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
-            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
-        if residual_metrics:
-            return pp_result[0], pp_result[1], _res_metrics
-        return pp_result
+        return _build_return(
+            pp_result,
+            hist=_assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history) if llr_history > 0 else None,
+            res_met=_res_metrics if residual_metrics else None,
+            etrace=_energy_trace if energy_trace else None,
+        )
 
     else:
         # ══════════════════════════════════════════════════════════════
@@ -2027,29 +2028,23 @@ def bp_decode(
                     H, llr, hard, it + 1, syndrome_vec, postprocess,
                     osd_cs_lam=osd_cs_lam,
                 )
-                if energy_trace:
-                    return pp_result[0], pp_result[1], _energy_trace
-                if llr_history > 0:
-                    if residual_metrics:
-                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
-                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
-                if residual_metrics:
-                    return pp_result[0], pp_result[1], _res_metrics
-                return pp_result
+                return _build_return(
+                    pp_result,
+                    hist=_assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history) if llr_history > 0 else None,
+                    res_met=_res_metrics if residual_metrics else None,
+                    etrace=_energy_trace if energy_trace else None,
+                )
 
         pp_result = _bp_postprocess(
             H, llr, hard, max_iters, syndrome_vec, postprocess,
             osd_cs_lam=osd_cs_lam,
         )
-        if energy_trace:
-            return pp_result[0], pp_result[1], _energy_trace
-        if llr_history > 0:
-            if residual_metrics:
-                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
-            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
-        if residual_metrics:
-            return pp_result[0], pp_result[1], _res_metrics
-        return pp_result
+        return _build_return(
+            pp_result,
+            hist=_assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history) if llr_history > 0 else None,
+            res_met=_res_metrics if residual_metrics else None,
+            etrace=_energy_trace if energy_trace else None,
+        )
 
 
 def _assemble_history(hist_buf, hist_idx, hist_count, llr_history):

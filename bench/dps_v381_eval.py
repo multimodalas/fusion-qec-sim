@@ -261,11 +261,10 @@ def run_mode(
             syndrome_vec=s_used,
             energy_trace=use_energy,
         )
+        correction, iters = result[0], result[1]
         if use_energy:
-            correction, iters, etrace = result[0], result[1], result[2]
-            all_energy_traces.append(etrace)
-        else:
-            correction, iters = result[0], result[1]
+            # Energy trace is always the last element when enabled.
+            all_energy_traces.append(result[-1])
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.

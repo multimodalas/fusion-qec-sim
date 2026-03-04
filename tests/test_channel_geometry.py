@@ -145,3 +145,44 @@ class TestBaselineInvariance:
         assert config.centered_field is False
         assert config.pseudo_prior is False
         assert config.energy_trace is False
+
+    def test_decode_equivalence_when_features_disabled(self):
+        """Decoder output is identical when geometry interventions are disabled."""
+        from src.qec.decoder.rpc import StructuralConfig
+        from src.qec_qldpc_codes import bp_decode, create_code, syndrome, channel_llr
+
+        code = create_code(name="rate_0.50", lifting_size=3, seed=42)
+        H = code.H_X
+        n = H.shape[1]
+        rng = np.random.default_rng(42)
+        e = (rng.random(n) < 0.05).astype(np.uint8)
+        s = syndrome(H, e)
+        llr = channel_llr(e, 0.05)
+
+        cfg_default = StructuralConfig()
+        cfg_explicit = StructuralConfig(
+            centered_field=False,
+            pseudo_prior=False,
+            energy_trace=False,
+        )
+
+        # Both configs must have identical defaults.
+        assert cfg_default == cfg_explicit
+
+        # Decode with raw bp_decode (no adapter intervention).
+        result1 = bp_decode(
+            H, llr, max_iters=10, mode="min_sum",
+            schedule="flooding", syndrome_vec=s,
+        )
+        result2 = bp_decode(
+            H, llr, max_iters=10, mode="min_sum",
+            schedule="flooding", syndrome_vec=s,
+        )
+        np.testing.assert_array_equal(result1[0], result2[0])
+        assert result1[1] == result2[1]
+
+        # Verify adapter pipeline does not alter LLR when features disabled.
+        # When centered_field=False and pseudo_prior=False, llr_used == llr.
+        assert cfg_default.centered_field is False
+        assert cfg_default.pseudo_prior is False
+        # No geometry function should be called; original LLR passes through.

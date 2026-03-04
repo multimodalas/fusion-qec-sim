@@ -284,6 +284,18 @@ def step4_energy_diagnostics(eval_result):
 # Step 5 — DPS Sign Detection
 # ──────────────────────────────────────────────────────────────
 
+_DPS_EPS = 1e-9
+
+
+def _dps_sign(x: float, eps: float = _DPS_EPS) -> str:
+    """Classify DPS value with epsilon tolerance for floating-point noise."""
+    if x > eps:
+        return "positive"
+    if x < -eps:
+        return "negative"
+    return "zero"
+
+
 def step5_dps_sign(slopes):
     print("=" * 72)
     print("STEP 5 — DPS SIGN DETECTION")
@@ -299,10 +311,11 @@ def step5_dps_sign(slopes):
     for mode_name in MODE_ORDER:
         for p in sorted(slopes[mode_name].keys()):
             dps = slopes[mode_name][p]
-            sign = "NEG (<0)" if dps < 0 else "POS (>0)" if dps > 0 else "ZERO"
-            marker = " ***" if dps < 0 else ""
-            print(f"{mode_name:<22} {p:>8.3f} {dps:>12.6f} {sign:>8}{marker}")
-            if dps < 0:
+            sign_label = _dps_sign(dps)
+            sign_display = {"negative": "NEG (<0)", "positive": "POS (>0)", "zero": "ZERO"}[sign_label]
+            marker = " ***" if sign_label == "negative" else ""
+            print(f"{mode_name:<22} {p:>8.3f} {dps:>12.6f} {sign_display:>8}{marker}")
+            if sign_label == "negative":
                 negative_found = True
                 negative_modes.append((mode_name, p, dps))
 
@@ -446,7 +459,7 @@ def step7_report(eval_result, energy_stats, negative_modes,
         row = f"| {mode_name} |"
         for p in config["p_values"]:
             s = slopes[mode_name][p]
-            marker = " **" if s < 0 else ""
+            marker = " **" if _dps_sign(s) == "negative" else ""
             row += f" {s:.6f}{marker} |"
         lines.append(row)
     lines.append("")

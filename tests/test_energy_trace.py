@@ -6,6 +6,7 @@ Verifies:
   - Energy trace does not alter decoding output.
   - bp_energy function returns correct values.
   - Baseline invariance when energy_trace is disabled.
+  - Return structure consistency with other optional outputs.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ class TestEnergyTraceIntegration:
         )
         # Should return (correction, iters, energy_trace)
         assert len(result) == 3
-        correction, iters, etrace = result
+        etrace = result[-1]
         assert isinstance(etrace, list)
         assert len(etrace) > 0
         assert len(etrace) <= 10
@@ -85,7 +86,7 @@ class TestEnergyTraceIntegration:
             H, llr, max_iters=10, mode="min_sum",
             schedule="flooding", syndrome_vec=s, energy_trace=True,
         )
-        assert result1[2] == result2[2]
+        assert result1[-1] == result2[-1]
 
     def test_trace_disabled_preserves_baseline(self, small_code):
         H = small_code
@@ -122,7 +123,7 @@ class TestEnergyTraceIntegration:
             schedule="geom_v1", syndrome_vec=s, energy_trace=True,
         )
         assert len(result) == 3
-        etrace = result[2]
+        etrace = result[-1]
         assert isinstance(etrace, list)
         assert len(etrace) > 0
 
@@ -139,6 +140,73 @@ class TestEnergyTraceIntegration:
             schedule="layered", syndrome_vec=s, energy_trace=True,
         )
         assert len(result) == 3
-        etrace = result[2]
+        etrace = result[-1]
         assert isinstance(etrace, list)
         assert len(etrace) > 0
+
+    def test_return_structure_with_llr_history_and_energy(self, small_code):
+        """Energy trace appended after llr_history in return tuple."""
+        H = small_code
+        n = H.shape[1]
+        rng = np.random.default_rng(42)
+        e = (rng.random(n) < 0.05).astype(np.uint8)
+        s = syndrome(H, e)
+        llr = channel_llr(e, 0.05)
+
+        result = bp_decode(
+            H, llr, max_iters=10, mode="min_sum",
+            schedule="flooding", syndrome_vec=s,
+            llr_history=3, energy_trace=True,
+        )
+        # (correction, iters, llr_history, energy_trace)
+        assert len(result) == 4
+        correction, iters, history, etrace = result
+        assert isinstance(correction, np.ndarray)
+        assert isinstance(iters, int)
+        assert isinstance(history, np.ndarray)
+        assert isinstance(etrace, list)
+
+    def test_return_structure_with_residual_metrics_and_energy(self, small_code):
+        """Energy trace appended after residual_metrics in return tuple."""
+        H = small_code
+        n = H.shape[1]
+        rng = np.random.default_rng(42)
+        e = (rng.random(n) < 0.05).astype(np.uint8)
+        s = syndrome(H, e)
+        llr = channel_llr(e, 0.05)
+
+        result = bp_decode(
+            H, llr, max_iters=10, mode="min_sum",
+            schedule="residual", syndrome_vec=s,
+            residual_metrics=True, energy_trace=True,
+        )
+        # (correction, iters, residual_metrics, energy_trace)
+        assert len(result) == 4
+        correction, iters, res_metrics, etrace = result
+        assert isinstance(correction, np.ndarray)
+        assert isinstance(iters, int)
+        assert isinstance(res_metrics, dict)
+        assert isinstance(etrace, list)
+
+    def test_return_structure_all_optionals(self, small_code):
+        """All optional outputs: llr_history + residual_metrics + energy_trace."""
+        H = small_code
+        n = H.shape[1]
+        rng = np.random.default_rng(42)
+        e = (rng.random(n) < 0.05).astype(np.uint8)
+        s = syndrome(H, e)
+        llr = channel_llr(e, 0.05)
+
+        result = bp_decode(
+            H, llr, max_iters=10, mode="min_sum",
+            schedule="residual", syndrome_vec=s,
+            llr_history=3, residual_metrics=True, energy_trace=True,
+        )
+        # (correction, iters, llr_history, residual_metrics, energy_trace)
+        assert len(result) == 5
+        correction, iters, history, res_metrics, etrace = result
+        assert isinstance(correction, np.ndarray)
+        assert isinstance(iters, int)
+        assert isinstance(history, np.ndarray)
+        assert isinstance(res_metrics, dict)
+        assert isinstance(etrace, list)
