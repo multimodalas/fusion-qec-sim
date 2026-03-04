@@ -6,6 +6,187 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+## [3.9.1] — 2026-03-04
+
+### Geometry Field Controls
+
+Introduces deterministic geometry field controls for controlled testing
+of likelihood magnitude effects under syndrome-only inference.
+
+All new features are opt-in. Baseline decoder behavior remains unchanged
+when features are disabled.
+
+### Added
+
+**Geometry Strength Scaling**
+
+- `geometry_strength` field on `StructuralConfig` (default: `1.0`)
+- Scales the constructed geometry LLR field after centered_field and
+  pseudo_prior are applied
+- Applied in both `BPAdapter` and DPS harness
+
+**Deterministic Field Normalization**
+
+- `normalize_geometry` field on `StructuralConfig` (default: `False`)
+- When enabled: `llr = llr / (std(llr) + 1e-12)`
+- Ensures the LLR distribution has unit variance
+- Only applies when geometry interventions are active
+- Normalization is applied before geometry_strength scaling
+
+**DPS Harness Geometry Sweep Modes**
+
+Three new evaluation modes:
+
+- `centered_strong` — centered field + geometry_strength=2.0
+- `centered_normalized` — centered field + normalize_geometry
+- `centered_prior_normalized` — centered + prior + normalize_geometry
+
+All modes reuse identical deterministic error instances.
+
+### Tests
+
+New test suite:
+
+    tests/test_geometry_controls.py
+
+Coverage includes:
+
+- geometry_strength scaling determinism and correctness
+- normalize_geometry unit-variance verification
+- baseline invariance when features disabled
+- DPS harness new mode execution and determinism
+
+### Results
+
+Full test suite:
+
+    923 passed
+    7 skipped
+    0 failed
+
+Deterministic reproducibility verified.
+
+### Guarantees
+
+- No changes to core decoding logic
+- No changes to `_bp_postprocess()` or BP iteration loops
+- No schema changes
+- No dependency changes
+- Baseline decoder outputs remain byte-identical when features disabled
+- All new features are opt-in with safe defaults
+- Determinism preserved
+
+---
+
+[3.9.0] — 2026-03-04
+Channel Geometry Interventions & BP Energy Diagnostics
+
+Introduces deterministic channel-geometry interventions and belief propagation energy diagnostics for structural decoding experiments under syndrome-only inference.
+
+This release expands the deterministic experimentation framework introduced in v3.8.x.
+
+Baseline decoder behavior remains unchanged when all structural features are disabled.
+
+Added
+
+Channel geometry utilities:
+
+src/qec/channel/geometry.py
+
+Deterministic functions:
+
+syndrome_field()
+
+centered_syndrome_field()
+
+pseudo_prior_bias()
+
+apply_pseudo_prior()
+
+These construct LLRs directly from syndrome structure for oracle-free decoding experiments.
+
+Belief propagation energy diagnostics:
+
+src/qec/decoder/energy.py
+
+Provides optional per-iteration energy tracing:
+
+E = − Σ (LLR_i · belief_i)
+
+Energy tracing enables analysis of:
+
+BP convergence dynamics
+
+oscillatory decoding behavior
+
+likelihood alignment during inference
+
+Energy tracing is purely diagnostic and does not alter decoder outputs.
+
+DPS Harness Expansion
+
+The deterministic evaluation harness now includes geometry-intervention modes.
+
+New modes:
+
+centered
+
+prior
+
+centered_prior
+
+geom_centered
+
+geom_centered_prior
+
+rpc_centered
+
+rpc_centered_prior
+
+All modes reuse identical deterministic error instances.
+
+Baseline evaluation behavior remains unchanged.
+
+Stability Improvements
+
+Resolved issues identified during code review:
+
+stabilized bp_decode() return structure across optional diagnostics
+
+ensured consistent tuple ordering when energy_trace is enabled
+
+added epsilon threshold to DPS sign detection to avoid floating-point noise
+
+strengthened baseline invariance testing
+
+Tests
+
+New test suites:
+
+tests/test_channel_geometry.py
+tests/test_energy_trace.py
+
+Coverage includes:
+
+deterministic geometry field construction
+
+pseudo-prior application
+
+BP energy trace correctness
+
+return-structure validation across feature combinations
+
+baseline decoder invariance
+
+Results
+
+Full test suite:
+
+904 passed
+0 failed
+
+Deterministic reproducibility verified.
+
 ## [3.8.1] — 2026-03-03
 
 ### Structural Geometry Evaluation Harness

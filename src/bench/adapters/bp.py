@@ -94,6 +94,20 @@ class BPAdapter(DecoderAdapter):
                     self._structural_config.pseudo_prior_strength,
                 )
 
+            # ── Geometry field post-processing ──
+            # Applied after centered_field and pseudo_prior, only when
+            # geometry interventions produced an LLR vector.
+            geometry_active = (
+                self._structural_config.centered_field
+                or self._structural_config.pseudo_prior
+            )
+            if geometry_active:
+                if self._structural_config.normalize_geometry:
+                    std = np.std(np.asarray(llr_used, dtype=np.float64))
+                    llr_used = np.asarray(llr_used, dtype=np.float64) / (std + 1e-12)
+                if self._structural_config.geometry_strength != 1.0:
+                    llr_used = self._structural_config.geometry_strength * np.asarray(llr_used, dtype=np.float64)
+
         result = bp_decode(
             H_used,
             llr_used,
