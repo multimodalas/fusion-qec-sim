@@ -1,6 +1,9 @@
 # tests/test_field.py
 import numpy as np
 import pytest
+
+pytest.importorskip("qldpc")
+
 from qldpc.field import GF2e
 # ---------------------------------------------------------
 # Utility helpers

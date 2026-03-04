@@ -23,9 +23,20 @@ where R = 1 - 2J/L (J = check rows, L = variable columns).
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
-from typing import Tuple, Dict, List, Optional
+from typing import Any, Tuple, Dict, List, Optional, Union
 from dataclasses import dataclass, field as dc_field
+
+# Type aliases for bp_decode return variants (v2.9.1)
+ResidualMetrics = Dict[str, List[Any]]
+BpDecodeReturnType = Union[
+    Tuple[np.ndarray, int],
+    Tuple[np.ndarray, int, np.ndarray],
+    Tuple[np.ndarray, int, ResidualMetrics],
+    Tuple[np.ndarray, int, np.ndarray, ResidualMetrics],
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -524,6 +535,10 @@ class JointSPDecoder:
                 nbrs = c2v[c]
                 if len(nbrs) == 0:
                     continue
+                if len(nbrs) == 1:
+                    # Degree-1 check node provides no extrinsic information.
+                    c2v_msg[c, nbrs[0]] = 0.0
+                    continue
                 # Gather incoming tanh half-LLRs
                 tanhs = np.array([
                     np.tanh(np.clip(v2c_msg[v, c] / 2.0, -20.0, 20.0))
@@ -593,6 +608,1600 @@ def depolarizing_channel(
     x_error = np.isin(choices, [1, 3]).astype(np.uint8)   # X or Y
     z_error = np.isin(choices, [2, 3]).astype(np.uint8)   # Z or Y
     return x_error, z_error
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Decoder Utilities — Pauli Frame, Syndrome, BP, Channel LLR
+# ═══════════════════════════════════════════════════════════════════════
+
+def update_pauli_frame(
+    frame: np.ndarray,
+    correction: np.ndarray,
+) -> np.ndarray:
+    """
+    Apply a correction to a Pauli frame via GF(2) addition (XOR).
+
+    Pure function: neither *frame* nor *correction* is mutated.
+
+    Args:
+        frame: Binary vector (length n) representing the current Pauli frame.
+        correction: Binary vector (length n) representing the correction to apply.
+
+    Returns:
+        New binary vector: frame XOR correction.
+
+    Raises:
+        ValueError: If inputs are not 1-D or have mismatched shapes.
+    """
+    frame = np.asarray(frame)
+    correction = np.asarray(correction)
+    if frame.ndim != 1 or correction.ndim != 1:
+        raise ValueError(
+            f"Both frame and correction must be 1-D arrays, "
+            f"got ndim={frame.ndim} and ndim={correction.ndim}"
+        )
+    if frame.shape[0] != correction.shape[0]:
+        raise ValueError(
+            f"Shape mismatch: frame has length {frame.shape[0]}, "
+            f"correction has length {correction.shape[0]}"
+        )
+    return (frame ^ correction).astype(np.uint8)
+
+
+def syndrome(H: np.ndarray, e: np.ndarray) -> np.ndarray:
+    """
+    Compute the binary syndrome s = H @ e (mod 2).
+
+    This is a standalone version of the syndrome computation performed by
+    :meth:`QuantumLDPCCode.syndrome_X` and :meth:`QuantumLDPCCode.syndrome_Z`.
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        e: Binary error vector, length n.
+
+    Returns:
+        Binary syndrome vector of length m, dtype uint8.
+    """
+    return ((H.astype(np.int32) @ np.asarray(e).astype(np.int32)) % 2).astype(np.uint8)
+
+
+_BP_MODES = {"sum_product", "min_sum", "norm_min_sum", "offset_min_sum",
+             "improved_norm", "improved_offset", "min_sum_urw"}
+_BP_SCHEDULES = {"flooding", "layered", "residual", "hybrid_residual", "adaptive", "geom_v1"}
+_BP_POSTPROCESS = {None, "osd0", "osd1", "osd_cs", "guided_decimation", "mp_osd1", "mp_osd_cs"}
+
+
+def bp_decode(
+    H: np.ndarray,
+    llr: np.ndarray,
+    max_iters: int = 100,
+    mode: str = "sum_product",
+    damping: float = 0.0,
+    norm_factor: float = 0.75,
+    offset: float = 0.5,
+    clip: Optional[float] = None,
+    schedule: str = "flooding",
+    postprocess: Optional[str] = None,
+    seed: Optional[int] = None,
+    syndrome_vec: Optional[np.ndarray] = None,
+    llr_history: int = 0,
+    osd_cs_lam: int = 1,
+    # ── v2.8.0 opt-in parameters (defaults preserve v2.7.0 behavior) ──
+    alpha1: float = 0.9,
+    alpha2: float = 0.75,
+    hybrid_residual_threshold: Optional[float] = None,
+    ensemble_k: int = 1,
+    state_aware_residual: bool = False,
+    phi_by_state: Optional[np.ndarray] = None,
+    s_by_state: Optional[np.ndarray] = None,
+    state_label_by_check: Optional[np.ndarray] = None,
+    lift_braided: bool = False,
+    braid_distance: Optional[int] = None,
+    gsa_style: Optional[str] = None,
+    # ── v2.9.0 adaptive schedule parameters ──
+    adaptive_k1: Optional[int] = None,
+    adaptive_rule: str = "one_way",
+    adaptive_log: bool = False,
+    # ── v2.9.1 opt-in residual instrumentation ──
+    residual_metrics: bool = False,
+    # ── v3.4.0 guided decimation parameters ──
+    decimation_rounds: int = 10,
+    decimation_inner_iters: int = 10,
+    decimation_freeze_llr: float = 1000.0,
+    # ── v3.7.0 URW-BP parameter ──
+    urw_rho: float = 1.0,
+    **kwargs,
+) -> BpDecodeReturnType:
+    """
+    Standalone belief-propagation decoder for a binary parity-check matrix.
+
+    Supports multiple check-node update rules, message damping,
+    magnitude clipping, and optional OSD post-processing.
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        llr: Per-variable log-likelihood ratios, length n (or scalar broadcast).
+        max_iters: Maximum BP iterations (default 100).
+        mode: Check-node update rule.  One of ``"sum_product"``,
+            ``"min_sum"``, ``"norm_min_sum"``, ``"offset_min_sum"``,
+            ``"improved_norm"`` (v2.8.0), ``"improved_offset"`` (v2.8.0).
+        damping: Damping factor in [0, 1).  ``0.0`` disables damping.
+        norm_factor: Normalisation factor for ``"norm_min_sum"`` mode.
+            Must be in the interval (0.0, 1.0].
+        offset: Offset for ``"offset_min_sum"`` mode.
+            Must be >= 0.0.
+        clip: If not None, clip check-to-variable message magnitudes to
+            ``[-clip, clip]`` after each iteration.
+        schedule: Message-passing schedule.  ``"flooding"`` (default)
+            updates all check nodes then all variable nodes per iteration.
+            ``"layered"`` processes check nodes serially, updating beliefs
+            incrementally — typically converges in fewer iterations.
+            ``"residual"`` is a variant of layered that reorders check nodes
+            each iteration by descending max message residual, with
+            deterministic tie-breaking by ascending check index.
+            ``"hybrid_residual"`` (v2.8.0) deterministic hybrid of layered
+            + residual with even/odd layer partitioning.
+        postprocess: Optional post-processing.  ``"osd0"`` applies order-0
+            Ordered Statistics Decoding when BP fails to converge.
+            ``"osd1"`` extends OSD-0 by testing a single least-reliable
+            bit flip.  ``"osd_cs"`` applies Combination Sweep OSD
+            (controlled by *osd_cs_lam*).
+        seed: Unused; reserved for future stochastic post-processors.
+        syndrome_vec: Binary syndrome vector, length m.  Defaults to all-zeros.
+        llr_history: Number of recent L_total snapshots to retain.
+            When 0 (default), no history is stored and the return type
+            is ``(correction, iterations)``.  When > 0, the return type
+            becomes ``(correction, iterations, history)`` where *history*
+            has shape ``(k, n)`` with ``k = min(iterations_run, llr_history)``.
+        osd_cs_lam: Lambda parameter for OSD-CS when
+            ``postprocess="osd_cs"``.  Maximum number of pivot bits to
+            flip simultaneously.  Default 1.
+        alpha1: Scaling factor for ``"improved_norm"`` / ``"improved_offset"``
+            modes (v2.8.0).  Applied to the first minimum.  Must be in
+            (0, 1].  Default 0.9.
+        alpha2: Scaling factor for ``"improved_norm"`` / ``"improved_offset"``
+            modes (v2.8.0).  Applied to the second minimum.  Must be in
+            (0, 1].  Default 0.75.
+        hybrid_residual_threshold: Threshold for ``"hybrid_residual"``
+            schedule (v2.8.0).  If None (default), update all checks in
+            layered-residual order.  If set (>= 0), within each layer
+            update checks with residual > threshold first, then the rest.
+        ensemble_k: Number of ensemble members for deterministic ensemble
+            decoding (v2.8.0).  ``1`` (default) disables ensemble mode.
+            Member 0 is always the exact baseline.  Hard cap at 8; a
+            warning is issued if > 4.
+        state_aware_residual: If True, apply state-aware weighting to
+            residuals before ordering (v2.8.0).  Requires *phi_by_state*,
+            *s_by_state*, and *state_label_by_check* to be provided.
+        phi_by_state: Per-state phase array for state-aware residual
+            weighting.  Required when ``state_aware_residual=True``.
+        s_by_state: Per-state amplitude array for state-aware residual
+            weighting.  Required when ``state_aware_residual=True``.
+        state_label_by_check: Per-check state label array (integer indices
+            into *phi_by_state* / *s_by_state*).  Required when
+            ``state_aware_residual=True``.
+        lift_braided: Reserved for future braided-lift construction
+            (v2.8.0).  Not yet implemented.
+        braid_distance: Reserved for future braided-lift construction.
+        gsa_style: Reserved for future braided-lift construction.
+        adaptive_k1: Number of iterations for phase 1 (flooding) when
+            ``schedule="adaptive"``.  Defaults to ``max(1, max_iters // 4)``
+            when *None*.
+
+            **Adaptive schedule overview** (v2.9.0):
+
+            ``schedule="adaptive"`` is a deterministic one-way checkpoint
+            controller.  It does **not** pass internal message state between
+            phases — each phase is a fresh, independent ``bp_decode()`` call.
+
+            * Phase 1: ``"flooding"`` for *k1* iterations.
+            * If phase 1 converges, return immediately (iters = iters_p1).
+            * Phase 2: ``"hybrid_residual"`` for *max_iters − k1* iterations.
+            * Tie-break between phases: prefer converged → lower syndrome
+              weight → fewer total iterations → phase order (deterministic).
+            * When phase 2 is selected the returned iteration count is
+              cumulative: ``k1 + iters_p2`` (total work performed).
+
+            No residual-based dynamic thresholding is applied to the
+            switching decision (reserved for a future extension).
+
+        adaptive_rule: Switching rule for adaptive schedule.  Currently
+            only ``"one_way"`` is supported: always switch to
+            ``"hybrid_residual"`` after phase 1 if not converged.
+        adaptive_log: If *True*, print a one-line log showing which
+            phase was selected and why.  Default *False*.
+        **kwargs: Accepts legacy ``max_iter`` keyword for backward
+            compatibility.
+
+    Returns:
+        When ``residual_metrics=False`` (default):
+
+            When ``llr_history == 0``:
+                ``(correction, iterations)`` — hard-decision binary vector
+                (length n, dtype uint8) and iteration count.
+
+            When ``llr_history > 0``:
+                ``(correction, iterations, history)`` — same as above plus
+                a float64 array of shape ``(k, n)`` containing the last *k*
+                per-iteration L_total snapshots.
+
+        When ``residual_metrics=True``:
+
+            When ``llr_history == 0``:
+                ``(correction, iterations, metrics)`` — 3-tuple with a
+                metrics dict as the last element.
+
+            When ``llr_history > 0``:
+                ``(correction, iterations, history, metrics)`` — 4-tuple
+                with the LLR history array followed by the metrics dict.
+
+            The *metrics* dict has keys:
+                ``"residual_linf"``
+                    List of per-iteration L-inf residual arrays, each of
+                    shape ``(n_checks,)``.
+                ``"residual_l2"``
+                    List of per-iteration L2 residual arrays, each of
+                    shape ``(n_checks,)``.
+                ``"residual_energy"``
+                    List of per-iteration scalar energy values.
+            All three lists have length equal to the number of iterations
+            executed.  For schedules that do not compute residuals
+            (e.g. ``"flooding"``), the lists are empty.
+    """
+    # ── backward compatibility: accept old ``max_iter`` keyword ──
+    if "max_iter" in kwargs:
+        if max_iters != 100:
+            raise TypeError("Cannot pass both max_iter and max_iters")
+        max_iters = kwargs.pop("max_iter")
+    if kwargs:
+        raise TypeError(f"Unexpected keyword arguments: {list(kwargs)}")
+
+    # ── parameter validation ──
+    if mode not in _BP_MODES:
+        raise ValueError(f"mode must be one of {_BP_MODES}, got '{mode}'")
+    if schedule not in _BP_SCHEDULES:
+        raise NotImplementedError(
+            f"schedule '{schedule}' not implemented; use one of {_BP_SCHEDULES}"
+        )
+    if postprocess not in _BP_POSTPROCESS:
+        raise ValueError(f"Unknown postprocess: '{postprocess}'")
+
+    # ── numeric parameter validation ──
+    if not (0.0 < norm_factor <= 1.0):
+        raise ValueError(
+            f"norm_factor must be in the interval (0.0, 1.0], got {norm_factor}"
+        )
+    if offset < 0.0:
+        raise ValueError(f"offset must be >= 0.0, got {offset}")
+    if not isinstance(llr_history, int) or llr_history < 0:
+        raise ValueError(
+            f"llr_history must be a non-negative integer, got {llr_history}"
+        )
+    if not isinstance(osd_cs_lam, int) or osd_cs_lam < 0:
+        raise ValueError(
+            f"osd_cs_lam must be a non-negative integer, got {osd_cs_lam}"
+        )
+
+    # ── v2.8.0 parameter validation ──
+    if mode in ("improved_norm", "improved_offset"):
+        if not (0.0 < alpha1 <= 1.0):
+            raise ValueError(
+                f"alpha1 must be in the interval (0.0, 1.0], got {alpha1}"
+            )
+        if not (0.0 < alpha2 <= 1.0):
+            raise ValueError(
+                f"alpha2 must be in the interval (0.0, 1.0], got {alpha2}"
+            )
+
+    if schedule == "hybrid_residual" and hybrid_residual_threshold is not None and hybrid_residual_threshold < 0.0:
+        raise ValueError(
+            f"hybrid_residual_threshold must be >= 0.0, got {hybrid_residual_threshold}"
+        )
+
+    # ── v3.7.0 URW-BP validation ──
+    if mode == "min_sum_urw":
+        if not (0.0 < urw_rho <= 1.0):
+            raise ValueError(
+                f"urw_rho must be in the interval (0.0, 1.0], got {urw_rho}"
+            )
+
+    # ── v2.9.0 adaptive schedule validation ──
+    _ADAPTIVE_RULES = {"one_way"}
+    if schedule == "adaptive":
+        if adaptive_rule not in _ADAPTIVE_RULES:
+            raise ValueError(
+                f"adaptive_rule must be one of {_ADAPTIVE_RULES}, "
+                f"got '{adaptive_rule}'"
+            )
+        if adaptive_k1 is not None:
+            if not isinstance(adaptive_k1, int) or adaptive_k1 < 1:
+                raise ValueError(
+                    f"adaptive_k1 must be a positive integer, got {adaptive_k1}"
+                )
+            if adaptive_k1 >= max_iters:
+                raise ValueError(
+                    f"adaptive_k1 must be < max_iters ({max_iters}), "
+                    f"got {adaptive_k1}"
+                )
+
+    if not isinstance(ensemble_k, int) or ensemble_k < 1:
+        raise ValueError(
+            f"ensemble_k must be an integer >= 1, got {ensemble_k}"
+        )
+    if ensemble_k > 8:
+        raise ValueError(
+            f"ensemble_k must be <= 8, got {ensemble_k}"
+        )
+    if ensemble_k > 4:
+        warnings.warn(
+            f"ensemble_k={ensemble_k} is large; values > 4 may be slow "
+            "with diminishing returns",
+            stacklevel=2,
+        )
+
+    if state_aware_residual:
+        if phi_by_state is None or s_by_state is None or state_label_by_check is None:
+            raise ValueError(
+                "state_aware_residual=True requires phi_by_state, "
+                "s_by_state, and state_label_by_check to be provided"
+            )
+        state_label_by_check = np.asarray(state_label_by_check, dtype=np.int64)
+        phi_by_state = np.asarray(phi_by_state, dtype=np.float64)
+        s_by_state = np.asarray(s_by_state, dtype=np.float64)
+        if state_label_by_check.shape[0] != H.shape[0]:
+            raise ValueError(
+                f"len(state_label_by_check) must equal m={H.shape[0]}, "
+                f"got {state_label_by_check.shape[0]}"
+            )
+        if state_label_by_check.shape[0] > 0:
+            _min_label = int(np.min(state_label_by_check))
+            if _min_label < 0:
+                raise ValueError(
+                    f"state_label_by_check must be >= 0, got min={_min_label}"
+                )
+            _max_label = int(np.max(state_label_by_check))
+            if _max_label >= len(phi_by_state):
+                raise ValueError(
+                    f"state_label_by_check max={_max_label} exceeds "
+                    f"phi_by_state length={len(phi_by_state)}"
+                )
+            if _max_label >= len(s_by_state):
+                raise ValueError(
+                    f"state_label_by_check max={_max_label} exceeds "
+                    f"s_by_state length={len(s_by_state)}"
+                )
+
+    if state_aware_residual:
+        state_aware_residual_weights = (
+            s_by_state[state_label_by_check]
+            * np.abs(np.cos(phi_by_state[state_label_by_check]))
+        )
+
+    if lift_braided:
+        raise NotImplementedError(
+            "lift_braided is reserved for a future release and not yet implemented"
+        )
+
+    # ── v3.4.0: guided decimation early dispatch ──
+    # This is a separate decode path that orchestrates its own BP sub-calls.
+    # It exits before the main iteration loop and never touches
+    # _bp_postprocess() or any existing schedule/postprocess logic.
+    if postprocess == "guided_decimation":
+        if not isinstance(decimation_rounds, int) or decimation_rounds < 1:
+            raise ValueError(
+                f"decimation_rounds must be a positive integer, "
+                f"got {decimation_rounds}"
+            )
+        if not isinstance(decimation_inner_iters, int) or decimation_inner_iters < 1:
+            raise ValueError(
+                f"decimation_inner_iters must be a positive integer, "
+                f"got {decimation_inner_iters}"
+            )
+        if not isinstance(decimation_freeze_llr, (int, float)) or decimation_freeze_llr <= 0.0:
+            raise ValueError(
+                f"decimation_freeze_llr must be a positive number, "
+                f"got {decimation_freeze_llr}"
+            )
+
+        from .decoder.decimation import guided_decimation
+
+        _H = np.asarray(H, dtype=np.uint8)
+        _llr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (_H.shape[1],)
+        ).copy()
+
+        if syndrome_vec is None:
+            _syn = np.zeros(_H.shape[0], dtype=np.uint8)
+        else:
+            _syn = np.asarray(syndrome_vec, dtype=np.uint8)
+
+        # Build bp_kwargs for the inner BP calls — pass through all
+        # schedule/mode params but NOT postprocess, max_iters, llr_history,
+        # syndrome_vec, or the decimation params themselves.
+        _inner_bp_kwargs = {
+            "mode": mode,
+            "damping": damping,
+            "norm_factor": norm_factor,
+            "offset": offset,
+            "schedule": schedule,
+            "alpha1": alpha1,
+            "alpha2": alpha2,
+        }
+        if clip is not None:
+            _inner_bp_kwargs["clip"] = clip
+        if hybrid_residual_threshold is not None:
+            _inner_bp_kwargs["hybrid_residual_threshold"] = hybrid_residual_threshold
+
+        correction, total_iters = guided_decimation(
+            _H, _llr,
+            syndrome_vec=_syn,
+            decimation_rounds=decimation_rounds,
+            decimation_inner_iters=decimation_inner_iters,
+            decimation_freeze_llr=decimation_freeze_llr,
+            bp_kwargs=_inner_bp_kwargs,
+        )
+
+        # ── Assemble return tuple matching bp_decode output-shape rules ──
+        # The caller may have requested llr_history or residual_metrics.
+        # Guided decimation does not produce these internally, so return
+        # empty/neutral values that match the expected shapes.
+        if llr_history > 0:
+            _empty_hist = np.empty((0, _H.shape[1]), dtype=np.float64)
+            if residual_metrics:
+                _empty_metrics = {
+                    "residual_linf": [],
+                    "residual_l2": [],
+                    "residual_energy": [],
+                }
+                return correction, total_iters, _empty_hist, _empty_metrics
+            return correction, total_iters, _empty_hist
+        if residual_metrics:
+            _empty_metrics = {
+                "residual_linf": [],
+                "residual_l2": [],
+                "residual_energy": [],
+            }
+            return correction, total_iters, _empty_metrics
+        return correction, total_iters
+
+    # ── v3.5.0: mp_osd1 early dispatch ──
+    # MP-aware OSD-1 that uses posterior LLR magnitude for column ordering.
+    # Follows the same early-return wrapper pattern as guided_decimation.
+    # Runs BP with postprocess=None and llr_history=1 to obtain posterior,
+    # then applies mp_osd1_postprocess if syndrome is not satisfied.
+    if postprocess == "mp_osd1":
+        from .decoder.osd import mp_osd1_postprocess
+
+        _H = np.asarray(H, dtype=np.uint8)
+        _llr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (_H.shape[1],)
+        ).copy()
+
+        if syndrome_vec is None:
+            _syn = np.zeros(_H.shape[0], dtype=np.uint8)
+        else:
+            _syn = np.asarray(syndrome_vec, dtype=np.uint8)
+
+        # Inner BP call — same H, llr, max_iters, schedule, mode, etc.
+        # postprocess=None prevents recursion; llr_history=1 captures posterior.
+        _inner_result = bp_decode(
+            _H, _llr,
+            max_iters=max_iters,
+            mode=mode,
+            damping=damping,
+            norm_factor=norm_factor,
+            offset=offset,
+            clip=clip,
+            schedule=schedule,
+            postprocess=None,
+            seed=seed,
+            syndrome_vec=_syn,
+            llr_history=1,
+            alpha1=alpha1,
+            alpha2=alpha2,
+            hybrid_residual_threshold=hybrid_residual_threshold,
+            ensemble_k=ensemble_k,
+            state_aware_residual=state_aware_residual,
+            phi_by_state=phi_by_state,
+            s_by_state=s_by_state,
+            state_label_by_check=state_label_by_check,
+        )
+
+        hard_bp = _inner_result[0]
+        iters_bp = _inner_result[1]
+        _history = _inner_result[2]  # shape (k, n) from llr_history=1
+
+        # Check if BP already converged.
+        bp_syn = (
+            (_H.astype(np.int32) @ hard_bp.astype(np.int32)) % 2
+        ).astype(np.uint8)
+
+        if np.array_equal(bp_syn, _syn):
+            # BP converged — return immediately without OSD.
+            correction = hard_bp
+        else:
+            # Extract posterior LLR from history (last snapshot).
+            L_post = _history[-1]  # shape (n,)
+
+            corrected = mp_osd1_postprocess(
+                _H, _llr, hard_bp, L_post, _syn,
+            )
+
+            # Never-degrade rule: verify OSD result satisfies syndrome.
+            osd_syn = (
+                (_H.astype(np.int32) @ corrected.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            if np.array_equal(osd_syn, _syn):
+                correction = corrected
+            else:
+                correction = hard_bp
+
+        # Assemble return tuple matching bp_decode output-shape rules.
+        if llr_history > 0:
+            # Return the captured history from the inner call.
+            if residual_metrics:
+                _empty_metrics = {
+                    "residual_linf": [],
+                    "residual_l2": [],
+                    "residual_energy": [],
+                }
+                return correction, iters_bp, _history, _empty_metrics
+            return correction, iters_bp, _history
+        if residual_metrics:
+            _empty_metrics = {
+                "residual_linf": [],
+                "residual_l2": [],
+                "residual_energy": [],
+            }
+            return correction, iters_bp, _empty_metrics
+        return correction, iters_bp
+
+    # ── v3.6.0: mp_osd_cs early dispatch ──
+    # MP-aware combination-sweep OSD that uses posterior LLR magnitude
+    # for column ordering.  Follows the same early-return wrapper pattern
+    # as mp_osd1.  Runs BP with postprocess=None and llr_history=1 to
+    # obtain posterior, then applies mp_osd_cs_postprocess if syndrome
+    # is not satisfied.
+    if postprocess == "mp_osd_cs":
+        from .decoder.osd import mp_osd_cs_postprocess
+
+        _H = np.asarray(H, dtype=np.uint8)
+        _llr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (_H.shape[1],)
+        ).copy()
+
+        if syndrome_vec is None:
+            _syn = np.zeros(_H.shape[0], dtype=np.uint8)
+        else:
+            _syn = np.asarray(syndrome_vec, dtype=np.uint8)
+
+        # Inner BP call — same H, llr, max_iters, schedule, mode, etc.
+        # postprocess=None prevents recursion; llr_history=1 captures posterior.
+        _inner_result = bp_decode(
+            _H, _llr,
+            max_iters=max_iters,
+            mode=mode,
+            damping=damping,
+            norm_factor=norm_factor,
+            offset=offset,
+            clip=clip,
+            schedule=schedule,
+            postprocess=None,
+            seed=seed,
+            syndrome_vec=_syn,
+            llr_history=1,
+            alpha1=alpha1,
+            alpha2=alpha2,
+            hybrid_residual_threshold=hybrid_residual_threshold,
+            ensemble_k=ensemble_k,
+            state_aware_residual=state_aware_residual,
+            phi_by_state=phi_by_state,
+            s_by_state=s_by_state,
+            state_label_by_check=state_label_by_check,
+        )
+
+        hard_bp = _inner_result[0]
+        iters_bp = _inner_result[1]
+        _history = _inner_result[2]  # shape (k, n) from llr_history=1
+
+        # Check if BP already converged.
+        bp_syn = (
+            (_H.astype(np.int32) @ hard_bp.astype(np.int32)) % 2
+        ).astype(np.uint8)
+
+        if np.array_equal(bp_syn, _syn):
+            # BP converged — return immediately without OSD.
+            correction = hard_bp
+        else:
+            # Extract posterior LLR from history (last snapshot).
+            L_post = _history[-1]  # shape (n,)
+
+            corrected = mp_osd_cs_postprocess(
+                _H, _llr, hard_bp, L_post, _syn, lam=osd_cs_lam,
+            )
+
+            # Never-degrade rule: verify OSD result satisfies syndrome.
+            osd_syn = (
+                (_H.astype(np.int32) @ corrected.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            if np.array_equal(osd_syn, _syn):
+                correction = corrected
+            else:
+                correction = hard_bp
+
+        # Assemble return tuple matching bp_decode output-shape rules.
+        if llr_history > 0:
+            # Return the captured history from the inner call.
+            if residual_metrics:
+                _empty_metrics = {
+                    "residual_linf": [],
+                    "residual_l2": [],
+                    "residual_energy": [],
+                }
+                return correction, iters_bp, _history, _empty_metrics
+            return correction, iters_bp, _history
+        if residual_metrics:
+            _empty_metrics = {
+                "residual_linf": [],
+                "residual_l2": [],
+                "residual_energy": [],
+            }
+            return correction, iters_bp, _empty_metrics
+        return correction, iters_bp
+
+    # ── v2.9.1: residual metric collection (opt-in) ──
+    if residual_metrics:
+        _res_metrics = {"residual_linf": [], "residual_l2": [], "residual_energy": []}
+
+    # ── Deterministic ensemble wrapper (v2.8.0) ──
+    # When ensemble_k > 1, run K independent BP passes with deterministic
+    # LLR perturbations and return the best candidate.  Member 0 always
+    # uses the exact original LLR (baseline).  Falls through when k == 1.
+    if ensemble_k > 1:
+        _llr_arr = np.broadcast_to(
+            np.asarray(llr, dtype=np.float64), (H.shape[1],)
+        ).copy()
+        _n_ens = H.shape[1]
+        _mean_abs = np.mean(np.abs(_llr_arr)) if _n_ens > 0 else 0.0
+        _scale = 0.05 * _mean_abs if _mean_abs > 0.0 else 0.05
+
+        best_hard = None
+        best_iters = None
+        best_hist = None
+        best_syn_weight = None  # None means not yet set
+        best_converged = False
+        best_member = -1
+        H32 = H.astype(np.int32, copy=False)
+
+        for _k in range(ensemble_k):
+            if _k == 0:
+                llr_k = _llr_arr
+            else:
+                # Deterministic, discrete, zero-mean perturbation.
+                # Alternating +1/-1 base pattern, rolled by member index.
+                _base = np.where(
+                    (np.arange(_n_ens) % 2) == 0, 1.0, -1.0
+                )
+                _pattern = np.roll(_base, _k)
+                # Enforce exact zero-mean (needed when n is odd).
+                _pattern = _pattern - _pattern.mean()
+                epsilon_k = _scale * _pattern
+                llr_k = _llr_arr + epsilon_k
+
+            result_k = bp_decode(
+                H, llr_k, max_iters=max_iters, mode=mode,
+                damping=damping, norm_factor=norm_factor,
+                offset=offset, clip=clip,
+                syndrome_vec=syndrome_vec,
+                postprocess=postprocess, osd_cs_lam=osd_cs_lam,
+                llr_history=llr_history,
+                schedule=schedule,
+                alpha1=alpha1, alpha2=alpha2,
+                hybrid_residual_threshold=hybrid_residual_threshold,
+                ensemble_k=1,  # single run per member
+                state_aware_residual=state_aware_residual,
+                phi_by_state=phi_by_state,
+                s_by_state=s_by_state,
+                state_label_by_check=state_label_by_check,
+            )
+
+            if llr_history > 0:
+                hard_k, iters_k, hist_k = result_k
+            else:
+                hard_k, iters_k = result_k
+                hist_k = None
+
+            # Evaluate candidate quality.
+            syn_k = (
+                (H32 @ hard_k.astype(np.int32)) % 2
+            ).astype(np.uint8)
+            if syndrome_vec is not None:
+                syn_weight_k = int(np.sum(syn_k != syndrome_vec))
+            else:
+                syn_weight_k = int(np.sum(syn_k))
+            converged_k = (syn_weight_k == 0)
+
+            # Selection: prefer converged, then lowest syndrome weight,
+            # then lowest member index (deterministic tie-break).
+            if best_hard is None:
+                is_better = True
+            elif converged_k and not best_converged:
+                is_better = True
+            elif not converged_k and best_converged:
+                is_better = False
+            elif syn_weight_k < best_syn_weight:
+                is_better = True
+            else:
+                is_better = False
+
+            if is_better:
+                best_hard = hard_k
+                best_iters = iters_k
+                best_hist = hist_k
+                best_syn_weight = syn_weight_k
+                best_converged = converged_k
+                best_member = _k
+
+        if llr_history > 0:
+            if residual_metrics:
+                return best_hard, best_iters, best_hist, _res_metrics
+            return best_hard, best_iters, best_hist
+        if residual_metrics:
+            return best_hard, best_iters, _res_metrics
+        return best_hard, best_iters
+
+    # ── Deterministic adaptive schedule controller (v2.9.0) ──
+    # One-way checkpointed controller:
+    #   Phase 1: run "flooding" for k1 iterations.
+    #   If converged → return immediately.
+    #   Phase 2: run "hybrid_residual" for remaining (max_iters - k1) iters.
+    #   Tie-break: prefer converged → lower syndrome weight → fewer iters
+    #   → phase order (deterministic).
+    # No internal message state is passed between phases; each phase is
+    # an independent bp_decode() call with a concrete schedule.
+    if schedule == "adaptive":
+        k1 = adaptive_k1 if adaptive_k1 is not None else max(1, max_iters // 4)
+        k2 = max_iters - k1
+
+        # Shared keyword arguments for both phases (forward all non-adaptive
+        # parameters unchanged).
+        _adaptive_common = dict(
+            mode=mode, damping=damping, norm_factor=norm_factor,
+            offset=offset, clip=clip, postprocess=postprocess,
+            osd_cs_lam=osd_cs_lam, llr_history=llr_history,
+            syndrome_vec=syndrome_vec,
+            alpha1=alpha1, alpha2=alpha2,
+            hybrid_residual_threshold=hybrid_residual_threshold,
+            ensemble_k=1,
+            state_aware_residual=state_aware_residual,
+            phi_by_state=phi_by_state,
+            s_by_state=s_by_state,
+            state_label_by_check=state_label_by_check,
+        )
+
+        H32 = H.astype(np.int32, copy=False)
+        _syn_ref = (
+            np.asarray(syndrome_vec, dtype=np.uint8)
+            if syndrome_vec is not None
+            else np.zeros(H.shape[0], dtype=np.uint8)
+        )
+
+        # ── Phase 1: flooding for k1 iterations ──
+        result_p1 = bp_decode(
+            H, llr, max_iters=k1, schedule="flooding", **_adaptive_common,
+        )
+        if llr_history > 0:
+            hard_p1, iters_p1, hist_p1 = result_p1
+        else:
+            hard_p1, iters_p1 = result_p1
+            hist_p1 = None
+
+        syn_p1 = (
+            (H32 @ hard_p1.astype(np.int32)) % 2
+        ).astype(np.uint8)
+        syn_weight_p1 = int(np.sum(syn_p1 != _syn_ref))
+        converged_p1 = (syn_weight_p1 == 0)
+
+        if adaptive_log:
+            print(
+                f"[adaptive] phase1 flooding k1={k1}: "
+                f"iters={iters_p1}, syn_weight={syn_weight_p1}, "
+                f"converged={converged_p1}"
+            )
+
+        if converged_p1:
+            # Phase 1 converged — return immediately.
+            if adaptive_log:
+                print("[adaptive] returning phase1 (converged)")
+            if llr_history > 0:
+                if residual_metrics:
+                    return hard_p1, iters_p1, hist_p1, _res_metrics
+                return hard_p1, iters_p1, hist_p1
+            if residual_metrics:
+                return hard_p1, iters_p1, _res_metrics
+            return hard_p1, iters_p1
+
+        # ── Phase 2: hybrid_residual for remaining iterations ──
+        result_p2 = bp_decode(
+            H, llr, max_iters=k2, schedule="hybrid_residual",
+            **_adaptive_common,
+        )
+        if llr_history > 0:
+            hard_p2, iters_p2, hist_p2 = result_p2
+        else:
+            hard_p2, iters_p2 = result_p2
+            hist_p2 = None
+
+        syn_p2 = (
+            (H32 @ hard_p2.astype(np.int32)) % 2
+        ).astype(np.uint8)
+        syn_weight_p2 = int(np.sum(syn_p2 != _syn_ref))
+        converged_p2 = (syn_weight_p2 == 0)
+
+        if adaptive_log:
+            print(
+                f"[adaptive] phase2 hybrid_residual k2={k2}: "
+                f"iters={iters_p2}, syn_weight={syn_weight_p2}, "
+                f"converged={converged_p2}"
+            )
+
+        # ── Tie-break: pick best phase result ──
+        # Prefer: converged → lower syndrome weight → fewer total iters
+        # → phase order (phase 1 wins ties — deterministic).
+        # Iteration accounting: phase 1 returns iters_p1 directly;
+        # phase 2 returns k1 + iters_p2 (cumulative work).
+        total_iters_p1 = iters_p1
+        total_iters_p2 = k1 + iters_p2
+
+        pick_p2 = False
+        if converged_p2 and not converged_p1:
+            pick_p2 = True
+        elif not converged_p2 and converged_p1:
+            pick_p2 = False
+        elif syn_weight_p2 < syn_weight_p1:
+            pick_p2 = True
+        elif syn_weight_p2 > syn_weight_p1:
+            pick_p2 = False
+        elif total_iters_p2 < total_iters_p1:
+            pick_p2 = True
+        # else: tie on all criteria → prefer phase 1 (deterministic)
+
+        if pick_p2:
+            if adaptive_log:
+                print("[adaptive] returning phase2 (better)")
+            if llr_history > 0:
+                if residual_metrics:
+                    return hard_p2, total_iters_p2, hist_p2, _res_metrics
+                return hard_p2, total_iters_p2, hist_p2
+            if residual_metrics:
+                return hard_p2, total_iters_p2, _res_metrics
+            return hard_p2, total_iters_p2
+        else:
+            if adaptive_log:
+                print("[adaptive] returning phase1 (better or tie)")
+            if llr_history > 0:
+                if residual_metrics:
+                    return hard_p1, total_iters_p1, hist_p1, _res_metrics
+                return hard_p1, total_iters_p1, hist_p1
+            if residual_metrics:
+                return hard_p1, total_iters_p1, _res_metrics
+            return hard_p1, total_iters_p1
+
+    m, n = H.shape
+    eps = 1e-30
+
+    llr = np.broadcast_to(np.asarray(llr, dtype=np.float64), (n,)).copy()
+
+    if syndrome_vec is None:
+        syndrome_vec = np.zeros(m, dtype=np.uint8)
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    c2v, v2c = _tanner_graph(H)
+
+    # Variable-to-check LLR messages (initialised to channel LLR per variable)
+    v2c_msg = np.zeros((n, m), dtype=np.float64)
+    for v in range(n):
+        for c in v2c[v]:
+            v2c_msg[v, c] = llr[v]
+
+    # Check-to-variable LLR messages
+    c2v_msg = np.zeros((m, n), dtype=np.float64)
+
+    hard = np.zeros(n, dtype=np.uint8)
+
+    # ── LLR history buffer (circular, fixed-size) ──
+    if llr_history > 0:
+        _hist_buf = [None] * llr_history
+        _hist_idx = 0
+        _hist_count = 0
+        _L_total = np.empty(n, dtype=np.float64)
+
+    use_min_sum = mode in ("min_sum", "norm_min_sum", "offset_min_sum",
+                           "improved_norm", "improved_offset", "min_sum_urw")
+
+    if schedule == "flooding":
+        # ══════════════════════════════════════════════════════════════
+        # Flooding schedule: update ALL check nodes, then ALL variable
+        # nodes, in separate sweeps.  This is the v2.4.0 default.
+        # ══════════════════════════════════════════════════════════════
+        for it in range(max_iters):
+            # Save old messages for damping.
+            if damping > 0.0:
+                c2v_msg_old = c2v_msg.copy()
+
+            # ── check → variable ──
+            for c in range(m):
+                nbrs = c2v[c]
+                if len(nbrs) == 0:
+                    continue
+                if len(nbrs) == 1:
+                    c2v_msg[c, nbrs[0]] = 0.0
+                    continue
+
+                sign_s = (-1.0) ** int(syndrome_vec[c])
+
+                if use_min_sum:
+                    # Gather signs and magnitudes.
+                    incoming = np.array([v2c_msg[v, c] for v in nbrs])
+                    signs = np.where(incoming == 0.0, 1.0, np.sign(incoming))
+                    abs_vals = np.abs(incoming)
+                    sign_prod_all = np.prod(signs) * sign_s
+
+                    # Precompute first and second minimums for O(d_c) exclusion.
+                    d = len(nbrs)
+                    if d >= 2:
+                        idx_sorted = np.argpartition(abs_vals, 1)[:2]
+                        if abs_vals[idx_sorted[0]] <= abs_vals[idx_sorted[1]]:
+                            min1_idx, min2_idx = idx_sorted[0], idx_sorted[1]
+                        else:
+                            min1_idx, min2_idx = idx_sorted[1], idx_sorted[0]
+                        min1_val = abs_vals[min1_idx]
+                        min2_val = abs_vals[min2_idx]
+                    else:
+                        min1_idx = 0
+                        min1_val = abs_vals[0]
+                        min2_val = 0.0
+
+                    for idx, v in enumerate(nbrs):
+                        sign_excl = sign_prod_all * signs[idx]
+                        min_excl = min2_val if idx == min1_idx else min1_val
+
+                        if mode == "min_sum":
+                            c2v_msg[c, v] = sign_excl * min_excl
+                        elif mode == "norm_min_sum":
+                            c2v_msg[c, v] = norm_factor * sign_excl * min_excl
+                        elif mode == "offset_min_sum":
+                            c2v_msg[c, v] = sign_excl * max(min_excl - offset, 0.0)
+                        elif mode == "improved_norm":
+                            alpha = alpha1 if idx == min1_idx else alpha2
+                            c2v_msg[c, v] = alpha * sign_excl * min_excl
+                        elif mode == "min_sum_urw":
+                            c2v_msg[c, v] = urw_rho * sign_excl * min_excl
+                        else:  # improved_offset
+                            alpha = alpha1 if idx == min1_idx else alpha2
+                            c2v_msg[c, v] = sign_excl * max(alpha * min_excl - offset, 0.0)
+                else:
+                    # sum_product: tanh product rule.
+                    tanhs = np.array([
+                        np.tanh(np.clip(v2c_msg[v, c] / 2.0, -20.0, 20.0))
+                        for v in nbrs
+                    ])
+                    prod_all = np.prod(tanhs)
+                    for idx, v in enumerate(nbrs):
+                        prod_excl = prod_all / (tanhs[idx] + eps)
+                        prod_excl = np.clip(prod_excl, -1 + 1e-15, 1 - 1e-15)
+                        c2v_msg[c, v] = sign_s * 2.0 * np.arctanh(prod_excl)
+
+            # ── damping ──
+            if damping > 0.0:
+                c2v_msg = (1 - damping) * c2v_msg + damping * c2v_msg_old
+
+            # ── user-specified message clipping ──
+            if clip is not None:
+                c2v_msg = np.clip(c2v_msg, -clip, clip)
+
+            # ── variable → check + hard decision ──
+            for v in range(n):
+                nbrs = v2c[v]
+                total = llr[v] + sum(c2v_msg[c, v] for c in nbrs)
+                for c in nbrs:
+                    v2c_msg[v, c] = total - c2v_msg[c, v]
+                hard[v] = 0 if total >= 0.0 else 1
+                if llr_history > 0:
+                    _L_total[v] = total
+
+            # ── LLR history snapshot (flooding) ──
+            if llr_history > 0:
+                _hist_buf[_hist_idx % llr_history] = _L_total.copy()
+                _hist_idx += 1
+                _hist_count = min(_hist_count + 1, llr_history)
+
+            # ── early stop ──
+            if np.array_equal(
+                (H.astype(np.int32) @ hard.astype(np.int32)) % 2,
+                syndrome_vec.astype(np.uint8),
+            ):
+                pp_result = _bp_postprocess(
+                    H, llr, hard, it + 1, syndrome_vec, postprocess,
+                    osd_cs_lam=osd_cs_lam,
+                )
+                if llr_history > 0:
+                    if residual_metrics:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
+                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                if residual_metrics:
+                    return pp_result[0], pp_result[1], _res_metrics
+                return pp_result
+
+        pp_result = _bp_postprocess(
+            H, llr, hard, max_iters, syndrome_vec, postprocess,
+            osd_cs_lam=osd_cs_lam,
+        )
+        if llr_history > 0:
+            if residual_metrics:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
+            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        if residual_metrics:
+            return pp_result[0], pp_result[1], _res_metrics
+        return pp_result
+
+    elif schedule == "geom_v1":
+        # ══════════════════════════════════════════════════════════════
+        # Geometry-aware flooding schedule (v3.8.0).
+        #
+        # Identical to flooding except check-to-variable messages are
+        # scaled by  alpha_c = 1 / sqrt(d_c)  where d_c is the degree
+        # of check node c (number of non-zero entries in row c of H).
+        #
+        # This normalises the influence of high-degree checks without
+        # altering any other decoding semantics.
+        # ══════════════════════════════════════════════════════════════
+
+        # Precompute per-check scaling factors (deterministic, pure
+        # function of H structure).
+        _dc = np.array([len(c2v[c]) for c in range(m)], dtype=np.float64)
+        _geom_alpha = np.where(_dc > 0.0, 1.0 / np.sqrt(_dc), 0.0)
+
+        for it in range(max_iters):
+            # Save old messages for damping.
+            if damping > 0.0:
+                c2v_msg_old = c2v_msg.copy()
+
+            # ── check → variable (with geometric scaling) ──
+            for c in range(m):
+                nbrs = c2v[c]
+                if len(nbrs) == 0:
+                    continue
+                if len(nbrs) == 1:
+                    c2v_msg[c, nbrs[0]] = 0.0
+                    continue
+
+                alpha_c = _geom_alpha[c]
+                sign_s = (-1.0) ** int(syndrome_vec[c])
+
+                if use_min_sum:
+                    # Gather signs and magnitudes.
+                    incoming = np.array([v2c_msg[v, c] for v in nbrs])
+                    signs = np.where(incoming == 0.0, 1.0, np.sign(incoming))
+                    abs_vals = np.abs(incoming)
+                    sign_prod_all = np.prod(signs) * sign_s
+
+                    # Precompute first and second minimums for O(d_c) exclusion.
+                    d = len(nbrs)
+                    if d >= 2:
+                        idx_sorted = np.argpartition(abs_vals, 1)[:2]
+                        if abs_vals[idx_sorted[0]] <= abs_vals[idx_sorted[1]]:
+                            min1_idx, min2_idx = idx_sorted[0], idx_sorted[1]
+                        else:
+                            min1_idx, min2_idx = idx_sorted[1], idx_sorted[0]
+                        min1_val = abs_vals[min1_idx]
+                        min2_val = abs_vals[min2_idx]
+                    else:
+                        min1_idx = 0
+                        min1_val = abs_vals[0]
+                        min2_val = 0.0
+
+                    for idx, v in enumerate(nbrs):
+                        sign_excl = sign_prod_all * signs[idx]
+                        min_excl = min2_val if idx == min1_idx else min1_val
+
+                        if mode == "min_sum":
+                            c2v_msg[c, v] = alpha_c * sign_excl * min_excl
+                        elif mode == "norm_min_sum":
+                            c2v_msg[c, v] = alpha_c * norm_factor * sign_excl * min_excl
+                        elif mode == "offset_min_sum":
+                            c2v_msg[c, v] = alpha_c * sign_excl * max(min_excl - offset, 0.0)
+                        elif mode == "improved_norm":
+                            alpha = alpha1 if idx == min1_idx else alpha2
+                            c2v_msg[c, v] = alpha_c * alpha * sign_excl * min_excl
+                        elif mode == "min_sum_urw":
+                            c2v_msg[c, v] = alpha_c * urw_rho * sign_excl * min_excl
+                        else:  # improved_offset
+                            alpha = alpha1 if idx == min1_idx else alpha2
+                            c2v_msg[c, v] = alpha_c * sign_excl * max(alpha * min_excl - offset, 0.0)
+                else:
+                    # sum_product: tanh product rule, then scale.
+                    tanhs = np.array([
+                        np.tanh(np.clip(v2c_msg[v, c] / 2.0, -20.0, 20.0))
+                        for v in nbrs
+                    ])
+                    prod_all = np.prod(tanhs)
+                    for idx, v in enumerate(nbrs):
+                        prod_excl = prod_all / (tanhs[idx] + eps)
+                        prod_excl = np.clip(prod_excl, -1 + 1e-15, 1 - 1e-15)
+                        c2v_msg[c, v] = alpha_c * sign_s * 2.0 * np.arctanh(prod_excl)
+
+            # ── damping ──
+            if damping > 0.0:
+                c2v_msg = (1 - damping) * c2v_msg + damping * c2v_msg_old
+
+            # ── user-specified message clipping ──
+            if clip is not None:
+                c2v_msg = np.clip(c2v_msg, -clip, clip)
+
+            # ── variable → check + hard decision ──
+            for v in range(n):
+                nbrs = v2c[v]
+                total = llr[v] + sum(c2v_msg[c, v] for c in nbrs)
+                for c in nbrs:
+                    v2c_msg[v, c] = total - c2v_msg[c, v]
+                hard[v] = 0 if total >= 0.0 else 1
+                if llr_history > 0:
+                    _L_total[v] = total
+
+            # ── LLR history snapshot (geom_v1) ──
+            if llr_history > 0:
+                _hist_buf[_hist_idx % llr_history] = _L_total.copy()
+                _hist_idx += 1
+                _hist_count = min(_hist_count + 1, llr_history)
+
+            # ── early stop ──
+            if np.array_equal(
+                (H.astype(np.int32) @ hard.astype(np.int32)) % 2,
+                syndrome_vec.astype(np.uint8),
+            ):
+                pp_result = _bp_postprocess(
+                    H, llr, hard, it + 1, syndrome_vec, postprocess,
+                    osd_cs_lam=osd_cs_lam,
+                )
+                if llr_history > 0:
+                    if residual_metrics:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
+                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                if residual_metrics:
+                    return pp_result[0], pp_result[1], _res_metrics
+                return pp_result
+
+        pp_result = _bp_postprocess(
+            H, llr, hard, max_iters, syndrome_vec, postprocess,
+            osd_cs_lam=osd_cs_lam,
+        )
+        if llr_history > 0:
+            if residual_metrics:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
+            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        if residual_metrics:
+            return pp_result[0], pp_result[1], _res_metrics
+        return pp_result
+
+    else:
+        # ══════════════════════════════════════════════════════════════
+        # Layered (serial) schedule: process check nodes one-by-one,
+        # updating variable beliefs incrementally.
+        #
+        # State:
+        #   L_total[v] = total belief for variable v.
+        #     Invariant: L_total[v] = llr[v] + sum_c c2v_msg[c, v]
+        #   c2v_msg[c, v] = check-to-variable messages (init 0.0).
+        #
+        # Per check node c:
+        #   1. v2c[v,c] = L_total[v] - c2v_msg[c,v]   (remove old c2v)
+        #   2. c2v_raw   = CheckNodeUpdate(v2c inputs)
+        #   3. c2v_new   = damp(c2v_raw, c2v_old)
+        #   4. c2v_new   = clip(c2v_new)
+        #   5. L_total[v] += c2v_new - c2v_msg[c,v]    (remove old, add new)
+        #   6. c2v_msg[c,v] = c2v_new
+        # ══════════════════════════════════════════════════════════════
+
+        # Initialise total beliefs from channel LLRs.
+        # c2v_msg is already zero, so invariant L_total = llr + 0 holds.
+        L_total = llr.copy()
+        is_residual = (schedule == "residual")
+        is_hybrid = (schedule == "hybrid_residual")
+        if is_residual or is_hybrid:
+            residuals = np.zeros(m, dtype=np.float64)
+            check_indices = np.arange(m, dtype=np.int64)
+        if is_hybrid:
+            # Deterministic even/odd partition by check index.
+            layer_even = np.array([c for c in range(m) if c % 2 == 0], dtype=np.int64)
+            layer_odd = np.array([c for c in range(m) if c % 2 == 1], dtype=np.int64)
+
+        for it in range(max_iters):
+            if is_residual:
+                check_order = np.lexsort((check_indices, -residuals))
+                c2v_msg_before = c2v_msg.copy()
+            elif is_hybrid:
+                c2v_msg_before = c2v_msg.copy()
+                check_order_parts = []
+                for layer in (layer_even, layer_odd):
+                    if len(layer) == 0:
+                        continue
+                    layer_res = residuals[layer]
+                    layer_idx = layer
+                    if hybrid_residual_threshold is not None:
+                        high = layer_res > hybrid_residual_threshold
+                        low = ~high
+                        if np.any(high):
+                            h_idx = layer_idx[high]
+                            h_res = layer_res[high]
+                            h_order = np.lexsort((h_idx, -h_res))
+                            check_order_parts.append(h_idx[h_order])
+                        if np.any(low):
+                            l_idx = layer_idx[low]
+                            l_res = layer_res[low]
+                            l_order = np.lexsort((l_idx, -l_res))
+                            check_order_parts.append(l_idx[l_order])
+                    else:
+                        order = np.lexsort((layer_idx, -layer_res))
+                        check_order_parts.append(layer_idx[order])
+                check_order = np.concatenate(check_order_parts) if check_order_parts else np.array([], dtype=np.int64)
+            else:
+                check_order = range(m)
+
+            for c in check_order:
+                nbrs = c2v[c]
+                if len(nbrs) == 0:
+                    continue
+
+                # ── Step 1: Derive v2c from L_total (no full-sum recompute) ──
+                # v2c[v,c] = L_total[v] - c2v_msg[c,v]
+                v2c_vals = np.array([L_total[v] - c2v_msg[c, v] for v in nbrs])
+
+                if len(nbrs) == 1:
+                    # Degree-1 check: c2v message is zero by convention.
+                    c2v_new_val = 0.0
+                    old_val = c2v_msg[c, nbrs[0]]
+                    if damping > 0.0:
+                        c2v_new_val = (1 - damping) * c2v_new_val + damping * old_val
+                    if clip is not None:
+                        c2v_new_val = np.clip(c2v_new_val, -clip, clip)
+                    # Step 5: Update L_total incrementally.
+                    L_total[nbrs[0]] += c2v_new_val - old_val
+                    c2v_msg[c, nbrs[0]] = c2v_new_val
+                    continue
+
+                sign_s = (-1.0) ** int(syndrome_vec[c])
+
+                # ── Step 2: Compute new c2v messages ──
+                if use_min_sum:
+                    signs = np.where(v2c_vals == 0.0, 1.0, np.sign(v2c_vals))
+                    abs_vals = np.abs(v2c_vals)
+                    sign_prod_all = np.prod(signs) * sign_s
+
+                    # Precompute first and second minimums.
+                    d = len(nbrs)
+                    if d >= 2:
+                        idx_sorted = np.argpartition(abs_vals, 1)[:2]
+                        if abs_vals[idx_sorted[0]] <= abs_vals[idx_sorted[1]]:
+                            min1_idx, min2_idx = idx_sorted[0], idx_sorted[1]
+                        else:
+                            min1_idx, min2_idx = idx_sorted[1], idx_sorted[0]
+                        min1_val = abs_vals[min1_idx]
+                        min2_val = abs_vals[min2_idx]
+                    else:
+                        min1_idx = 0
+                        min1_val = abs_vals[0]
+                        min2_val = 0.0
+
+                    for idx, v in enumerate(nbrs):
+                        sign_excl = sign_prod_all * signs[idx]
+                        min_excl = min2_val if idx == min1_idx else min1_val
+
+                        if mode == "min_sum":
+                            c2v_raw = sign_excl * min_excl
+                        elif mode == "norm_min_sum":
+                            c2v_raw = norm_factor * sign_excl * min_excl
+                        elif mode == "offset_min_sum":
+                            c2v_raw = sign_excl * max(min_excl - offset, 0.0)
+                        elif mode == "improved_norm":
+                            alpha = alpha1 if idx == min1_idx else alpha2
+                            c2v_raw = alpha * sign_excl * min_excl
+                        elif mode == "min_sum_urw":
+                            c2v_raw = urw_rho * sign_excl * min_excl
+                        else:  # improved_offset
+                            alpha = alpha1 if idx == min1_idx else alpha2
+                            c2v_raw = sign_excl * max(alpha * min_excl - offset, 0.0)
+
+                        # Step 3: Damping per-message.
+                        old_val = c2v_msg[c, v]
+                        if damping > 0.0:
+                            c2v_new_val = (1 - damping) * c2v_raw + damping * old_val
+                        else:
+                            c2v_new_val = c2v_raw
+
+                        # Step 4: Clipping per-message.
+                        if clip is not None:
+                            c2v_new_val = np.clip(c2v_new_val, -clip, clip)
+
+                        # Step 5: Update L_total incrementally.
+                        L_total[v] += c2v_new_val - old_val
+
+                        # Step 6: Store new c2v message.
+                        c2v_msg[c, v] = c2v_new_val
+                else:
+                    # sum_product: tanh product rule.
+                    tanhs = np.array([
+                        np.tanh(np.clip(val / 2.0, -20.0, 20.0))
+                        for val in v2c_vals
+                    ])
+                    prod_all = np.prod(tanhs)
+
+                    for idx, v in enumerate(nbrs):
+                        prod_excl = prod_all / (tanhs[idx] + eps)
+                        prod_excl = np.clip(prod_excl, -1 + 1e-15, 1 - 1e-15)
+                        c2v_raw = sign_s * 2.0 * np.arctanh(prod_excl)
+
+                        # Step 3: Damping per-message.
+                        old_val = c2v_msg[c, v]
+                        if damping > 0.0:
+                            c2v_new_val = (1 - damping) * c2v_raw + damping * old_val
+                        else:
+                            c2v_new_val = c2v_raw
+
+                        # Step 4: Clipping per-message.
+                        if clip is not None:
+                            c2v_new_val = np.clip(c2v_new_val, -clip, clip)
+
+                        # Step 5: Update L_total incrementally.
+                        L_total[v] += c2v_new_val - old_val
+
+                        # Step 6: Store new c2v message.
+                        c2v_msg[c, v] = c2v_new_val
+
+            # ── Update residuals (residual / hybrid_residual schedule) ──
+            if is_residual or is_hybrid:
+                if residual_metrics:
+                    delta = c2v_msg - c2v_msg_before
+                    abs_delta = np.abs(delta)
+                    sq_delta = delta * delta
+                    residuals = np.max(abs_delta, axis=1)
+                    _res_metrics["residual_linf"].append(residuals.copy())
+                    _res_metrics["residual_l2"].append(np.sqrt(np.sum(sq_delta, axis=1)))
+                    _res_metrics["residual_energy"].append(float(np.sum(sq_delta)))
+                else:
+                    residuals = np.max(np.abs(c2v_msg - c2v_msg_before), axis=1)
+                if state_aware_residual:
+                    residuals *= state_aware_residual_weights
+
+            # ── After all layers: compute hard decisions from L_total ──
+            for v in range(n):
+                hard[v] = 0 if L_total[v] >= 0.0 else 1
+
+            # ── LLR history snapshot (layered) ──
+            if llr_history > 0:
+                _hist_buf[_hist_idx % llr_history] = L_total.copy()
+                _hist_idx += 1
+                _hist_count = min(_hist_count + 1, llr_history)
+
+            # ── early stop ──
+            if np.array_equal(
+                (H.astype(np.int32) @ hard.astype(np.int32)) % 2,
+                syndrome_vec.astype(np.uint8),
+            ):
+                pp_result = _bp_postprocess(
+                    H, llr, hard, it + 1, syndrome_vec, postprocess,
+                    osd_cs_lam=osd_cs_lam,
+                )
+                if llr_history > 0:
+                    if residual_metrics:
+                        return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
+                    return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+                if residual_metrics:
+                    return pp_result[0], pp_result[1], _res_metrics
+                return pp_result
+
+        pp_result = _bp_postprocess(
+            H, llr, hard, max_iters, syndrome_vec, postprocess,
+            osd_cs_lam=osd_cs_lam,
+        )
+        if llr_history > 0:
+            if residual_metrics:
+                return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history), _res_metrics
+            return pp_result[0], pp_result[1], _assemble_history(_hist_buf, _hist_idx, _hist_count, llr_history)
+        if residual_metrics:
+            return pp_result[0], pp_result[1], _res_metrics
+        return pp_result
+
+
+def _assemble_history(hist_buf, hist_idx, hist_count, llr_history):
+    """Reconstruct ordered history array from circular buffer."""
+    filled = hist_buf[:hist_count]
+    if hist_count == llr_history:
+        start = hist_idx % llr_history
+        filled = hist_buf[start:] + hist_buf[:start]
+    return np.array(filled, dtype=np.float64)
+
+
+def _bp_postprocess(H, llr, hard, iters, syndrome_vec, postprocess, **pp_kwargs):
+    """Apply optional post-processing after BP terminates."""
+    if postprocess not in ("osd0", "osd1", "osd_cs"):
+        return hard, iters
+
+    bp_syn = (
+        (H.astype(np.int32) @ hard.astype(np.int32)) % 2
+    ).astype(np.uint8)
+
+    if np.array_equal(bp_syn, syndrome_vec):
+        # BP already converged — do not risk degradation.
+        return hard, iters
+
+    if postprocess == "osd0":
+        from .decoder.osd import osd0
+        hard_pp = osd0(H, llr, hard, syndrome_vec=syndrome_vec)
+    elif postprocess == "osd1":
+        from .decoder.osd import osd1
+        hard_pp = osd1(H, llr, hard, syndrome_vec=syndrome_vec)
+    else:  # "osd_cs"
+        from .decoder.osd import osd_cs
+        lam = pp_kwargs.get("osd_cs_lam", 1)
+        hard_pp = osd_cs(H, llr, hard, syndrome_vec=syndrome_vec, lam=lam)
+
+    pp_syn = (
+        (H.astype(np.int32) @ hard_pp.astype(np.int32)) % 2
+    ).astype(np.uint8)
+
+    if np.array_equal(pp_syn, syndrome_vec):
+        return hard_pp, iters
+
+    return hard, iters
+
+
+def detect(H: np.ndarray, e: np.ndarray) -> np.ndarray:
+    """
+    Compute the error syndrome (thin wrapper over :func:`syndrome`).
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        e: Binary error vector, length n.
+
+    Returns:
+        Binary syndrome vector, length m.
+    """
+    return syndrome(H, e)
+
+
+def infer(
+    H: np.ndarray,
+    llr: np.ndarray,
+    max_iter: int = 100,
+    mode: str = "sum_product",
+    damping: float = 0.0,
+    norm_factor: float = 0.75,
+    offset: float = 0.5,
+    clip: Optional[float] = None,
+    schedule: str = "flooding",
+    postprocess: Optional[str] = None,
+    seed: Optional[int] = None,
+    syndrome_vec: Optional[np.ndarray] = None,
+    llr_history: int = 0,
+    osd_cs_lam: int = 1,
+) -> Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, np.ndarray]]:
+    """
+    Infer the most likely error pattern via belief propagation
+    (thin wrapper over :func:`bp_decode`).
+
+    Args:
+        H: Binary parity-check matrix, shape (m, n).
+        llr: Per-variable log-likelihood ratios, length n.
+        max_iter: Maximum BP iterations.
+        mode: Check-node update rule (see :func:`bp_decode`).
+        damping: Damping factor in [0, 1).
+        norm_factor: Normalisation factor for ``"norm_min_sum"``.
+        offset: Offset for ``"offset_min_sum"``.
+        clip: Message magnitude clipping bound.
+        schedule: Message-passing schedule (``"flooding"``, ``"layered"``,
+            or ``"residual"``).
+        postprocess: Optional post-processing (see :func:`bp_decode`).
+        seed: Reserved for future use.
+        syndrome_vec: Binary syndrome vector, length m.  Defaults to all-zeros.
+        llr_history: See :func:`bp_decode`.
+        osd_cs_lam: See :func:`bp_decode`.
+
+    Returns:
+        Same as :func:`bp_decode`.
+    """
+    return bp_decode(
+        H, llr, max_iters=max_iter, mode=mode, damping=damping,
+        norm_factor=norm_factor, offset=offset, clip=clip,
+        schedule=schedule, postprocess=postprocess, seed=seed,
+        syndrome_vec=syndrome_vec, llr_history=llr_history,
+        osd_cs_lam=osd_cs_lam,
+    )
+
+
+def channel_llr(
+    e: np.ndarray,
+    p: float,
+    bias: Optional[Union[np.ndarray, dict]] = None,
+) -> np.ndarray:
+    """
+    Compute per-variable channel log-likelihood ratios for a binary error pattern.
+
+    The base LLR is ``log((1 - p + eps) / (p + eps))``, identical to the
+    inline computation in :meth:`JointSPDecoder._bp_component`.
+    Each element is then multiplied by ``(1 - 2*e[i])``, which flips the
+    sign for positions where an error is present.
+
+    Args:
+        e: Binary error vector of length n.
+        p: Channel error probability in (0, 1).
+        bias: Optional noise-bias multiplier.
+            - *None*  → uniform LLR (default, matches existing behavior).
+            - *scalar* (0-d or length-1 array, or Python float/int)
+              → multiply all LLRs by that scalar.
+            - *vector* (length n) → element-wise multiply.
+            - *dict* with keys ``"x"`` and/or ``"z"`` whose values are
+              scalars or length-n vectors.  The combined bias is the
+              element-wise product of the two components (missing keys
+              default to 1.0).
+
+    Returns:
+        LLR vector of length n (float64).  Inputs are never mutated.
+
+    Raises:
+        ValueError: If *p* is not in (0, 1), bias shape mismatches,
+            or dict contains unexpected keys.
+    """
+    if not (0.0 < p < 1.0):
+        raise ValueError(f"p must be in (0, 1), got {p}")
+
+    e = np.asarray(e)
+    n = e.shape[0]
+    eps = 1e-30
+
+    base_llr = np.log((1.0 - p + eps) / (p + eps))
+    sign = (1 - 2 * e.astype(np.float64))
+    llr = base_llr * sign
+
+    if bias is not None:
+        if isinstance(bias, dict):
+            valid_keys = {"x", "z"}
+            unexpected = set(bias.keys()) - valid_keys
+            if unexpected:
+                raise ValueError(
+                    f"Unexpected bias dict keys: {unexpected}. "
+                    f"Expected subset of {valid_keys}"
+                )
+            def _validate_and_broadcast(component, name):
+                arr = np.asarray(component, dtype=np.float64)
+                if arr.ndim == 0:
+                    return np.full(n, float(arr))
+                if arr.shape == (1,):
+                    return np.full(n, float(arr[0]))
+                if arr.shape == (n,):
+                    return arr
+                raise ValueError(
+                    f"bias['{name}'] has shape {arr.shape}; "
+                    f"expected scalar, (1,), or ({n},)"
+                )
+            bx = _validate_and_broadcast(bias.get("x", 1.0), "x")
+            bz = _validate_and_broadcast(bias.get("z", 1.0), "z")
+            llr = llr * bx * bz
+        else:
+            bias = np.asarray(bias, dtype=np.float64)
+            if bias.ndim == 0:
+                llr = llr * float(bias)
+            elif bias.shape == (1,):
+                llr = llr * float(bias[0])
+            elif bias.shape == (n,):
+                llr = llr * bias
+            else:
+                raise ValueError(
+                    f"bias shape {bias.shape} incompatible with error vector "
+                    f"length {n}. Expected scalar, (1,), or ({n},)."
+                )
+
+    return llr
 
 
 # ═══════════════════════════════════════════════════════════════════════
