@@ -318,3 +318,15 @@ QSOL-IMC
 
 ORCID
 https://orcid.org/0009-0002-4515-9237
+
+---
+
+# Project State & Documentation
+
+Additional project documentation:
+
+- **PROJECT_STATE.md** — current architectural snapshot of the system
+- **ROADMAP.md** — long-term research direction and architectural governance
+- **CHANGELOG.md** — full release history and version notes
+
+These documents provide the canonical reference for the system architecture, research trajectory, and deterministic guarantees of QEC.
