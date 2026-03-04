@@ -53,9 +53,21 @@ class StructuralConfig:
     ----------
     rpc : RPCConfig
         Redundant parity-check augmentation settings.
+    centered_field : bool
+        Enable centered syndrome-field projection (removes uniform bias).
+    pseudo_prior : bool
+        Enable parity-derived pseudo-prior injection.
+    pseudo_prior_strength : float
+        Coupling strength κ for pseudo-prior injection.
+    energy_trace : bool
+        Enable per-iteration BP energy trace diagnostic.
     """
 
     rpc: RPCConfig = field(default_factory=RPCConfig)
+    centered_field: bool = False
+    pseudo_prior: bool = False
+    pseudo_prior_strength: float = 0.25
+    energy_trace: bool = False
 
 
 def build_rpc_augmented_system(

@@ -1,14 +1,23 @@
 """
-v3.8.1 — Structural Geometry DPS Evaluation Harness.
+v3.9.0 — Structural Geometry DPS Evaluation Harness.
 
-Measurement-only.  No decoder changes, no schedule changes, no RPC
-changes, no algorithm changes.
+Extends v3.8.1 harness with channel-geometry interventions:
+  - Centered syndrome-field projection
+  - Parity-derived pseudo-prior injection
+  - Optional BP energy trace diagnostics
 
-Evaluates Distance Penalty Slope (DPS) across four modes:
-  baseline     — flooding, structural disabled
-  rpc_only     — flooding, structural.rpc.enabled=True
-  geom_v1_only — geom_v1 schedule, structural disabled
-  rpc_geom     — geom_v1 schedule, structural.rpc.enabled=True
+Evaluates Distance Penalty Slope (DPS) across twelve modes:
+  baseline           — flooding, all interventions disabled
+  rpc_only           — flooding, RPC augmentation
+  geom_v1_only       — geom_v1 schedule
+  rpc_geom           — geom_v1 + RPC
+  centered           — centered field projection
+  prior              — pseudo-prior injection
+  centered_prior     — centered field + pseudo-prior
+  geom_centered      — geom_v1 + centered field
+  geom_centered_prior — geom_v1 + centered field + pseudo-prior
+  rpc_centered       — RPC + centered field
+  rpc_centered_prior — RPC + centered field + pseudo-prior
 
 FER uses syndrome-consistency semantics:
   frame_error := syndrome(H, correction) != syndrome(H, error)
@@ -28,34 +37,79 @@ import numpy as np
 
 from src.qec_qldpc_codes import bp_decode, syndrome, channel_llr, create_code
 from src.qec.decoder.rpc import RPCConfig, StructuralConfig, build_rpc_augmented_system
+from src.qec.channel.geometry import (
+    centered_syndrome_field,
+    syndrome_field,
+    pseudo_prior_bias,
+    apply_pseudo_prior,
+)
 
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
+_RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
+_RPC_OFF = RPCConfig(enabled=False)
+
 MODES: dict[str, dict[str, Any]] = {
     "baseline": {
         "schedule": "flooding",
-        "structural": StructuralConfig(rpc=RPCConfig(enabled=False)),
+        "structural": StructuralConfig(rpc=_RPC_OFF),
     },
     "rpc_only": {
         "schedule": "flooding",
-        "structural": StructuralConfig(rpc=RPCConfig(
-            enabled=True, max_rows=64, w_min=2, w_max=32,
-        )),
+        "structural": StructuralConfig(rpc=_RPC_ON),
     },
     "geom_v1_only": {
         "schedule": "geom_v1",
-        "structural": StructuralConfig(rpc=RPCConfig(enabled=False)),
+        "structural": StructuralConfig(rpc=_RPC_OFF),
     },
     "rpc_geom": {
         "schedule": "geom_v1",
-        "structural": StructuralConfig(rpc=RPCConfig(
-            enabled=True, max_rows=64, w_min=2, w_max=32,
-        )),
+        "structural": StructuralConfig(rpc=_RPC_ON),
+    },
+    # ── v3.9.0 channel-geometry modes ──
+    "centered": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(rpc=_RPC_OFF, centered_field=True),
+    },
+    "prior": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(rpc=_RPC_OFF, pseudo_prior=True),
+    },
+    "centered_prior": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(
+            rpc=_RPC_OFF, centered_field=True, pseudo_prior=True,
+        ),
+    },
+    "geom_centered": {
+        "schedule": "geom_v1",
+        "structural": StructuralConfig(rpc=_RPC_OFF, centered_field=True),
+    },
+    "geom_centered_prior": {
+        "schedule": "geom_v1",
+        "structural": StructuralConfig(
+            rpc=_RPC_OFF, centered_field=True, pseudo_prior=True,
+        ),
+    },
+    "rpc_centered": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(rpc=_RPC_ON, centered_field=True),
+    },
+    "rpc_centered_prior": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(
+            rpc=_RPC_ON, centered_field=True, pseudo_prior=True,
+        ),
     },
 }
 
-MODE_ORDER = ["baseline", "rpc_only", "geom_v1_only", "rpc_geom"]
+MODE_ORDER = [
+    "baseline", "rpc_only", "geom_v1_only", "rpc_geom",
+    "centered", "prior", "centered_prior",
+    "geom_centered", "geom_centered_prior",
+    "rpc_centered", "rpc_centered_prior",
+]
 
 # ── Default parameters ───────────────────────────────────────────────
 
@@ -155,10 +209,12 @@ def run_mode(
     instances: list[dict[str, Any]],
     max_iters: int = DEFAULT_MAX_ITERS,
     bp_mode: str = DEFAULT_BP_MODE,
+    enable_energy_trace: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
     Returns dict with keys: fer, frame_errors, trials, audit_summary.
+    When *enable_energy_trace* is True, also returns ``energy_traces``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -167,6 +223,7 @@ def run_mode(
     frame_errors = 0
     residual_mismatches = 0
     trials_audit: list[dict[str, Any]] = []
+    all_energy_traces: list[list[float]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -181,14 +238,34 @@ def run_mode(
                 H, s, structural.rpc,
             )
 
+        # ── Channel geometry interventions ──
+        llr_used = llr
+        if structural.centered_field:
+            llr_used = centered_syndrome_field(H_used, s_used)
+        elif structural.pseudo_prior:
+            llr_used = syndrome_field(H_used, s_used)
+
+        if structural.pseudo_prior:
+            bias = pseudo_prior_bias(H_used, s_used)
+            llr_used = apply_pseudo_prior(
+                llr_used, bias, structural.pseudo_prior_strength,
+            )
+
         # Decode.
-        correction, iters = bp_decode(
-            H_used, llr,
+        use_energy = enable_energy_trace or structural.energy_trace
+        result = bp_decode(
+            H_used, llr_used,
             max_iters=max_iters,
             mode=bp_mode,
             schedule=schedule,
             syndrome_vec=s_used,
+            energy_trace=use_energy,
         )
+        if use_energy:
+            correction, iters, etrace = result[0], result[1], result[2]
+            all_energy_traces.append(etrace)
+        else:
+            correction, iters = result[0], result[1]
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
@@ -211,13 +288,16 @@ def run_mode(
     n_trials = len(instances)
     fer = float(frame_errors) / n_trials if n_trials else 0.0
 
-    return {
+    out: dict[str, Any] = {
         "fer": fer,
         "frame_errors": frame_errors,
         "residual_mismatches": residual_mismatches,
         "trials": n_trials,
         "audit_summary": _summarize_audit(trials_audit),
     }
+    if all_energy_traces:
+        out["energy_traces"] = all_energy_traces
+    return out
 
 
 # ── DPS slope computation ───────────────────────────────────────────
@@ -252,6 +332,7 @@ def run_evaluation(
     trials: int = DEFAULT_TRIALS,
     max_iters: int = DEFAULT_MAX_ITERS,
     bp_mode: str = DEFAULT_BP_MODE,
+    enable_energy_trace: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -301,6 +382,7 @@ def run_evaluation(
                 result = run_mode(
                     mode_name, H, instances,
                     max_iters=max_iters, bp_mode=bp_mode,
+                    enable_energy_trace=enable_energy_trace,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -397,10 +479,15 @@ def print_activation_report(eval_result: dict[str, Any]) -> None:
                 if audit["fraction_iters_eq_1"] > 0.95:
                     print("  WARNING: fraction_iters_eq_1 > 0.95")
                 expected_schedule = MODES[mode_name]["schedule"]
+                structural = MODES[mode_name]["structural"]
                 # Schedule mismatch can't happen in this harness, but flag
                 # if the mode definition is inconsistent.
                 if expected_schedule not in ("flooding", "geom_v1"):
                     print(f"  WARNING: unexpected schedule {expected_schedule}")
+                if structural.centered_field:
+                    print(f"  centered_field: ON")
+                if structural.pseudo_prior:
+                    print(f"  pseudo_prior: ON (kappa={structural.pseudo_prior_strength})")
 
 
 def print_dps_table(eval_result: dict[str, Any]) -> None:
@@ -446,9 +533,36 @@ def print_determinism_result(det_result: dict[str, Any]) -> None:
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+def print_energy_trace(eval_result: dict[str, Any]) -> None:
+    """Print energy trace summary for modes that have it."""
+    results = eval_result["results"]
+    config = eval_result["config"]
+    p_values = config["p_values"]
+    distances = config["distances"]
+
+    has_any = False
+    for mode_name in MODE_ORDER:
+        for p in p_values:
+            for distance in distances:
+                r = results[mode_name][p][distance]
+                if "energy_traces" in r and r["energy_traces"]:
+                    if not has_any:
+                        print("\n" + "=" * 72)
+                        print("ENERGY TRACE SUMMARY")
+                        print("=" * 72)
+                        has_any = True
+                    traces = r["energy_traces"]
+                    # Show first trial's trace.
+                    first = traces[0]
+                    print(f"\n--- {mode_name} | p={p} | d={distance} ---")
+                    print("[ENERGY TRACE]")
+                    for i, e in enumerate(first):
+                        print(f"iter {i} : {e:.2f}")
+
+
 def main() -> None:
     """Run full evaluation and print all reports."""
-    print("v3.8.1 — Structural Geometry DPS Evaluation")
+    print("v3.9.0 — Structural Geometry DPS Evaluation")
     print(f"Seed: {DEFAULT_SEED}")
     print(f"Distances: {DEFAULT_DISTANCES}")
     print(f"P values: {DEFAULT_P_VALUES}")
@@ -462,6 +576,7 @@ def main() -> None:
     # Print reports.
     print_activation_report(eval_result)
     print_dps_table(eval_result)
+    print_energy_trace(eval_result)
 
     # Determinism check.
     det_result = run_determinism_check()

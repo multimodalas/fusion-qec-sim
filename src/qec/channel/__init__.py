@@ -11,8 +11,23 @@ Provides:
 from .base import ChannelModel
 from .oracle import OracleChannel
 from .bsc_syndrome import BSCSyndromeChannel
+from .geometry import (
+    syndrome_field,
+    centered_syndrome_field,
+    pseudo_prior_bias,
+    apply_pseudo_prior,
+)
 
-__all__ = ["ChannelModel", "OracleChannel", "BSCSyndromeChannel", "get_channel_model"]
+__all__ = [
+    "ChannelModel",
+    "OracleChannel",
+    "BSCSyndromeChannel",
+    "get_channel_model",
+    "syndrome_field",
+    "centered_syndrome_field",
+    "pseudo_prior_bias",
+    "apply_pseudo_prior",
+]
 
 _CHANNEL_REGISTRY = {
     "oracle": OracleChannel,
