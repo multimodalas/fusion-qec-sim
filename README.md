@@ -1,274 +1,251 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.7.0](https://img.shields.io/badge/release-v3.7.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.7.0)
+[![Release v3.8.1](https://img.shields.io/badge/release-v3.8.1-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.8.1)
 
 License: CC-BY-4.0
 
-QEC — Deterministic QLDPC CSS Framework
+# QEC — Deterministic QLDPC CSS Framework
 
-Deterministic QLDPC CSS quantum error correction toolkit with invariant-safe algebraic construction, multi-mode belief propagation (sum-product / min-sum family), flooding/layered/hybrid/adaptive scheduling, posterior-aware and decimation-based postprocessing, pluggable deterministic channel modeling, and rigorous FER benchmarking.
+Deterministic QLDPC CSS quantum error correction toolkit with invariant-safe algebraic construction, multi-mode belief propagation decoding, deterministic postprocessing, pluggable channel models, and reproducible FER/DPS benchmarking.
 
-Engineered for:
+The framework is designed for **controlled decoder experimentation** under strict determinism guarantees.
 
-Reproducibility
+---
 
-Interpretability
+# Core Goals
 
-Structural experimentation
+The system is engineered for:
 
-Controlled decoder intervention research
+- **Reproducibility** — byte-identical results across runs  
+- **Interpretability** — explicit algorithmic behavior  
+- **Structural experimentation** — controlled topology / inference geometry changes  
+- **Deterministic benchmarking** — stable FER and distance-scaling measurements  
 
-Current Release
-v3.7.0 — Deterministic Uniformly Reweighted BP (URW) & Geometry Audit
+If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
 
-v3.7.0 introduces Uniformly Reweighted Belief Propagation (URW) as a strictly opt-in inference-geometry variant.
+---
 
-mode="min_sum_urw"
-urw_rho ∈ (0, 1]
+# Current Releases
 
-URW applies a uniform scalar damping factor to check-to-variable messages:
+## v3.8.1 — Structural Geometry Evaluation
 
-R_{j→i} ← ρ · R_{j→i}
+Introduces a deterministic **Distance Performance Scaling (DPS)** evaluation harness.
 
-Where:
+New module:
 
-ρ = 1.0 → bit-identical to baseline min_sum
 
-ρ < 1.0 → uniformly damped check influence
+bench/dps_v381_eval.py
 
-Fully deterministic
 
-No adaptive behavior
+Features:
 
-No stochastic elements
+- Deterministic RNG (`seed = 42`)
+- Pre-generated error instances reused across modes
+- Activation audits for structural interventions
+- Determinism verification
+- DPS slope measurement across distances
 
-Flooding and layered schedules are supported.
+Evaluation modes:
 
-Structural Guarantees
+| Mode | Schedule | RPC |
+|-----|------|------|
+| baseline | flooding | disabled |
+| rpc_only | flooding | enabled |
+| geom_v1_only | geom_v1 | disabled |
+| rpc_geom | geom_v1 | enabled |
 
-Baseline decoders unchanged
+Frame error rate uses **syndrome-consistency semantics**:
 
-Golden artifact hash unchanged
 
-_bp_postprocess() untouched
+syndrome(H, correction) != s
 
-Scheduling semantics untouched
 
-Schema versions unchanged
+No decoder behavior changes were introduced.
 
-Identity stability preserved
+This release establishes a **reproducible experimental harness** for analyzing structural decoder interventions.
 
-Determinism verified across repeated runs
+---
 
-Full test suite passing
+## v3.8.0 — Structural Geometry Core
 
-URW is strictly opt-in and introduces zero drift when disabled.
+Adds deterministic infrastructure for topology and inference-geometry experiments.
 
-Geometry Probe — DPS Audit (v3.7.0)
+### RPC Augmentation
 
-A controlled Distance Preservation Slope (DPS) sweep was executed under:
+Deterministic redundant parity checks generated via lexicographic row-pair XOR.
 
-channel_model="bsc_syndrome"
+Properties:
 
-distances [8, 12, 16]
+- deterministic
+- no feasible-set change
+- opt-in only
+- no in-place mutation
 
-p [0.01, 0.02, 0.03, 0.04]
+### `geom_v1` Schedule
 
-300 trials per point
+Flooding-style belief propagation with deterministic check-degree scaling:
 
-ρ ∈ [1.0 … 0.6]
 
-Findings
+α_c = 1 / sqrt(d_c)
 
-No ρ value produced negative DPS.
 
-DPS magnitude varied slightly but non-monotonically.
+No adaptive logic or stochastic elements are introduced.
 
-No stable ρ window reduced inversion meaningfully.
+### Adapter Integration
 
-URW does not correct syndrome-only distance scaling inversion.
+Structural interventions are applied at the adapter layer so that baseline decoder behavior remains unchanged when disabled.
 
-Interpretation
+---
 
-Uniform scalar reweighting of check influence is insufficient to alter the structural inversion regime under syndrome-only inference.
+# Decoder Core
 
-The inversion is not attributable to simple loop overcount amplification and appears structural to the information geometry of syndrome-only decoding.
+The decoding stack supports multiple belief propagation variants:
 
-v3.7.0 eliminates uniform reweighting as a viable correction mechanism.
+- `sum_product`
+- `min_sum`
+- `norm_min_sum`
+- `offset_min_sum`
 
-v3.6.0 — Deterministic Posterior-Aware Combination-Sweep OSD
+Scheduling modes:
 
-v3.6.0 completed the ordering-tier escalation by introducing:
+- `flooding`
+- `layered`
+- `residual`
+- `hybrid_residual`
+- `adaptive`
+- `geom_v1`
 
-postprocess="mp_osd_cs"
+All schedules are deterministic.
 
-This extends osd_cs by using posterior LLR magnitude (abs(L_post)) instead of channel LLR magnitude for reliability ordering.
+---
 
-Key Properties
+# Deterministic Postprocessing
 
-No BP loop modifications
+Deterministic correction refinement algorithms include:
 
-No scheduling changes
+| Method | Description |
+|------|-------------|
+| `osd1` | deterministic single-bit ordered statistics |
+| `osd_cs` | combination-sweep ordered statistics |
+| `mp_osd1` | posterior-aware OSD-1 |
+| `mp_osd_cs` | posterior-aware combination sweep |
+| `guided_decimation` | BP-guided deterministic variable freezing |
 
-_bp_postprocess() untouched
+Postprocessing is strictly layered and does not modify BP schedules.
 
-No schema changes
+---
 
-No new parameters (reuses osd_cs_lam)
+# Channel Models
 
-Fully deterministic
+Channel models generate deterministic LLR vectors:
 
-Ordering Sensitivity Probe
+| Model | Description |
+|------|-------------|
+| `oracle` | full error visibility |
+| `bsc_syndrome` | syndrome-only inference |
+| custom | pluggable deterministic models |
 
-Under bsc_syndrome:
+Channel models are isolated from decoder logic.
 
-osd_cs and mp_osd_cs produced byte-identical corrections
+---
 
-No ordering sensitivity observed
+# Benchmarking & Diagnostics
 
-DPS inversion persisted
+Benchmark tools provide deterministic measurement of:
 
-Increasing lam did not alter candidate selection
+- FER (frame error rate)
+- DPS (distance performance scaling)
+- syndrome consistency rate
+- inversion diagnostics
+- activation audit reports
 
-Interpretation:
+The system separates **measurement instrumentation** from **decoder implementation**.
 
-Ordering differences are structurally verified but not expressive in the syndrome-only regime. Inversion is upstream of reliability ordering.
+---
 
-v3.5.0 — Posterior-Aware OSD-1
+# Architecture
 
-Introduced:
+Layered architecture with strict boundaries.
 
-postprocess="mp_osd1"
-
-Deterministic posterior-aware single-bit OSD.
-
-Probe results under syndrome-only channel:
-
-Reduced inversion magnitude compared to osd1
-
-Lower FER growth across distances
-
-Posterior magnitude superior to channel LLR ordering
-
-Inversion reduced but not eliminated
-
-Deterministic Guided Decimation (v3.4.0)
-postprocess="guided_decimation"
-
-Belief-propagation–guided deterministic variable freezing:
-
-Iterative BP refinement
-
-Freeze variable with maximal |posterior LLR|
-
-Deterministic tie-breaking
-
-Fixed-magnitude LLR clamp
-
-Never-degrade fallback ordering
-
-All operations deterministic.
-
-Inversion Index (II)
-
-Primary scalar diagnostic for structural channel artifacts:
-
-II = SCR - Fidelity
-   = syndrome_consistency_rate - (1 - FER)
-
-Interpretation:
-
-II = 0 → no systematic inversion
-
-II > 0 → syndrome-consistent but logically incorrect corrections
-
-II = 1.0 → maximal inversion regime
-
-Derived strictly from deterministic benchmark outputs.
-
-Channel Regime Comparison
-Property	Oracle	Syndrome-Only
-Effective threshold	~0.50	~0.01–0.02
-Inversion regime	Yes (p>0.50)	Structural
-Inversion Index peak	1.0	~0.0
-SCR/FER divergence	Yes	No
-Distance scaling	Positive	Inverted
-Schedule differentiation	Masked	Real
-
-The Inversion Index separates channel-model artifacts from decoder behavior.
-
-Architecture Overview
-
-Layered system:
 
 Layer 1 — Decoder Core
-Belief propagation + deterministic postprocessing.
+Belief propagation + deterministic postprocessing
 
 Layer 2 — Channel Models
-Pluggable, deterministic LLR generators.
+Deterministic LLR generation
 
-Layer 3 — Benchmark & Reporting
-FER, DPS, inversion diagnostics.
+Layer 3 — Benchmark & Diagnostics
+FER / DPS / structural analysis
 
-Interop Layer — Canonical JSON + Hash Verification
+Interop Layer — JSON schema + hash verification
 
-Strict ownership boundaries enforced.
+
 No layer mutates another layer’s invariants.
 
-Reproducibility Anchor
+---
 
-Deterministic interop baseline:
+# Reproducibility Anchor
+
+Deterministic schema versions:
+
 
 SCHEMA_VERSION = 3.0.1
 INTEROP_SCHEMA_VERSION = 3.1.2
 
-Deterministic Suite Artifact (SHA-256):
 
+Deterministic suite artifact:
+
+
+SHA256
 431f7573a0ba8af4784b385f528cfe99d6169eb74798eabddd146def278b6d77
 
-Golden Vector Hash:
+
+Golden vector hash:
+
 
 86babd2ec81daa165d3ce778b9eb71a3766667484e1c51a2000642ae08ec9569
 
+
 Deterministic configuration:
+
 
 runtime_mode="off"
 deterministic_metadata=True
 seed=12345
 
-If it cannot be reproduced byte-for-byte, it is not a baseline.
 
-Structural Guarantees
+---
 
-Flooding loop unchanged
+# Structural Guarantees
 
-Layered loop unchanged
+Baseline decoder invariants are preserved across releases:
 
-_bp_postprocess() unchanged
+- Flooding schedule unchanged
+- Layered schedule unchanged
+- `_bp_postprocess()` unchanged
+- No stochastic elements
+- No hidden randomness
+- No schema drift
+- No identity/hash drift for baseline decoders
 
-No schema changes
+All releases require the full test suite to pass.
 
-No dependency expansion
+---
 
-No hidden randomness
+# Design Philosophy
 
-No identity/hash drift for baseline decoders
-
-Determinism verified across repeated runs
-
-Full test suite passing at release.
-
-Design Philosophy
-
-Small is beautiful.
-Determinism is holy.
+Small is beautiful.  
+Determinism is holy.  
 Stability is engineered.
 
 Negative results are data.
 
-If it cannot be reproduced byte-for-byte, it is not a baseline.
+---
 
-Author
-Trent Slade
-QSOL-IMC
-ORCID: https://orcid.org/0009-0002-4515-9237
+# Author
+
+**Trent Slade**  
+QSOL-IMC  
+
+ORCID  
+https://orcid.org/0009-0002-4515-9237

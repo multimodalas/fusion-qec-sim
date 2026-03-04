@@ -69,9 +69,34 @@ class BPAdapter(DecoderAdapter):
                 self._H, s_for_rpc, self._structural_config.rpc,
             )
 
+        # ── Channel geometry interventions ──
+        llr_used = llr
+        if self._structural_config is not None:
+            s_geom = (
+                np.asarray(s_used, dtype=np.uint8)
+                if s_used is not None
+                else np.zeros(H_used.shape[0], dtype=np.uint8)
+            )
+            if self._structural_config.centered_field:
+                from ...qec.channel.geometry import centered_syndrome_field
+                llr_used = centered_syndrome_field(H_used, s_geom)
+            elif self._structural_config.pseudo_prior:
+                # When only pseudo_prior is enabled (no centered_field),
+                # use standard syndrome field as base LLR.
+                from ...qec.channel.geometry import syndrome_field
+                llr_used = syndrome_field(H_used, s_geom)
+
+            if self._structural_config.pseudo_prior:
+                from ...qec.channel.geometry import pseudo_prior_bias, apply_pseudo_prior
+                bias = pseudo_prior_bias(H_used, s_geom)
+                llr_used = apply_pseudo_prior(
+                    llr_used, bias,
+                    self._structural_config.pseudo_prior_strength,
+                )
+
         result = bp_decode(
             H_used,
-            llr,
+            llr_used,
             syndrome_vec=s_used,
             **self._params,
         )

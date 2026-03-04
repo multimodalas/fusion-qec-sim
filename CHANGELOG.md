@@ -2,7 +2,208 @@
 
 All notable changes to this project are documented in this file.
 
-This project follows semantic versioning (SemVer).
+This project follows Semantic Versioning (SemVer).
+
+---
+
+## [3.8.1] — 2026-03-03
+
+### Structural Geometry Evaluation Harness
+
+Adds a deterministic evaluation harness for analyzing structural
+decoder interventions introduced in v3.8.0.
+
+This release introduces **measurement infrastructure only**.
+No decoder algorithms were modified.
+
+### Added
+
+Deterministic DPS evaluation harness:
+
+
+bench/dps_v381_eval.py
+
+
+Capabilities:
+
+- deterministic RNG (`seed = 42`)
+- pre-generated error instances reused across modes
+- four evaluation modes:
+  - baseline
+  - rpc_only
+  - geom_v1_only
+  - rpc_geom
+- activation audit reporting:
+  - original_rows
+  - augmented_rows
+  - added_rows
+  - H checksum
+  - syndrome checksum
+  - iteration count
+- deterministic slope estimation for DPS
+- inversion detection marker
+- determinism verification run
+
+Frame error rate uses **syndrome-consistency semantics**:
+
+
+syndrome(H, correction) != s
+
+
+### Tests
+
+New harness validation suite:
+
+
+tests/test_dps_v381_harness.py
+
+
+Coverage includes:
+
+- deterministic instance reuse
+- RPC activation verification
+- schedule dispatch validation
+- DPS slope computation
+- decoder invariance confirmation
+
+### Guarantees
+
+- No decoder algorithm changes
+- `bp_decode()` unchanged
+- All BP schedules unchanged
+- `_bp_postprocess()` unchanged
+- No schema changes
+- No dependency changes
+- Deterministic outputs preserved
+- Full test suite passing
+
+---
+
+## [3.8.0] — 2026-03-02
+
+### Structural Geometry Infrastructure
+
+Introduces deterministic infrastructure for controlled experiments on
+decoder **topology** and **inference geometry**.
+
+All new features are **strictly opt-in**.
+
+Baseline decoder behavior remains unchanged when disabled.
+
+---
+
+### Added
+
+#### RPC Builder
+
+New deterministic redundant parity-check augmentation module:
+
+
+src/qec/decoder/rpc.py
+
+
+Provides:
+
+
+build_rpc_augmented_system()
+
+
+Functionality:
+
+- deterministic lexicographic row-pair XOR generation
+- redundant parity constraints
+- no feasible-set change
+- no mutation of original H matrix
+- deterministic ordering of generated rows
+
+Configuration objects:
+
+
+RPCConfig
+StructuralConfig
+
+
+Tests:
+
+
+tests/test_rpc_builder.py
+
+
+---
+
+#### `geom_v1` Schedule
+
+Adds a geometry-scaled flooding schedule.
+
+
+schedule="geom_v1"
+
+
+Scaling rule:
+
+
+α_c = 1 / sqrt(d_c)
+
+
+Where `d_c` is the degree of check node `c`.
+
+Properties:
+
+- flooding-style schedule
+- deterministic scaling
+- no adaptive behavior
+- no stochastic elements
+
+Tests:
+
+
+tests/test_geom_v1_schedule.py
+
+
+---
+
+#### Adapter Integration
+
+Structural geometry features integrated into the decoder adapter layer.
+
+File:
+
+
+src/bench/adapters/bp.py
+
+
+Behavior:
+
+
+if structural_config.rpc.enabled:
+H_used, s_used = build_rpc_augmented_system(...)
+else:
+H_used, s_used = H, s
+
+
+This ensures structural interventions occur **outside the decoder core**.
+
+Tests:
+
+
+tests/test_adapter_rpc_integration.py
+
+
+---
+
+### Guarantees
+
+- Flooding schedule unchanged
+- Layered schedule unchanged
+- Residual schedule unchanged
+- `_bp_postprocess()` unchanged
+- Decoder iteration logic untouched
+- No schema version changes
+- No dependency additions
+- No stochastic behavior introduced
+- Baseline decoder outputs remain bit-identical
+
+---
 
 ## [3.7.0] — 2026-03-01
 

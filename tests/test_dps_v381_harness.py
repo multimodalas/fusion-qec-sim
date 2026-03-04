@@ -49,15 +49,21 @@ def small_instances(small_code):
 
 class TestModeDefinitions:
 
-    def test_exactly_four_modes(self):
-        """Exactly 4 modes are defined."""
-        assert len(MODES) == 4
-        assert set(MODES.keys()) == {"baseline", "rpc_only", "geom_v1_only", "rpc_geom"}
+    def test_all_modes_defined(self):
+        """All expected modes are defined."""
+        expected = {
+            "baseline", "rpc_only", "geom_v1_only", "rpc_geom",
+            "centered", "prior", "centered_prior",
+            "geom_centered", "geom_centered_prior",
+            "rpc_centered", "rpc_centered_prior",
+        }
+        assert set(MODES.keys()) == expected
+        assert len(MODES) == 11
 
     def test_mode_order_matches_keys(self):
         """MODE_ORDER lists all mode keys."""
         assert set(MODE_ORDER) == set(MODES.keys())
-        assert len(MODE_ORDER) == 4
+        assert len(MODE_ORDER) == 11
 
     def test_baseline_is_flooding_no_rpc(self):
         cfg = MODES["baseline"]
