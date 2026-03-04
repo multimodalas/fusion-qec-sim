@@ -56,14 +56,16 @@ class TestModeDefinitions:
             "centered", "prior", "centered_prior",
             "geom_centered", "geom_centered_prior",
             "rpc_centered", "rpc_centered_prior",
+            "centered_strong", "centered_normalized",
+            "centered_prior_normalized",
         }
         assert set(MODES.keys()) == expected
-        assert len(MODES) == 11
+        assert len(MODES) == 14
 
     def test_mode_order_matches_keys(self):
         """MODE_ORDER lists all mode keys."""
         assert set(MODE_ORDER) == set(MODES.keys())
-        assert len(MODE_ORDER) == 11
+        assert len(MODE_ORDER) == 14
 
     def test_baseline_is_flooding_no_rpc(self):
         cfg = MODES["baseline"]

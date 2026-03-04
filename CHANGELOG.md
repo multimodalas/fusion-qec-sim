@@ -6,6 +6,78 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+## [3.9.1] — 2026-03-04
+
+### Geometry Field Controls
+
+Introduces deterministic geometry field controls for controlled testing
+of likelihood magnitude effects under syndrome-only inference.
+
+All new features are opt-in. Baseline decoder behavior remains unchanged
+when features are disabled.
+
+### Added
+
+**Geometry Strength Scaling**
+
+- `geometry_strength` field on `StructuralConfig` (default: `1.0`)
+- Scales the constructed geometry LLR field after centered_field and
+  pseudo_prior are applied
+- Applied in both `BPAdapter` and DPS harness
+
+**Deterministic Field Normalization**
+
+- `normalize_geometry` field on `StructuralConfig` (default: `False`)
+- When enabled: `llr = llr / (std(llr) + 1e-12)`
+- Ensures the LLR distribution has unit variance
+- Only applies when geometry interventions are active
+- Normalization is applied before geometry_strength scaling
+
+**DPS Harness Geometry Sweep Modes**
+
+Three new evaluation modes:
+
+- `centered_strong` — centered field + geometry_strength=2.0
+- `centered_normalized` — centered field + normalize_geometry
+- `centered_prior_normalized` — centered + prior + normalize_geometry
+
+All modes reuse identical deterministic error instances.
+
+### Tests
+
+New test suite:
+
+    tests/test_geometry_controls.py
+
+Coverage includes:
+
+- geometry_strength scaling determinism and correctness
+- normalize_geometry unit-variance verification
+- baseline invariance when features disabled
+- DPS harness new mode execution and determinism
+
+### Results
+
+Full test suite:
+
+    923 passed
+    7 skipped
+    0 failed
+
+Deterministic reproducibility verified.
+
+### Guarantees
+
+- No changes to core decoding logic
+- No changes to `_bp_postprocess()` or BP iteration loops
+- No schema changes
+- No dependency changes
+- Baseline decoder outputs remain byte-identical when features disabled
+- All new features are opt-in with safe defaults
+- Determinism preserved
+
+---
+
 [3.9.0] — 2026-03-04
 Channel Geometry Interventions & BP Energy Diagnostics
 
