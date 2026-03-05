@@ -28,15 +28,26 @@ quickly understand:
 This file should be updated whenever a major release changes the research state of the system.
 
 Current Stable Version
-v3.9.0
+
+v4.3.0
 
 Release theme:
 
-Channel Geometry Interventions
+Deterministic Decoder Dynamics Diagnostics
 +
-Belief Propagation Energy Diagnostics
+Free-Energy Landscape Analysis
 
-v3.9.x establishes the experimental platform for decoder regime analysis under syndrome-only inference.
+v4.x establishes a deterministic framework for studying belief propagation (BP) decoding dynamics in QLDPC codes.
+
+The toolkit now supports systematic analysis of:
+
+• decoder attractor basins
+• oscillatory BP regimes
+• metastable states
+• trapping sets
+• convergence instabilities
+
+under controlled deterministic experiments.
 
 Core System
 
@@ -49,6 +60,7 @@ The framework provides:
 • deterministic postprocessing methods
 • structural intervention mechanisms
 • deterministic benchmarking infrastructure
+• deterministic decoder dynamics diagnostics
 
 The system is designed to enable reproducible decoder research.
 
@@ -66,7 +78,7 @@ Layer 3 — Structural Interventions
 Geometry / constraint modifications
 
 Layer 4 — Benchmark & Diagnostics
-FER / DPS / energy analysis
+FER / DPS / energy / trajectory analysis
 
 Interop Layer — Schema + artifact hashing
 
@@ -174,7 +186,7 @@ break likelihood symmetry under syndrome-only channels.
 
 Diagnostics Infrastructure
 
-The framework contains deterministic diagnostic tools.
+The framework contains deterministic diagnostic tools for analyzing decoder behavior.
 
 DPS Harness
 
@@ -199,19 +211,44 @@ geom_centered
 geom_centered_prior
 rpc_centered
 rpc_centered_prior
-BP Energy Diagnostics (v3.9)
 
-Optional per-iteration energy tracing.
+Energy Landscape Diagnostics (v4.1 → v4.2)
 
-Energy definition:
+The system now supports deterministic analysis of the free-energy landscape of BP decoding.
 
-E = − Σ (LLR_i · belief_i)
+Diagnostics include:
 
-Used for:
+Basin Switch Classification
+Basin Stability Index (BSI)
+Attractor Distance (AD)
+Escape Energy (EE)
 
-• convergence analysis
-• oscillatory regime detection
-• BP objective diagnostics
+These metrics characterize:
+
+• basin transitions
+• decoder stability under perturbation
+• attractor geometry
+
+Iteration-Trace Diagnostics (v4.3)
+
+v4.3 introduces deterministic analysis of decoder iteration dynamics.
+
+Metrics include:
+
+Persistent Error Indicator (PEI)
+Belief Oscillation Index (BOI)
+Oscillation Depth (OD)
+Convergence Instability Score (CIS)
+Correction Vector Fluctuation (CVF)
+
+These diagnostics detect:
+
+• trapping sets
+• oscillatory message passing
+• metastable convergence
+• correction cycling
+
+Diagnostics operate purely on iteration traces and do not modify the BP algorithm.
 
 Current Experimental Observation
 
@@ -237,7 +274,7 @@ v3.9	centered field + pseudo-prior	partial improvement
 
 Conclusion:
 
-The problem is information-geometric, not algorithmic.
+The problem appears information-geometric rather than algorithmic.
 
 Research Objective
 
@@ -255,34 +292,39 @@ Immediate Research Direction
 
 Active exploration areas:
 
-geometry-aware inference fields
-constraint density amplification
-geometry-aware BP schedules
-BP initialization strategies
-energy landscape diagnostics
+• geometry-aware inference fields
+• constraint density amplification
+• geometry-aware BP schedules
+• BP initialization strategies
+• free-energy landscape diagnostics
+• iteration-trace regime classification
 
 All interventions must remain:
 
 deterministic
 opt-in
 baseline-preserving
+
 Medium-Term Direction (v4)
 
-v4 will focus on decoder regime analysis.
+v4 focuses on decoder regime analysis.
 
-Key goal:
+Primary objective:
 
-Map the BP free-energy landscape of QLDPC codes
+Map the BP free-energy landscape and trajectory dynamics of QLDPC codes.
 
-Possible tools:
+Tools now available:
 
 • energy trajectory analysis
 • attractor basin detection
 • regime classification
-• scaling phase transitions
+• oscillation diagnostics
+• metastability detection
 
 Test Suite Status
-904 tests passing
+
+1042 tests passing
+7 skipped
 0 failures
 
 Baseline decoder outputs remain unchanged when all interventions are disabled.
