@@ -14,7 +14,8 @@ import pytest
 
 from src.qec.diagnostics.energy_landscape import (
     _count_gradient_sign_flips,
-    _check_convergence,
+    _trace_converged,
+    _deterministic_sign,
     classify_basin_switch,
     detect_basin_switch,
     classify_energy_landscape,
@@ -78,20 +79,62 @@ class TestCheckConvergence:
 
     def test_converged(self):
         trace = [10.0, 5.0, 3.0, 2.5, 2.5]
-        assert _check_convergence(trace) is True
+        assert _trace_converged(trace) is True
 
     def test_not_converged(self):
         trace = [10.0, 5.0, 3.0, 1.0]
-        assert _check_convergence(trace) is False
+        assert _trace_converged(trace) is False
 
     def test_single_point(self):
-        assert _check_convergence([5.0]) is True
+        assert _trace_converged([5.0]) is True
 
     def test_determinism(self):
         trace = [10.0, 5.0, 3.0, 2.5, 2.5]
-        r1 = _check_convergence(trace)
-        r2 = _check_convergence(trace)
+        r1 = _trace_converged(trace)
+        r2 = _trace_converged(trace)
         assert r1 == r2
+
+
+# ── Deterministic Sign Helper ─────────────────────────────────────
+
+class TestDeterministicSign:
+
+    def test_positive_values(self):
+        llr = np.array([1.0, 2.5, 0.01])
+        s = _deterministic_sign(llr)
+        np.testing.assert_array_equal(s, [1.0, 1.0, 1.0])
+
+    def test_negative_values(self):
+        llr = np.array([-1.0, -2.5, -0.01])
+        s = _deterministic_sign(llr)
+        np.testing.assert_array_equal(s, [-1.0, -1.0, -1.0])
+
+    def test_zero_maps_to_positive_one(self):
+        llr = np.array([0.0, 0.0, 0.0])
+        s = _deterministic_sign(llr)
+        np.testing.assert_array_equal(s, [1.0, 1.0, 1.0])
+
+    def test_mixed_with_zeros(self):
+        llr = np.array([-3.0, 0.0, 5.0, 0.0, -1.0])
+        s = _deterministic_sign(llr)
+        np.testing.assert_array_equal(s, [-1.0, 1.0, 1.0, 1.0, -1.0])
+
+    def test_input_not_mutated(self):
+        llr = np.array([0.0, -1.0, 2.0])
+        llr_original = llr.copy()
+        _deterministic_sign(llr)
+        np.testing.assert_array_equal(llr, llr_original)
+
+    def test_determinism(self):
+        llr = np.array([0.0, -1.0, 2.0, 0.0])
+        s1 = _deterministic_sign(llr)
+        s2 = _deterministic_sign(llr)
+        np.testing.assert_array_equal(s1, s2)
+
+    def test_returns_new_array(self):
+        llr = np.array([1.0, -1.0, 0.0])
+        s = _deterministic_sign(llr)
+        assert s is not llr
 
 
 # ── Classification Output Structure ──────────────────────────────
@@ -253,7 +296,7 @@ class TestSyntheticClassification:
         # A simple monotonically descending trace with convergence.
         trace = [10.0, 8.0, 6.0, 5.0, 4.5, 4.5]
         flip_count = _count_gradient_sign_flips(trace)
-        converged = _check_convergence(trace)
+        converged = _trace_converged(trace)
         assert flip_count < 3
         assert converged is True
 
@@ -262,7 +305,7 @@ class TestSyntheticClassification:
         # Oscillating trace: many sign flips, doesn't converge.
         trace = [10.0, 8.0, 9.0, 7.0, 8.5, 6.5, 8.0, 6.0]
         flip_count = _count_gradient_sign_flips(trace)
-        converged = _check_convergence(trace)
+        converged = _trace_converged(trace)
         assert flip_count >= 3, f"Expected ≥3 flips, got {flip_count}"
         assert converged is False
 

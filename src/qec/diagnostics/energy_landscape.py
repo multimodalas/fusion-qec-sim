@@ -124,6 +124,18 @@ def classify_energy_landscape(trace: List[float]) -> dict[str, Any]:
 _BASIN_EPSILON = 1e-3
 
 
+def _deterministic_sign(llr: np.ndarray) -> np.ndarray:
+    """Return element-wise sign with deterministic tie-break for zeros.
+
+    Returns +1 for positive values, -1 for negative values, and +1 for
+    zeros.  Always allocates a new array; never modifies the input.
+    """
+    s = np.sign(llr)
+    s = s.astype(np.float64, copy=True)
+    s[s == 0] = 1.0
+    return s
+
+
 def detect_basin_switch(
     H: np.ndarray,
     llr_base: np.ndarray,
@@ -145,8 +157,7 @@ def detect_basin_switch(
 
     # Small deterministic perturbation
     eps = 1e-3
-    sign = np.sign(llr_base)
-    sign[sign == 0] = 1.0
+    sign = _deterministic_sign(llr_base)
     llr_perturbed = llr_base + eps * sign
 
     # Run perturbed decode
@@ -198,8 +209,12 @@ def _count_gradient_sign_flips(trace: List[float]) -> int:
     return flips
 
 
-def _check_convergence(trace: List[float], tolerance: float = 1e-6) -> bool:
-    """Check whether the energy trace converged (final gradient near zero).
+def _trace_converged(trace: List[float], tolerance: float = 1e-6) -> bool:
+    """Check whether the energy trace has stabilised (diagnostic heuristic).
+
+    This checks trace stability only — whether the final energy step is
+    near zero.  It does not reflect actual decoder convergence (syndrome
+    satisfaction).
 
     Deterministic: identical trace → identical result.
     """
@@ -248,8 +263,7 @@ def classify_basin_switch(
 
     # Deterministic perturbation vectors.
     eps = _BASIN_EPSILON
-    s = np.sign(llr_base.copy())
-    s[s == 0] = 1.0
+    s = _deterministic_sign(llr_base)
 
     llr_plus = llr_base + eps * s
     llr_minus = llr_base - eps * s
@@ -290,7 +304,7 @@ def classify_basin_switch(
     corrections_differ_plus = not np.array_equal(corr_baseline, corr_plus)
     corrections_differ_minus = not np.array_equal(corr_baseline, corr_minus)
 
-    converged = _check_convergence(trace_baseline)
+    converged = _trace_converged(trace_baseline)
 
     evidence = {
         "energy_delta_plus": float(energy_delta_plus),
