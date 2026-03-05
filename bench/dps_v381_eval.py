@@ -1,9 +1,10 @@
 """
-v3.9.1 — Structural Geometry DPS Evaluation Harness.
+v4.0.0 — BP Free-Energy Landscape Diagnostics.
 
-Extends v3.9.0 harness with geometry field controls:
-  - Geometry strength scaling (geometry_strength)
-  - Deterministic field normalization (normalize_geometry)
+Extends v3.9.1 harness with:
+  - Energy landscape classification per trial
+  - Geometry-induced basin switching detection
+  - Aggregate basin statistics per mode
 
 Evaluates Distance Penalty Slope (DPS) across fourteen modes:
   baseline           — flooding, all interventions disabled
@@ -48,6 +49,11 @@ from src.qec.channel.geometry import (
 )
 
 from src.qec.channel.geometry_post import apply_geometry_postprocessing
+
+from src.qec.diagnostics.energy_landscape import (
+    classify_energy_landscape,
+    detect_basin_switch,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -237,20 +243,31 @@ def run_mode(
     max_iters: int = DEFAULT_MAX_ITERS,
     bp_mode: str = DEFAULT_BP_MODE,
     enable_energy_trace: bool = False,
+    enable_landscape: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
     Returns dict with keys: fer, frame_errors, trials, audit_summary.
-    When *enable_energy_trace* is True, also returns ``energy_traces``.
+    When *enable_energy_trace* or *enable_landscape* is True, also
+    returns ``energy_traces``.  When *enable_landscape* is True, also
+    returns ``landscape_metrics``, ``basin_switch``, and
+    ``energy_delta``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
     structural: StructuralConfig = mode_cfg["structural"]
 
+    # Landscape mode implies energy trace.
+    if enable_landscape:
+        enable_energy_trace = True
+
     frame_errors = 0
     residual_mismatches = 0
     trials_audit: list[dict[str, Any]] = []
     all_energy_traces: list[list[float]] = []
+    all_landscape_metrics: list[dict[str, Any]] = []
+    basin_switches = 0
+    energy_deltas: list[float] = []
 
     for inst in instances:
         e = inst["e"]
@@ -293,7 +310,19 @@ def run_mode(
         correction, iters = result[0], result[1]
         if use_energy:
             # Energy trace is always the last element when enabled.
-            all_energy_traces.append(result[-1])
+            trace = result[-1]
+            all_energy_traces.append(trace)
+
+            if enable_landscape and len(trace) >= 2:
+                all_landscape_metrics.append(classify_energy_landscape(trace))
+
+                basin = detect_basin_switch(
+                    H_used, llr_used, structural,
+                    max_iters, bp_mode, schedule, s_used,
+                )
+                if basin["basin_switch"]:
+                    basin_switches += 1
+                energy_deltas.append(basin["energy_delta"])
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
@@ -325,6 +354,15 @@ def run_mode(
     }
     if all_energy_traces:
         out["energy_traces"] = all_energy_traces
+    if all_landscape_metrics:
+        out["landscape_metrics"] = all_landscape_metrics
+        n = len(instances)
+        out["basin_switch"] = basin_switches > 0
+        out["basin_switch_fraction"] = basin_switches / n if n else 0.0
+        out["energy_delta"] = (
+            sum(energy_deltas) / len(energy_deltas)
+            if energy_deltas else 0.0
+        )
     return out
 
 
@@ -361,6 +399,7 @@ def run_evaluation(
     max_iters: int = DEFAULT_MAX_ITERS,
     bp_mode: str = DEFAULT_BP_MODE,
     enable_energy_trace: bool = False,
+    enable_landscape: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -411,6 +450,7 @@ def run_evaluation(
                     mode_name, H, instances,
                     max_iters=max_iters, bp_mode=bp_mode,
                     enable_energy_trace=enable_energy_trace,
+                    enable_landscape=enable_landscape,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -588,23 +628,59 @@ def print_energy_trace(eval_result: dict[str, Any]) -> None:
                         print(f"iter {i} : {e:.2f}")
 
 
+def print_basin_statistics(eval_result: dict[str, Any]) -> None:
+    """Print aggregate basin switching statistics per mode."""
+    results = eval_result["results"]
+    config = eval_result["config"]
+    p_values = config["p_values"]
+    distances = config["distances"]
+
+    has_any = False
+    for mode_name in MODE_ORDER:
+        for p in p_values:
+            for distance in distances:
+                r = results[mode_name][p][distance]
+                if "basin_switch_fraction" not in r:
+                    continue
+                if not has_any:
+                    print("\n" + "=" * 72)
+                    print("BASIN SWITCHING STATISTICS")
+                    print("=" * 72)
+                    has_any = True
+                frac = r["basin_switch_fraction"]
+                delta = r["energy_delta"]
+                print(f"  {mode_name:<30} p={p}  d={distance}"
+                      f"  switch_frac={frac:.4f}"
+                      f"  mean_delta={delta:.6f}")
+
+
 def main() -> None:
     """Run full evaluation and print all reports."""
-    print("v3.9.1 — Structural Geometry DPS Evaluation")
+    enable_landscape = "--landscape" in sys.argv
+
+    print("v4.0.0 — BP Free-Energy Landscape Diagnostics")
     print(f"Seed: {DEFAULT_SEED}")
     print(f"Distances: {DEFAULT_DISTANCES}")
     print(f"P values: {DEFAULT_P_VALUES}")
     print(f"Trials: {DEFAULT_TRIALS}")
     print(f"Max iters: {DEFAULT_MAX_ITERS}")
     print(f"BP mode: {DEFAULT_BP_MODE}")
+    if enable_landscape:
+        print("Landscape diagnostics: ENABLED")
 
     # Full evaluation.
-    eval_result = run_evaluation()
+    eval_result = run_evaluation(
+        enable_energy_trace=enable_landscape,
+        enable_landscape=enable_landscape,
+    )
 
     # Print reports.
     print_activation_report(eval_result)
     print_dps_table(eval_result)
     print_energy_trace(eval_result)
+
+    if enable_landscape:
+        print_basin_statistics(eval_result)
 
     # Determinism check.
     det_result = run_determinism_check()
