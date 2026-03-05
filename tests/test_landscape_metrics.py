@@ -264,6 +264,52 @@ class TestEscapeEnergy:
         )
         np.testing.assert_array_equal(llr, llr_orig)
 
+    def test_custom_eps_values(self, small_code, small_instances):
+        """Custom eps_values are accepted and produce valid results."""
+        H = small_code.H_X
+        inst = small_instances[0]
+        result = bp_decode(
+            H, inst["llr"], max_iters=20, mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+        )
+        correction = result[0]
+
+        custom_eps = [0.01, 0.02]
+        ee = compute_escape_energy(
+            H, inst["llr"], correction,
+            max_iters=20, bp_mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+            eps_values=custom_eps,
+        )
+        assert "escape_energy" in ee
+        assert "escape_energy_plus" in ee
+        assert "escape_energy_minus" in ee
+        for key in ("escape_energy", "escape_energy_plus", "escape_energy_minus"):
+            val = ee[key]
+            assert val is None or isinstance(val, float)
+            if val is not None:
+                assert val in custom_eps
+
+    def test_empty_eps_values(self, small_code, small_instances):
+        """Empty eps_values list produces all-None escape energies."""
+        H = small_code.H_X
+        inst = small_instances[0]
+        result = bp_decode(
+            H, inst["llr"], max_iters=20, mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+        )
+        correction = result[0]
+
+        ee = compute_escape_energy(
+            H, inst["llr"], correction,
+            max_iters=20, bp_mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+            eps_values=[],
+        )
+        assert ee["escape_energy"] is None
+        assert ee["escape_energy_plus"] is None
+        assert ee["escape_energy_minus"] is None
+
 
 # ── Composite Landscape Metrics ──────────────────────────────────
 
