@@ -92,8 +92,8 @@ def compute_belief_oscillation_index(
         prev = np.asarray(llr_trace[t - 1], dtype=np.float64)
         curr = np.asarray(llr_trace[t], dtype=np.float64)
         # Sign flip: sign changes between iterations (treat 0 as non-negative).
-        sign_prev = np.sign(prev)
-        sign_curr = np.sign(curr)
+        sign_prev = np.where(prev < 0, -1, 1)
+        sign_curr = np.where(curr < 0, -1, 1)
         flips += (sign_prev != sign_curr).astype(np.int32)
 
     boi_mean = float(np.mean(flips))
@@ -226,7 +226,7 @@ def compute_correction_vector_fluctuation(
 def compute_iteration_trace_metrics(
     llr_trace: List[np.ndarray],
     energy_trace: List[float],
-    correction_vectors: List[np.ndarray],
+    correction_vectors: List[np.ndarray] | None = None,
 ) -> Dict[str, Any]:
     """Compute all iteration-trace diagnostics in a single call.
 
@@ -236,8 +236,9 @@ def compute_iteration_trace_metrics(
         Per-iteration LLR vectors.
     energy_trace : list of float
         Per-iteration energy values.
-    correction_vectors : list of 1-D arrays
-        Per-iteration correction vectors.
+    correction_vectors : list of 1-D arrays or None
+        Per-iteration correction vectors.  When ``None`` or fewer than
+        2 vectors, CVF fields are set to ``None``.
 
     Returns
     -------
@@ -252,7 +253,10 @@ def compute_iteration_trace_metrics(
     boi = compute_belief_oscillation_index(llr_trace)
     od = compute_oscillation_depth(llr_trace)
     cis_result = compute_convergence_instability_score(energy_trace)
-    cvf = compute_correction_vector_fluctuation(correction_vectors)
+    if correction_vectors is None or len(correction_vectors) < 2:
+        cvf = {"cvf_mean": None, "cvf_max": None}
+    else:
+        cvf = compute_correction_vector_fluctuation(correction_vectors)
 
     return {
         "persistent_error_indicator": pei,

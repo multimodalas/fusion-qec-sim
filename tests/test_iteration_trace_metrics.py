@@ -318,6 +318,96 @@ class TestCorrectionCycling:
         assert result["cvf_max"] == 0.0
 
 
+# ── BOI Zero-Handling Tests ─────────────────────────────────────────
+
+
+class TestBOIZeroHandling:
+    """Zeros in LLR traces must be treated as non-negative (sign = +1)."""
+
+    def test_zero_to_positive_no_flip(self):
+        """Transition from 0.0 to +1.0 should not count as a sign flip."""
+        trace = [
+            np.array([0.0, 0.0], dtype=np.float64),
+            np.array([1.0, 2.0], dtype=np.float64),
+        ]
+        result = compute_belief_oscillation_index(trace)
+        np.testing.assert_array_equal(result["boi_vector"], [0, 0])
+
+    def test_zero_to_negative_is_flip(self):
+        """Transition from 0.0 to -1.0 should count as a sign flip."""
+        trace = [
+            np.array([0.0, 0.0], dtype=np.float64),
+            np.array([-1.0, -2.0], dtype=np.float64),
+        ]
+        result = compute_belief_oscillation_index(trace)
+        np.testing.assert_array_equal(result["boi_vector"], [1, 1])
+
+    def test_positive_to_zero_no_flip(self):
+        """Transition from +1.0 to 0.0 should not count as a sign flip."""
+        trace = [
+            np.array([1.0], dtype=np.float64),
+            np.array([0.0], dtype=np.float64),
+        ]
+        result = compute_belief_oscillation_index(trace)
+        np.testing.assert_array_equal(result["boi_vector"], [0])
+
+    def test_negative_to_zero_is_flip(self):
+        """Transition from -1.0 to 0.0 should count as a sign flip."""
+        trace = [
+            np.array([-1.0], dtype=np.float64),
+            np.array([0.0], dtype=np.float64),
+        ]
+        result = compute_belief_oscillation_index(trace)
+        np.testing.assert_array_equal(result["boi_vector"], [1])
+
+    def test_zero_to_zero_no_flip(self):
+        """Transition from 0.0 to 0.0 should not count as a sign flip."""
+        trace = [
+            np.array([0.0], dtype=np.float64),
+            np.array([0.0], dtype=np.float64),
+        ]
+        result = compute_belief_oscillation_index(trace)
+        np.testing.assert_array_equal(result["boi_vector"], [0])
+
+
+# ── Composite None-CVF Tests ────────────────────────────────────────
+
+
+class TestCompositeNoneCVF:
+    """When correction_vectors is None, CVF fields should be None."""
+
+    def test_none_corrections(self):
+        llr = _make_oscillating_llr_trace(5, 10)
+        energy = _make_monotonic_energy_trace(10)
+        result = compute_iteration_trace_metrics(llr, energy, None)
+        assert result["correction_vector_fluctuation"]["cvf_mean"] is None
+        assert result["correction_vector_fluctuation"]["cvf_max"] is None
+
+    def test_empty_corrections(self):
+        llr = _make_oscillating_llr_trace(5, 10)
+        energy = _make_monotonic_energy_trace(10)
+        result = compute_iteration_trace_metrics(llr, energy, [])
+        assert result["correction_vector_fluctuation"]["cvf_mean"] is None
+        assert result["correction_vector_fluctuation"]["cvf_max"] is None
+
+    def test_single_correction_vector(self):
+        llr = _make_oscillating_llr_trace(5, 10)
+        energy = _make_monotonic_energy_trace(10)
+        result = compute_iteration_trace_metrics(
+            llr, energy, [np.ones(5)],
+        )
+        assert result["correction_vector_fluctuation"]["cvf_mean"] is None
+        assert result["correction_vector_fluctuation"]["cvf_max"] is None
+
+    def test_determinism_with_none_corrections(self):
+        llr = _make_oscillating_llr_trace(5, 10)
+        energy = _make_monotonic_energy_trace(10)
+        r1 = compute_iteration_trace_metrics(llr, energy, None)
+        r2 = compute_iteration_trace_metrics(llr, energy, None)
+        assert r1["convergence_instability_score"] == r2["convergence_instability_score"]
+        assert r1["correction_vector_fluctuation"] == r2["correction_vector_fluctuation"]
+
+
 # ── Composite Metric Tests ──────────────────────────────────────────
 
 

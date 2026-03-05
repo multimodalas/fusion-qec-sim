@@ -367,7 +367,7 @@ def run_mode(
             iter_diag = compute_iteration_trace_metrics(
                 llr_trace=llr_trace_list,
                 energy_trace=list(trace),
-                correction_vectors=llr_trace_list,
+                correction_vectors=None,
             )
             all_iteration_diagnostics.append(iter_diag)
 
