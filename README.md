@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v3.9.0](https://img.shields.io/badge/release-v3.9.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v3.9.0)
+[![Release v4.1.0](https://img.shields.io/badge/release-v4.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.1.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 QEC — Deterministic QLDPC CSS Framework
@@ -23,7 +23,156 @@ Deterministic benchmarking — stable FER and distance-scaling measurements
 
 If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
 
-Current Releases
+Current Release
+v4.1.0 — Improved Basin Switch Detection
+
+v4.1.0 strengthens deterministic perturbation diagnostics by distinguishing metastable oscillation, shallow sensitivity, and true basin switching.
+
+This extends the structural experimentation framework introduced in v3.8–v3.9 and enables systematic study of BP convergence regimes, including plateau behavior, barrier crossings, and geometry-induced basin switching.
+
+Decoder behavior remains bit-identical when diagnostics are disabled.
+
+Channel Geometry Interventions
+
+Two deterministic inference-geometry interventions are available.
+
+Centered Field Projection
+
+Removes the uniform syndrome bias before projection:
+
+b = 1 − 2s
+b_centered = b − mean(b)
+
+LLR = Hᵀ b_centered
+
+Purpose:
+
+remove global field collapse
+
+restore directional likelihood structure
+
+preserve deterministic decoding
+
+Pseudo-Prior Injection
+
+Adds a weak deterministic prior derived from parity structure:
+
+parity_bias = Hᵀ(1 − 2s)
+
+LLR ← LLR + κ · parity_bias
+
+Default:
+
+κ = 0.25
+
+Properties:
+
+deterministic
+
+no oracle leakage
+
+opt-in only
+
+Free-Energy Landscape Diagnostics
+
+v4.0.0 introduces a diagnostics module for analyzing belief propagation energy dynamics.
+
+src/qec/diagnostics/energy_landscape.py
+
+The module provides deterministic analysis of BP energy traces:
+
+compute_energy_gradient
+
+compute_energy_curvature
+
+detect_plateau
+
+detect_local_minima
+
+detect_barrier_crossings
+
+classify_energy_landscape
+
+detect_basin_switch
+
+Energy is measured per BP iteration:
+
+E = − Σ (LLR_i · belief_i)
+
+These diagnostics allow the framework to study decoder convergence regimes, including:
+
+plateau dynamics
+
+metastable behavior
+
+barrier crossings
+
+geometry-induced basin switching
+
+All diagnostics are strictly observational and do not alter decoding behavior.
+
+Basin Switching Diagnostics
+
+A deterministic perturbation experiment detects when BP converges to different free-energy basins.
+
+A small perturbation is applied to the LLR vector:
+
+llr_perturbed = llr + ε · sign(llr)
+ε = 1e-3
+
+If the perturbed decode converges to a different correction or final energy, the trial is classified as a basin switch.
+
+The perturbation is deterministic and handles sign(0) safely to ensure stable results.
+
+DPS Harness Expansion
+
+The deterministic evaluation harness supports geometry-intervention modes and optional energy diagnostics.
+
+Mode	Centered	Prior	geom_v1	RPC
+baseline	F	F	F	F
+centered	T	F	F	F
+prior	F	T	F	F
+centered_prior	T	T	F	F
+geom_centered	T	F	T	F
+geom_centered_prior	T	T	T	F
+rpc_centered	T	F	F	T
+rpc_centered_prior	T	T	F	T
+
+All modes reuse identical deterministic error instances.
+
+Example Diagnostics Run
+PYTHONPATH=. python bench/dps_v381_eval.py \
+  --landscape \
+  --trials 200 \
+  --distances 5 7 \
+  --p-values 0.03
+
+Example observations:
+
+basin switching observed in RPC + centered field modes
+
+stable plateau dynamics in non-RPC geometry modes
+
+deterministic behavior preserved across runs
+
+Stability Guarantees
+
+v4.0.0 maintains strict determinism:
+
+decoder core unchanged
+
+no stochastic components introduced
+
+diagnostics operate only on decoder outputs
+
+identical results when diagnostics are disabled
+
+Full test suite:
+
+945 passed
+7 skipped
+
+Previous Releases
 v3.9.0 — Channel Geometry Interventions & BP Energy Diagnostics
 
 Introduces deterministic channel-geometry interventions and belief propagation energy diagnostics.

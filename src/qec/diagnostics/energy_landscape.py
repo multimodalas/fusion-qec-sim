@@ -124,6 +124,18 @@ def classify_energy_landscape(trace: List[float]) -> dict[str, Any]:
 _BASIN_EPSILON = 1e-3
 
 
+def _deterministic_sign(llr: np.ndarray) -> np.ndarray:
+    """Return element-wise sign with deterministic tie-break for zeros.
+
+    Returns +1 for positive values, -1 for negative values, and +1 for
+    zeros.  Always allocates a new array; never modifies the input.
+    """
+    s = np.sign(llr)
+    s = s.astype(np.float64, copy=True)
+    s[s == 0] = 1.0
+    return s
+
+
 def detect_basin_switch(
     H: np.ndarray,
     llr_base: np.ndarray,
@@ -144,9 +156,8 @@ def detect_basin_switch(
     trace1 = base_trace
 
     # Small deterministic perturbation
-    eps = 1e-3
-    sign = np.sign(llr_base)
-    sign[sign == 0] = 1.0
+    eps = _BASIN_EPSILON
+    sign = _deterministic_sign(llr_base)
     llr_perturbed = llr_base + eps * sign
 
     # Run perturbed decode
@@ -173,4 +184,175 @@ def detect_basin_switch(
         "switch": bool(switch),
         "energy_base": float(energy1),
         "energy_perturbed": float(energy2),
+    }
+
+
+# ── Improved Basin Switch Classification (v4.1.0) ──────────────────
+
+_TRACE_TOLERANCE = 1e-6
+_ENERGY_DELTA_THRESHOLD = _TRACE_TOLERANCE
+_GRADIENT_FLIP_THRESHOLD = 3
+
+
+def _count_gradient_sign_flips(trace: List[float]) -> int:
+    """Count sign changes in the energy gradient.
+
+    A sign flip occurs when consecutive gradient steps change sign.
+    Deterministic: identical trace → identical count.
+    """
+    grad = compute_energy_gradient(trace)
+    if len(grad) < 2:
+        return 0
+    flips = 0
+    for i in range(len(grad) - 1):
+        if grad[i] * grad[i + 1] < 0:
+            flips += 1
+    return flips
+
+
+def _trace_converged(trace: List[float], tolerance: float = _TRACE_TOLERANCE) -> bool:
+    """Check whether the energy trace has stabilised (diagnostic heuristic).
+
+    This checks trace stability only — whether the final energy step is
+    near zero.  It does not reflect actual decoder convergence (syndrome
+    satisfaction).
+
+    Deterministic: identical trace → identical result.
+    """
+    if len(trace) < 2:
+        return True
+    last_grad = trace[-1] - trace[-2]
+    return abs(last_grad) < tolerance
+
+
+def classify_basin_switch(
+    H: np.ndarray,
+    llr_base: np.ndarray,
+    base_correction: np.ndarray,
+    base_trace: List[float],
+    max_iters: int,
+    bp_mode: str,
+    schedule: str,
+    syndrome_vec: np.ndarray,
+) -> dict[str, Any]:
+    """Improved basin switch classifier (v4.1.0).
+
+    Performs three deterministic decodes (baseline, +epsilon, -epsilon)
+    and classifies the result into one of four regimes:
+
+      - ``"metastable_oscillation"``
+            Baseline gradient oscillates without settling.
+      - ``"shallow_sensitivity"``
+            Perturbations alter trajectory but not final correction.
+      - ``"true_basin_switch"``
+            Perturbations move decoding into a different attractor basin.
+      - ``"none"``
+            All outcomes match; no basin switching detected.
+
+    All perturbations are deterministic.  Baseline inputs are never
+    modified in-place.  The decoder is treated as a pure function.
+
+    Returns
+    -------
+    dict with keys:
+        basin_switch_class : str
+        basin_switch_evidence : dict
+    """
+    llr_base = np.asarray(llr_base, dtype=np.float64)
+    corr_baseline = base_correction
+    trace_baseline = list(base_trace)
+
+    # Deterministic perturbation vectors.
+    eps = _BASIN_EPSILON
+    s = _deterministic_sign(llr_base)
+
+    llr_plus = llr_base + eps * s
+    llr_minus = llr_base - eps * s
+
+    # Run perturbed decodes on explicit copies.
+    r_plus = bp_decode(
+        H, llr_plus,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+        energy_trace=True,
+    )
+    corr_plus = r_plus[0]
+    trace_plus = list(r_plus[-1])
+
+    r_minus = bp_decode(
+        H, llr_minus,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+        energy_trace=True,
+    )
+    corr_minus = r_minus[0]
+    trace_minus = list(r_minus[-1])
+
+    # ── Collect evidence ───────────────────────────────────────────
+    energy_baseline = trace_baseline[-1] if trace_baseline else 0.0
+    energy_plus = trace_plus[-1] if trace_plus else 0.0
+    energy_minus = trace_minus[-1] if trace_minus else 0.0
+
+    energy_delta_plus = abs(energy_plus - energy_baseline)
+    energy_delta_minus = abs(energy_minus - energy_baseline)
+
+    gradient_flip_count = _count_gradient_sign_flips(trace_baseline)
+
+    corrections_differ_plus = not np.array_equal(corr_baseline, corr_plus)
+    corrections_differ_minus = not np.array_equal(corr_baseline, corr_minus)
+
+    converged = _trace_converged(trace_baseline)
+
+    evidence = {
+        "energy_delta_plus": float(energy_delta_plus),
+        "energy_delta_minus": float(energy_delta_minus),
+        "gradient_flip_count": int(gradient_flip_count),
+        "corrections_differ_plus": bool(corrections_differ_plus),
+        "corrections_differ_minus": bool(corrections_differ_minus),
+        "converged": bool(converged),
+        "energy_baseline": float(energy_baseline),
+        "energy_plus": float(energy_plus),
+        "energy_minus": float(energy_minus),
+    }
+
+    # ── Classification logic ───────────────────────────────────────
+
+    # 1. Metastable Oscillation:
+    #    Repeated gradient sign flips and failure to converge.
+    if (gradient_flip_count >= _GRADIENT_FLIP_THRESHOLD
+            and not converged):
+        return {
+            "basin_switch_class": "metastable_oscillation",
+            "basin_switch_evidence": evidence,
+        }
+
+    # 2. True Basin Switch:
+    #    Perturbations produce different final corrections AND
+    #    energy difference exceeds deterministic threshold.
+    if ((corrections_differ_plus or corrections_differ_minus)
+            and (energy_delta_plus > _ENERGY_DELTA_THRESHOLD
+                 or energy_delta_minus > _ENERGY_DELTA_THRESHOLD)):
+        return {
+            "basin_switch_class": "true_basin_switch",
+            "basin_switch_evidence": evidence,
+        }
+
+    # 3. Shallow Sensitivity:
+    #    Perturbations alter energy trajectory but final corrections
+    #    are identical (or nearly identical energy).
+    if (energy_delta_plus > _ENERGY_DELTA_THRESHOLD
+            or energy_delta_minus > _ENERGY_DELTA_THRESHOLD):
+        return {
+            "basin_switch_class": "shallow_sensitivity",
+            "basin_switch_evidence": evidence,
+        }
+
+    # 4. None: all outcomes match.
+    return {
+        "basin_switch_class": "none",
+        "basin_switch_evidence": evidence,
     }

@@ -132,6 +132,141 @@ Fully deterministic.
 
 Structural extension must be additive, not invasive.
 
+4a. Diagnostics Layer Protection (AI-Agent Safety Rule)
+
+Diagnostics are observational instruments.
+
+They must never alter decoder behaviour, state, or execution paths.
+
+The diagnostics layer exists to observe decoder dynamics, not influence them.
+
+Diagnostics Code Must Be:
+
+Side-effect free with respect to decoder internals
+
+Deterministic
+
+Optional / opt-in
+
+Isolated from core decoding loops
+
+Prohibited Diagnostic Behaviours
+
+Diagnostics must not:
+
+Modify BP message values
+
+Alter LLR vectors passed into the decoder
+
+Change iteration ordering
+
+Modify scheduling logic
+
+Insert instrumentation inside BP update loops
+
+Introduce conditional behaviour inside decoder internals
+
+Wrap core decoding functions with modified semantics
+
+Cache decoder state that persists across runs
+
+Introduce randomness or sampling
+
+Mutate input arrays in-place
+
+Diagnostics may run additional decodes, but each decode must use:
+
+Explicit input copies
+
+Explicit deterministic perturbations
+
+No shared mutable state
+
+Allowed Diagnostic Mechanisms
+
+Diagnostics may:
+
+Record energy traces
+
+Record syndrome weight trajectories
+
+Run deterministic perturbation probes
+
+Compare final correction vectors
+
+Compute landscape metrics
+
+Analyze convergence behaviour
+
+Diagnostics must treat the decoder as a pure function.
+
+Decoder Invocation Rule
+
+Diagnostics must call decoder entrypoints exactly as external code would.
+
+They must not:
+
+Inject hooks
+
+Patch functions
+
+Modify internal iteration state
+
+If decoder behaviour must change for diagnostics:
+
+Stop and request architectural approval.
+
+Deterministic Perturbation Rule
+
+If perturbation tests are used:
+
+Perturbations must be deterministic
+
+Perturbations must be reversible
+
+Perturbations must not alter baseline decode
+
+Example allowed pattern:
+
+baseline = decode(llr)
+
+plus  = decode(llr + ε * sign(llr))
+minus = decode(llr - ε * sign(llr))
+
+Baseline inputs must never be modified in-place.
+
+Decoder Invariant
+
+The decoder must behave as though diagnostics do not exist.
+
+If removing the diagnostics layer changes decoding behaviour:
+
+The diagnostics layer is invalid.
+
+4b. AI Agent Pre-Modification Checklist
+
+Before modifying any code, Claude must confirm:
+
+Which architectural layer the change belongs to
+
+That the decoder core will remain untouched
+
+That determinism will remain intact
+
+That baseline decoding output will remain identical
+
+That schema and artifact identity remain unchanged
+
+Claude must explicitly state these checks before writing code.
+
+If any answer is uncertain:
+
+Claude must pause and request user instruction.
+
+Decoder outputs under identical inputs must remain byte-identical across all minor releases.
+
+If byte-identity cannot be preserved, a Major version bump is required.
+
 5. Channel Layer Discipline
 
 Channel models are consumers, not peers.

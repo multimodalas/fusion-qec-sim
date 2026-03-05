@@ -53,6 +53,7 @@ from src.qec.channel.geometry_post import apply_geometry_postprocessing
 
 from src.qec.diagnostics.energy_landscape import (
     classify_energy_landscape,
+    classify_basin_switch,
     detect_basin_switch,
 )
 
@@ -269,6 +270,7 @@ def run_mode(
     all_landscape_metrics: list[dict[str, Any]] = []
     basin_switches = 0
     energy_deltas: list[float] = []
+    all_basin_classifications: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -325,6 +327,13 @@ def run_mode(
                     basin_switches += 1
                 energy_deltas.append(abs(basin["energy_base"] - basin["energy_perturbed"]))
 
+                # v4.1.0: improved basin switch classification.
+                classification = classify_basin_switch(
+                    H_used, llr_used, correction, trace,
+                    max_iters, bp_mode, schedule, s_used,
+                )
+                all_basin_classifications.append(classification)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -364,6 +373,14 @@ def run_mode(
             sum(energy_deltas) / len(energy_deltas)
             if energy_deltas else 0.0
         )
+    if all_basin_classifications:
+        out["basin_classifications"] = all_basin_classifications
+        # Aggregate class counts.
+        class_counts: dict[str, int] = {}
+        for bc in all_basin_classifications:
+            cls = bc["basin_switch_class"]
+            class_counts[cls] = class_counts.get(cls, 0) + 1
+        out["basin_class_counts"] = class_counts
     return out
 
 
@@ -653,6 +670,10 @@ def print_basin_statistics(eval_result: dict[str, Any]) -> None:
                 print(f"  {mode_name:<30} p={p}  d={distance}"
                       f"  switch_frac={frac:.4f}"
                       f"  mean_delta={delta:.6f}")
+                if "basin_class_counts" in r:
+                    counts = r["basin_class_counts"]
+                    parts = [f"{k}={v}" for k, v in sorted(counts.items())]
+                    print(f"    classification: {', '.join(parts)}")
 
 
 def _parse_args() -> argparse.Namespace:

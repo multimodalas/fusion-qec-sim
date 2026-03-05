@@ -6,6 +6,193 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.1.0] — 2026-03-05
+Improved Basin Switch Detection
+
+Strengthens deterministic perturbation diagnostics by introducing a
+three-regime classifier that distinguishes between metastable oscillation,
+shallow perturbation sensitivity, and true basin switching.
+
+This is a diagnostic-only improvement.  No decoder core modifications.
+
+Added
+
+- `classify_basin_switch()` in `src/qec/diagnostics/energy_landscape.py`:
+  performs three deterministic decodes (baseline, +epsilon, -epsilon)
+  and classifies the result as `metastable_oscillation`,
+  `shallow_sensitivity`, `true_basin_switch`, or `none`.
+- Helper functions `_count_gradient_sign_flips()` and
+  `_trace_converged()` for trace analysis.
+- DPS harness (`bench/dps_v381_eval.py`) now emits `basin_classifications`
+  and `basin_class_counts` when `--landscape` mode is enabled.
+- Comprehensive tests: determinism, baseline safety, classification
+  coverage, and harness integration.
+
+Unchanged
+
+- Decoder core: no modifications to BP loops, scheduling, or iteration.
+- Schema: no SCHEMA_VERSION bump.
+- Canonical serialization, hashing, and identity: unchanged.
+- Baseline decoding outputs: byte-identical under identical inputs.
+- All existing harness output fields remain present and unchanged.
+
+---
+
+[4.0.0] — 2026-03-05
+BP Free-Energy Landscape Diagnostics
+
+Introduces a deterministic diagnostics layer for analyzing belief
+propagation (BP) energy dynamics during QLDPC decoding.
+
+This release extends the deterministic benchmarking framework with
+tools for studying decoder convergence regimes, including plateau
+behavior, barrier crossings, and geometry-induced basin switching.
+
+All diagnostics are strictly observational and do not modify decoding
+behavior.
+
+Added
+
+Energy Landscape Diagnostics Module
+
+New module:
+
+src/qec/diagnostics/energy_landscape.py
+
+Provides deterministic analysis utilities for BP energy traces:
+
+compute_energy_gradient
+
+compute_energy_curvature
+
+detect_plateau
+
+detect_local_minima
+
+detect_barrier_crossings
+
+classify_energy_landscape
+
+detect_basin_switch
+
+Energy is evaluated per BP iteration:
+
+E = − Σ (LLR_i · belief_i)
+
+These diagnostics enable systematic analysis of BP convergence behavior.
+
+Basin Switching Detector
+
+Introduces a deterministic perturbation experiment to detect
+free-energy basin switching in BP decoding.
+
+A small perturbation is applied to the LLR vector:
+
+llr_perturbed = llr + ε · sign(llr)
+ε = 1e-3
+
+If the perturbed decode converges to a different correction or final
+energy, the trial is classified as a basin switch.
+
+The perturbation is deterministic and safely handles sign(0).
+
+DPS Harness Landscape Mode
+
+The deterministic DPS evaluation harness now supports energy landscape
+diagnostics via a CLI flag:
+
+--landscape
+
+When enabled the harness records:
+
+per-iteration BP energy traces
+
+landscape classification statistics
+
+basin switching frequency per mode
+
+Example run:
+
+PYTHONPATH=. python bench/dps_v381_eval.py \
+  --landscape \
+  --trials 200 \
+  --distances 5 7 \
+  --p-values 0.03
+
+All modes reuse identical deterministic error instances.
+
+Improvements
+
+Reduced Diagnostic Overhead
+
+The basin-switch detector now reuses the existing decode result
+from the harness instead of performing a redundant baseline decode.
+
+This significantly reduces diagnostic runtime when landscape analysis
+is enabled.
+
+Fixes
+
+Geometry Postprocessing Consistency
+
+Fixed an issue where geometry postprocessing could be applied
+asymmetrically between baseline and perturbed decodes in the basin
+switch detector.
+
+Both decodes now operate in the same LLR domain, differing only by the
+deterministic perturbation.
+
+Perturbation Stability
+
+Improved numerical stability by ensuring deterministic perturbation
+behavior when LLR == 0.
+
+Tests
+
+New test suite:
+
+tests/test_energy_landscape.py
+
+Coverage includes:
+
+gradient and curvature computation
+
+plateau detection
+
+barrier detection
+
+basin switch detection
+
+deterministic perturbation behavior
+
+Results
+
+Full test suite:
+
+945 passed
+7 skipped
+0 failed
+
+Deterministic reproducibility verified.
+
+Guarantees
+
+No changes to core BP decoding logic
+
+No changes to BP scheduling or message updates
+
+Diagnostics operate only on decoder outputs
+
+No dependency changes
+
+Baseline decoder outputs remain byte-identical when diagnostics disabled
+
+All new features are opt-in
+
+Determinism preserved
+
+---
+
 ## [3.9.1] — 2026-03-04
 
 ### Geometry Field Controls
