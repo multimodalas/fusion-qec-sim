@@ -6,6 +6,38 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.1.0] — 2026-03-05
+Improved Basin Switch Detection
+
+Strengthens deterministic perturbation diagnostics by introducing a
+three-regime classifier that distinguishes between metastable oscillation,
+shallow perturbation sensitivity, and true basin switching.
+
+This is a diagnostic-only improvement.  No decoder core modifications.
+
+Added
+
+- `classify_basin_switch()` in `src/qec/diagnostics/energy_landscape.py`:
+  performs three deterministic decodes (baseline, +epsilon, -epsilon)
+  and classifies the result as `metastable_oscillation`,
+  `shallow_sensitivity`, `true_basin_switch`, or `none`.
+- Helper functions `_count_gradient_sign_flips()` and
+  `_check_convergence()` for trace analysis.
+- DPS harness (`bench/dps_v381_eval.py`) now emits `basin_classifications`
+  and `basin_class_counts` when `--landscape` mode is enabled.
+- Comprehensive tests: determinism, baseline safety, classification
+  coverage, and harness integration.
+
+Unchanged
+
+- Decoder core: no modifications to BP loops, scheduling, or iteration.
+- Schema: no SCHEMA_VERSION bump.
+- Canonical serialization, hashing, and identity: unchanged.
+- Baseline decoding outputs: byte-identical under identical inputs.
+- All existing harness output fields remain present and unchanged.
+
+---
+
 [4.0.0] — 2026-03-05
 BP Free-Energy Landscape Diagnostics
 
