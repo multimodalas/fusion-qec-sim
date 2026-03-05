@@ -6,6 +6,45 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.2.0] — 2026-03-05
+Deterministic Landscape Metrics
+
+Adds Basin Stability Index (BSI), Attractor Distance (AD), and Escape
+Energy (EE) to energy landscape diagnostics.  Escape energy includes
+directional barrier estimation inspired by spin-glass energy landscape
+analysis.
+
+This is a diagnostic-only extension.  No decoder core modifications.
+
+Added
+
+- `compute_basin_stability_index()`: ratio of perturbations yielding
+  same correction as baseline.  Values in [0.0, 1.0].
+- `compute_attractor_distance()`: Hamming distance between baseline and
+  perturbed corrections.  Returns max and mean.
+- `compute_escape_energy()`: deterministic epsilon sweep to find minimum
+  perturbation causing a basin switch.  Probes +epsilon and -epsilon
+  independently, returning directional and minimum barriers.
+- `compute_landscape_metrics()`: composite function combining v4.1.0
+  classification with BSI, AD, and EE in a single output dict.
+- `_hamming_distance()`: deterministic Hamming distance helper.
+- DPS harness (`bench/dps_v381_eval.py`) now emits landscape metrics
+  (BSI, AD, EE) alongside basin classifications when `--landscape`
+  mode is enabled.
+- Comprehensive tests: determinism, baseline safety, Hamming distance
+  correctness, escape energy sweep, and harness integration.
+
+Unchanged
+
+- Decoder core: no modifications to BP loops, scheduling, or iteration.
+- Schema: no SCHEMA_VERSION bump.
+- Canonical serialization, hashing, and identity: unchanged.
+- Baseline decoding outputs: byte-identical under identical inputs.
+- All existing harness output fields remain present and unchanged.
+- `classify_basin_switch()` remains available and unmodified.
+
+---
+
 [4.1.0] — 2026-03-05
 Improved Basin Switch Detection
 
