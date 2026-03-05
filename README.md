@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v4.2.1](https://img.shields.io/badge/release-v4.2.1-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.2.1)
+[![Release v4.3.0](https://img.shields.io/badge/release-v4.3.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.3.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 QEC — Deterministic QLDPC CSS Framework
@@ -24,6 +24,80 @@ Deterministic benchmarking — stable FER and distance-scaling measurements
 If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
 
 Current Release
+
+v4.3.0 — Deterministic Iteration-Trace Diagnostics
+
+v4.3.0 extends the deterministic diagnostics framework with a new layer of
+**iteration-trace analysis for belief propagation decoding**.
+
+Where the v4.2 series characterizes the *energy landscape of decoder attractors*,
+v4.3.0 introduces metrics that analyze **the internal dynamics of BP during
+the decoding trajectory itself**.
+
+These diagnostics operate entirely outside the decoder core and preserve the
+architectural guarantee that decoder outputs remain byte-identical when
+diagnostics are disabled.
+
+Iteration-Trace Diagnostics (v4.3.0)
+
+The new diagnostics module analyzes per-iteration belief trajectories and
+energy evolution produced during BP decoding.
+
+Five deterministic metrics characterize decoder dynamics:
+
+Belief Oscillation Index (BOI)
+
+Measures the rate at which variable beliefs change sign between iterations.
+
+High BOI indicates oscillatory BP regimes or unstable message passing.
+
+Zero values are treated as non-negative to avoid artificial flip counts.
+
+Energy Plateau Index (EPI)
+
+Measures the length of low-gradient segments in the energy trajectory.
+
+High EPI indicates plateau behavior where the decoder stalls in shallow
+regions of the free-energy landscape.
+
+Trapping Set Persistence (TSP)
+
+Measures how long the decoder remains in a constraint-consistent but
+incorrect configuration.
+
+High persistence indicates classical trapping-set behavior.
+
+Correction Vector Fluctuation (CVF)
+
+Measures cycling behavior in correction vectors across iterations.
+
+This metric is computed only when correction vectors are available and is
+reported as `None` otherwise to preserve semantic correctness.
+
+Composite Iteration Stability Score
+
+Combines the above metrics into a deterministic stability descriptor that
+characterizes the overall dynamical regime of the decoder trajectory.
+
+Architectural Safety
+
+All iteration diagnostics are strictly observational and never modify
+decoder behavior.
+
+The following invariants remain enforced:
+
+decoder core unchanged  
+message-passing semantics unchanged  
+no randomness introduced  
+schema unchanged  
+baseline decoder outputs remain byte-identical
+
+Version Lineage
+
+v4.1.0 — Improved Basin Switch Detection  
+v4.2.0 — Deterministic Landscape Metrics  
+v4.2.1 — Diagnostics Refactor and Test Hardening  
+v4.3.0 — Iteration-Trace Diagnostics
 
 v4.2.1 — Diagnostics Refactor and Test Hardening
 

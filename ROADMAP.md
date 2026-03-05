@@ -1,5 +1,5 @@
 QEC Roadmap
-Deterministic QLDPC CSS Toolkit — Architectural Governance Document
+Deterministic QLDPC CSS Toolkit — Architectural Governance & Research Direction
 
 This document defines the structural trajectory, invariants, and expansion boundaries of QEC.
 
@@ -168,29 +168,44 @@ Goal:
 
 Enable realistic FER curves without destabilizing the decoder core.
 
-Layer 4 — Structural Diagnostics & Regime Analysis
+Layer 4 — Deterministic Diagnostics & Regime Analysis
 
-Formalized in v3.2.x and extended in v3.3.x.
+Formalized in v3.2.x and significantly expanded in the v4.x series.
 
 Scope:
 
 Inversion Index (II)
 
-Geometry-aware diagnostics
+DPS regime diagnostics
 
-DPS, BSI, SSI metrics
+Belief propagation energy tracing
 
-Structural regime classification
+Basin-switch detection
+
+Energy-landscape attractor metrics
+
+Iteration-trace dynamics analysis
+
+These diagnostics characterize decoder behavior across three complementary layers:
+
+• attractor basin geometry  
+• free-energy landscape structure  
+• per-iteration BP trajectory dynamics  
 
 Constraints:
 
 Diagnostics must not alter decoder semantics
 
-Metrics must be algebraically derived from deterministic fields
+Metrics must be computed from deterministic decoder outputs
 
 No stochastic diagnostic sources
 
-This layer distinguishes structural channel artifacts from genuine decoder behavior.
+No mutation of decoder state
+
+All diagnostics must remain strictly observational.
+
+The v4.x series establishes QEC as a deterministic experimental platform for
+studying belief propagation dynamics on QLDPC energy landscapes.
 
 Layer 5 — Analytical & Dimensional Expansion (Opt-In Only)
 
@@ -218,104 +233,88 @@ Must preserve reproducibility guarantees
 
 Dimensional expansion must not destabilize binary baseline behavior.
 
-3. Current State — v3.9.0
+3. Current State — v4.3.0
 
-v3.9.0 establishes the first deterministic inference-geometry interventions and introduces belief propagation energy diagnostics for structural regime analysis.
+The v4.x series transitions QEC from a decoder engineering toolkit into a
+deterministic experimental platform for studying belief propagation dynamics
+on QLDPC codes.
 
-The release expands the deterministic experimentation framework introduced in v3.8.x.
+The decoder core remains unchanged from the v3.x architecture.
+
+All v4.x capabilities are implemented strictly in the diagnostics and
+benchmarking layers.
 
 Major Additions
 
-Channel Geometry Interventions
+Basin Switch Detection (v4.1.0)
 
-Two opt-in structural interventions were introduced:
+Introduces deterministic perturbation diagnostics capable of distinguishing:
 
-Centered Syndrome Field
+• metastable oscillation  
+• shallow perturbation sensitivity  
+• true basin switching  
 
-Pseudo-Prior Injection
+This allows systematic identification of attractor basin transitions in the
+BP energy landscape.
 
-These construct decoder likelihood fields directly from parity-check structure and syndrome information.
+Energy-Landscape Metrics (v4.2.x)
 
-Purpose:
+The diagnostics framework now quantifies the geometry of decoding attractors
+using three deterministic metrics:
 
-analyze syndrome-only inference geometry
+Basin Stability Index (BSI)
 
-explore decoder behavior without oracle channel information
+Measures the probability that small deterministic perturbations return the
+decoder to the same attractor basin.
 
-maintain deterministic experimentation
+Attractor Distance (AD)
 
-Both interventions are strictly adapter-layer features and do not modify baseline decoder behavior.
+Measures the Hamming distance between baseline and perturbed correction
+vectors.
 
-Belief Propagation Energy Diagnostics
+Escape Energy (EE)
 
-v3.9.0 introduces deterministic per-iteration BP energy tracing:
+Estimates the minimum perturbation magnitude required to escape the current
+basin.
 
-E = − Σ (LLR_i · belief_i)
+These metrics allow quantitative characterization of basin stability and
+barrier structure in the BP landscape.
 
-This enables analysis of:
+Iteration-Trace Diagnostics (v4.3.0)
 
-BP convergence regimes
+v4.3 introduces analysis of the internal dynamics of belief propagation
+trajectories.
 
-oscillatory decoding behavior
+Metrics include:
 
-likelihood alignment across iterations
+Belief Oscillation Index (BOI)
 
-free-energy landscape structure
+Energy Plateau Index (EPI)
 
-Energy tracing is diagnostic only and does not alter decoder outputs.
+Trapping Set Persistence (TSP)
 
-Expanded DPS Evaluation Harness
+Correction Vector Fluctuation (CVF)
 
-The deterministic DPS harness introduced in v3.8.1 now supports geometry-intervention modes.
+Composite Iteration Stability Score
 
-Evaluation modes now include:
+These metrics characterize oscillatory regimes, plateau behavior, trapping
+sets, and correction cycling during decoding.
 
-baseline
-rpc_only
-geom_v1_only
-rpc_geom
-centered
-prior
-centered_prior
-geom_centered
-geom_centered_prior
-rpc_centered
-rpc_centered_prior
+Architectural Guarantees
 
-All modes reuse identical deterministic error instances.
+Across the entire v4.x series:
 
-Stability Guarantees
+decoder core remains unchanged
 
-Despite these additions:
+message passing semantics remain unchanged
 
-baseline decoder outputs remain byte-identical
+scheduling behavior unchanged
 
-BP schedules are unchanged
+schema unchanged
 
-_bp_postprocess() remains unchanged
+baseline decoding outputs remain byte-identical
 
-decoder semantics are preserved
-
-all structural features remain opt-in
-
-Test Suite
-
-Current test coverage:
-
-904+ passing tests
-0 failures
-
-The test suite now includes validation for:
-
-geometry LLR construction
-
-BP energy tracing
-
-deterministic mode invariance
-
-DPS harness expansion
-
-adapter-layer intervention safety
+All diagnostics operate strictly outside the decoder core.
 
 4. Near-Term Direction (v3.9.x)
 
@@ -383,51 +382,37 @@ scaling regime transitions
 
 failure surface characterization
 
-5. Medium-Term Direction (v4.0+)
+5. Near-Term Direction (v4.4+)
 
-v4.0 will transition from decoder engineering toward decoder regime analysis.
+With the core diagnostics stack established in v4.1–v4.3, the next research
+phase focuses on deeper analysis of BP landscape structure.
 
-Primary goal:
+Candidate directions include:
 
-Formalize BP free-energy landscape analysis for QLDPC codes.
+Spin-glass–inspired BP diagnostics
 
-Planned Capabilities
+Energy barrier topology estimation
 
-Energy-landscape mapping
+Basin transition graph construction
 
-per-iteration BP energy profiles
+Deterministic perturbation annealing experiments
 
-attractor basin detection
+Attractor stability scaling across code families
 
-convergence topology analysis
+Trajectory phase classification
 
-Regime classification
+These investigations aim to understand the statistical-physics structure of
+belief propagation on QLDPC Tanner graphs.
 
-stable decoding basins
+All future diagnostics must remain:
 
-oscillatory regimes
+deterministic
 
-failure plateaus
+observational
 
-Deterministic scaling analysis
+opt-in
 
-DPS regime mapping across code families
-
-structural perturbation sensitivity
-
-topology-dependent decoding behavior
-
-Research Direction
-
-v4.0 moves QEC toward a deterministic experimental platform for decoding physics rather than only a decoder implementation.
-
-Focus shifts from:
-
-"How do we improve decoding?"
-
-to
-
-"What regimes does BP occupy on QLDPC energy landscapes?"
+decoder-safe
 
 6. What Will Not Happen
 
