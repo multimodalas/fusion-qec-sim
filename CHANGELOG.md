@@ -10,7 +10,7 @@ This project follows Semantic Versioning (SemVer).
 Deterministic BP Dynamics Regime Analysis
 
 Adds a deterministic BP dynamics metric suite and regime classifier that
-analyses iteration traces to classify decoder dynamics into one of six
+analyzes iteration traces to classify decoder dynamics into one of six
 regimes.  Diagnostics-only, decoder-safe: does not modify BP decoder
 internals.
 
