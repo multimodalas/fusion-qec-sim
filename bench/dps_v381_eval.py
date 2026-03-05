@@ -70,6 +70,10 @@ from src.qec.diagnostics.bp_regime_trace import (
     compute_bp_regime_trace,
 )
 
+from src.qec.diagnostics.bp_phase_diagram import (
+    compute_bp_phase_diagram,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -262,6 +266,7 @@ def run_mode(
     enable_iteration_diagnostics: bool = False,
     enable_bp_dynamics: bool = False,
     enable_bp_transitions: bool = False,
+    enable_bp_phase_diagram: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -283,6 +288,9 @@ def run_mode(
     # Landscape mode implies energy trace.
     if enable_landscape:
         enable_energy_trace = True
+    # Phase diagram implies BP transitions.
+    if enable_bp_phase_diagram:
+        enable_bp_transitions = True
     # Iteration diagnostics implies energy trace.
     if enable_iteration_diagnostics:
         enable_energy_trace = True
@@ -538,6 +546,7 @@ def run_evaluation(
     enable_iteration_diagnostics: bool = False,
     enable_bp_dynamics: bool = False,
     enable_bp_transitions: bool = False,
+    enable_bp_phase_diagram: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -592,6 +601,7 @@ def run_evaluation(
                     enable_iteration_diagnostics=enable_iteration_diagnostics,
                     enable_bp_dynamics=enable_bp_dynamics,
                     enable_bp_transitions=enable_bp_transitions,
+                    enable_bp_phase_diagram=enable_bp_phase_diagram,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -599,7 +609,7 @@ def run_evaluation(
 
             slopes[mode_name][p] = compute_dps_slope(fer_by_distance)
 
-    return {
+    out: dict[str, Any] = {
         "results": results,
         "slopes": slopes,
         "audits": audits,
@@ -612,6 +622,23 @@ def run_evaluation(
             "bp_mode": bp_mode,
         },
     }
+
+    # v4.6.0: BP phase diagram aggregation.
+    if enable_bp_phase_diagram:
+        phase_run_results: list[dict[str, Any]] = []
+        for mode_name in MODE_ORDER:
+            for p in p_values:
+                for distance in distances:
+                    r = results[mode_name][p][distance]
+                    if "bp_regime_trace" in r:
+                        phase_run_results.append({
+                            "distance": distance,
+                            "noise": p,
+                            "regime_trace_results": r["bp_regime_trace"],
+                        })
+        out["bp_phase_diagram"] = compute_bp_phase_diagram(phase_run_results)
+
+    return out
 
 
 # ── Determinism check ────────────────────────────────────────────────
@@ -812,6 +839,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP dynamics regime analysis (MSI, CPI, TSL, LEC, CVNE, GOS, EDS, BTI)")
     parser.add_argument("--bp-transitions", action="store_true",
                         help="Enable BP regime transition analysis (regime trace, dwell times, events)")
+    parser.add_argument("--bp-phase-diagram", action="store_true",
+                        help="Enable BP phase diagram analysis (requires --bp-transitions)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -842,6 +871,8 @@ def main() -> None:
         print("BP dynamics regime analysis: ENABLED")
     if args.bp_transitions:
         print("BP regime transition analysis: ENABLED")
+    if args.bp_phase_diagram:
+        print("BP phase diagram analysis: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -851,11 +882,12 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions,
-        enable_bp_dynamics=args.bp_dynamics or args.bp_transitions,
-        enable_bp_transitions=args.bp_transitions,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram,
+        enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram,
+        enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
+        enable_bp_phase_diagram=args.bp_phase_diagram,
     )
 
     # Print reports.

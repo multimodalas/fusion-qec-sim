@@ -6,6 +6,37 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.6.0] — 2026-03-05
+Deterministic BP Phase Diagram Analysis
+
+Adds deterministic aggregation of BP regime traces across parameter sweeps
+to compute phase diagram statistics for metastability analysis.
+Diagnostics only.  Decoder behavior unchanged.
+
+Added
+
+- `compute_bp_phase_diagram()`: aggregates regime-trace diagnostics across
+  decoding runs to produce deterministic BP phase statistics as a function
+  of code distance and noise rate.
+- Phase point output: per-(distance, noise) statistics including
+  `metastable_probability`, `mean_freeze_score`, `mean_switch_rate`,
+  `mean_max_dwell`, `event_rate`, and `regime_frequencies`.
+- Configurable metastable threshold (default 0.5).
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-phase-diagram` flag.
+  When enabled, computes phase diagram analysis across all modes and stores
+  results under `bp_phase_diagram`.
+- Comprehensive tests (`tests/test_bp_phase_diagram.py`): determinism,
+  correct aggregation, empty input handling, bench integration smoke tests.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`): untouched.
+- Construction layer (`src/qec/construction/`): untouched.
+- Schema version: unchanged.
+- Baseline decoding output: byte-identical when diagnostics disabled.
+
+---
+
 [4.5.0] — 2026-03-05
 Deterministic BP Regime Transition Analysis
 
