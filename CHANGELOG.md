@@ -6,6 +6,47 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.3.0] — 2026-03-05
+Deterministic Iteration-Trace Diagnostics
+
+Adds iteration-trace diagnostics that analyse BP iteration logs to detect
+trapping sets, oscillatory message passing, unstable convergence, and
+correction vector cycling.  Diagnostics operate purely on iteration traces
+and do not modify the BP decoder.
+
+Added
+
+- `compute_persistent_error_indicator()` (PEI): flags variable nodes whose
+  LLR sign indicates an error for a configurable number of consecutive
+  iterations.  Detects trapping sets.
+- `compute_belief_oscillation_index()` (BOI): counts LLR sign flips across
+  iterations for each variable node.  Measures oscillatory message passing.
+- `compute_oscillation_depth()` (OD): measures peak-to-peak LLR amplitude
+  over a trailing window.  Quantifies oscillation severity.
+- `compute_convergence_instability_score()` (CIS): variance of the energy
+  trace over a trailing window.  Detects unstable convergence.
+- `compute_correction_vector_fluctuation()` (CVF): Euclidean norm of
+  consecutive correction vector differences.  Detects correction cycling.
+- `compute_iteration_trace_metrics()`: composite function returning all
+  five metrics in a single call.
+- DPS harness (`bench/dps_v381_eval.py`): new `--iteration-diagnostics`
+  flag.  When enabled, computes iteration-trace metrics per trial and
+  stores them under `result["iteration_diagnostics"]`.
+- Comprehensive tests (`tests/test_iteration_trace_metrics.py`):
+  determinism, no-input-mutation, oscillation detection, stable
+  convergence, trapping set detection, correction cycling, and composite
+  metric validation.
+
+Unchanged
+
+- Decoder core: no modifications to BP loops, scheduling, or iteration.
+- Schema: no SCHEMA_VERSION bump.
+- Canonical serialization, hashing, and identity: unchanged.
+- Baseline decoding outputs: byte-identical under identical inputs.
+- All existing harness output fields remain present and unchanged.
+
+---
+
 [4.2.1] — 2026-03-05
 Diagnostics Refactor and Test Hardening
 

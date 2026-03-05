@@ -58,6 +58,10 @@ from src.qec.diagnostics.energy_landscape import (
     detect_basin_switch,
 )
 
+from src.qec.diagnostics.iteration_trace import (
+    compute_iteration_trace_metrics,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -247,6 +251,7 @@ def run_mode(
     bp_mode: str = DEFAULT_BP_MODE,
     enable_energy_trace: bool = False,
     enable_landscape: bool = False,
+    enable_iteration_diagnostics: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -254,7 +259,8 @@ def run_mode(
     When *enable_energy_trace* or *enable_landscape* is True, also
     returns ``energy_traces``.  When *enable_landscape* is True, also
     returns ``landscape_metrics``, ``basin_switch``, and
-    ``energy_delta``.
+    ``energy_delta``.  When *enable_iteration_diagnostics* is True,
+    also returns ``iteration_diagnostics``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -262,6 +268,9 @@ def run_mode(
 
     # Landscape mode implies energy trace.
     if enable_landscape:
+        enable_energy_trace = True
+    # Iteration diagnostics implies energy trace.
+    if enable_iteration_diagnostics:
         enable_energy_trace = True
 
     frame_errors = 0
@@ -272,6 +281,7 @@ def run_mode(
     basin_switches = 0
     energy_deltas: list[float] = []
     all_basin_classifications: list[dict[str, Any]] = []
+    all_iteration_diagnostics: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -303,6 +313,7 @@ def run_mode(
       
         # Decode.
         use_energy = enable_energy_trace or structural.energy_trace
+        use_llr_history = max_iters if enable_iteration_diagnostics else 0
         result = bp_decode(
             H_used, llr_used,
             max_iters=max_iters,
@@ -310,11 +321,22 @@ def run_mode(
             schedule=schedule,
             syndrome_vec=s_used,
             energy_trace=use_energy,
+            llr_history=use_llr_history,
         )
         correction, iters = result[0], result[1]
-        if use_energy:
-            # Energy trace is always the last element when enabled.
+        # Extract optional outputs based on what was requested.
+        llr_hist = None
+        trace = None
+        if use_llr_history > 0 and use_energy:
+            # Return order: (correction, iters, llr_history, energy_trace)
+            llr_hist = result[2]
             trace = result[-1]
+        elif use_llr_history > 0:
+            llr_hist = result[2]
+        elif use_energy:
+            trace = result[-1]
+
+        if trace is not None:
             all_energy_traces.append(trace)
 
             if enable_landscape and len(trace) >= 2:
@@ -334,6 +356,20 @@ def run_mode(
                     max_iters, bp_mode, schedule, s_used,
                 )
                 all_basin_classifications.append(classification)
+
+        # v4.3.0: iteration-trace diagnostics.
+        if enable_iteration_diagnostics and trace is not None:
+            llr_trace_list = (
+                [llr_hist[i] for i in range(llr_hist.shape[0])]
+                if llr_hist is not None and llr_hist.shape[0] > 0
+                else []
+            )
+            iter_diag = compute_iteration_trace_metrics(
+                llr_trace=llr_trace_list,
+                energy_trace=list(trace),
+                correction_vectors=None,
+            )
+            all_iteration_diagnostics.append(iter_diag)
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
@@ -382,6 +418,8 @@ def run_mode(
             cls = bc["basin_switch_class"]
             class_counts[cls] = class_counts.get(cls, 0) + 1
         out["basin_class_counts"] = class_counts
+    if all_iteration_diagnostics:
+        out["iteration_diagnostics"] = all_iteration_diagnostics
     return out
 
 
@@ -419,6 +457,7 @@ def run_evaluation(
     bp_mode: str = DEFAULT_BP_MODE,
     enable_energy_trace: bool = False,
     enable_landscape: bool = False,
+    enable_iteration_diagnostics: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -470,6 +509,7 @@ def run_evaluation(
                     max_iters=max_iters, bp_mode=bp_mode,
                     enable_energy_trace=enable_energy_trace,
                     enable_landscape=enable_landscape,
+                    enable_iteration_diagnostics=enable_iteration_diagnostics,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -684,6 +724,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--landscape", action="store_true",
                         help="Enable landscape diagnostics and basin switching")
+    parser.add_argument("--iteration-diagnostics", action="store_true",
+                        help="Enable iteration-trace diagnostics (PEI, BOI, OD, CIS, CVF)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -708,6 +750,8 @@ def main() -> None:
     print(f"BP mode: {args.bp_mode}")
     if args.landscape:
         print("Landscape diagnostics: ENABLED")
+    if args.iteration_diagnostics:
+        print("Iteration-trace diagnostics: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -717,8 +761,9 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics,
         enable_landscape=args.landscape,
+        enable_iteration_diagnostics=args.iteration_diagnostics,
     )
 
     # Print reports.

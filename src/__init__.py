@@ -11,7 +11,7 @@ Components:
 - info_mass_gravity: Information-theoretic and physics-inspired metrics
 """
 
-__version__ = '3.0.2'
+__version__ = '4.3.0'
 
 from .qec_qldpc_codes import (
     QuantumLDPCCode,

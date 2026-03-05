@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v4.1.0](https://img.shields.io/badge/release-v4.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.1.0)
+[![Release v4.2.1](https://img.shields.io/badge/release-v4.2.1-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.2.1)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 QEC — Deterministic QLDPC CSS Framework
@@ -24,6 +24,99 @@ Deterministic benchmarking — stable FER and distance-scaling measurements
 If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
 
 Current Release
+
+v4.2.1 — Diagnostics Refactor and Test Hardening
+
+The v4.2 series extends the deterministic perturbation diagnostics introduced in v4.1.0 with quantitative energy-landscape metrics for BP decoding experiments.
+
+These diagnostics characterize the stability and geometry of decoding attractors under small deterministic perturbations while preserving the architectural guarantee that decoder outputs remain bit-identical when diagnostics are disabled.
+
+v4.2.1 further refines the diagnostics layer with internal optimizations and expanded test coverage.
+
+Landscape Metrics (v4.2.0)
+
+The diagnostics framework now computes three deterministic metrics describing the local decoding landscape.
+
+Basin Stability Index (BSI)
+Measures how often small perturbations return the decoder to the same attractor basin.
+
+BSI = (# perturbations yielding baseline correction) / (# perturbations)
+
+Values range from 0.0 (unstable) to 1.0 (fully stable).
+
+Attractor Distance (AD)
+Measures the Hamming distance between baseline and perturbed decoding corrections.
+
+Reported values:
+
+attractor_distance_max
+attractor_distance_mean
+
+These quantify how far nearby attractors lie in correction space.
+
+Escape Energy (EE)
+Estimates the minimum perturbation magnitude required to leave the current basin.
+
+The deterministic epsilon sweep is:
+
+[1e-3, 2e-3, 5e-3, 1e-2]
+
+Directional escape barriers are reported:
+
+escape_energy_plus
+escape_energy_minus
+escape_energy
+
+The final escape energy is the minimum directional barrier.
+
+v4.2.1 Improvements
+
+v4.2.1 introduces several internal improvements to the diagnostics system:
+
+shared perturbation decode helper to eliminate redundant BP decodes
+
+configurable epsilon sweep (eps_values) for escape-energy diagnostics
+
+strengthened integration tests to guarantee landscape metrics are exercised
+
+additional test coverage for configurable epsilon schedules
+
+These changes do not modify decoder behavior and preserve full determinism.
+
+Decoder Safety
+
+All diagnostics operate outside the decoder core.
+
+The following invariants remain enforced:
+
+decoder message passing unchanged
+
+scheduling semantics unchanged
+
+schema unchanged
+
+deterministic execution preserved
+
+baseline decoding outputs remain byte-identical
+
+Version Lineage
+v4.1.0 — Improved Basin Switch Detection
+v4.2.0 — Deterministic Landscape Metrics
+v4.2.1 — Diagnostics Refactor and Test Hardening
+Free-Energy Landscape Diagnostics
+
+Landscape diagnostics enable systematic experimentation with BP convergence regimes, including:
+
+metastable oscillation
+
+shallow perturbation sensitivity
+
+true basin switching
+
+attractor geometry and basin stability
+
+perturbation-induced barrier crossings
+
 v4.1.0 — Improved Basin Switch Detection
 
 v4.1.0 strengthens deterministic perturbation diagnostics by distinguishing metastable oscillation, shallow sensitivity, and true basin switching.
