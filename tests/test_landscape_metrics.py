@@ -264,6 +264,52 @@ class TestEscapeEnergy:
         )
         np.testing.assert_array_equal(llr, llr_orig)
 
+    def test_custom_eps_values(self, small_code, small_instances):
+        """Custom eps_values are accepted and produce valid results."""
+        H = small_code.H_X
+        inst = small_instances[0]
+        result = bp_decode(
+            H, inst["llr"], max_iters=20, mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+        )
+        correction = result[0]
+
+        custom_eps = [0.01, 0.02]
+        ee = compute_escape_energy(
+            H, inst["llr"], correction,
+            max_iters=20, bp_mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+            eps_values=custom_eps,
+        )
+        assert "escape_energy" in ee
+        assert "escape_energy_plus" in ee
+        assert "escape_energy_minus" in ee
+        for key in ("escape_energy", "escape_energy_plus", "escape_energy_minus"):
+            val = ee[key]
+            assert val is None or isinstance(val, float)
+            if val is not None:
+                assert val in custom_eps
+
+    def test_empty_eps_values(self, small_code, small_instances):
+        """Empty eps_values list produces all-None escape energies."""
+        H = small_code.H_X
+        inst = small_instances[0]
+        result = bp_decode(
+            H, inst["llr"], max_iters=20, mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+        )
+        correction = result[0]
+
+        ee = compute_escape_energy(
+            H, inst["llr"], correction,
+            max_iters=20, bp_mode="min_sum",
+            schedule="flooding", syndrome_vec=inst["s"],
+            eps_values=[],
+        )
+        assert ee["escape_energy"] is None
+        assert ee["escape_energy_plus"] is None
+        assert ee["escape_energy_minus"] is None
+
 
 # ── Composite Landscape Metrics ──────────────────────────────────
 
@@ -460,7 +506,7 @@ class TestHarnessLandscapeMetrics:
         """With landscape enabled, classifications include v4.2.0 fields."""
         H = landscape_code.H_X
         rng = np.random.default_rng(99)
-        instances = _pre_generate_instances(H, 0.05, 10, rng)
+        instances = _pre_generate_instances(H, 0.50, 10, rng)
 
         result = run_mode(
             "baseline", H, instances,
@@ -488,17 +534,32 @@ class TestHarnessLandscapeMetrics:
         results = []
         for _ in range(2):
             rng = np.random.default_rng(99)
-            instances = _pre_generate_instances(H, 0.05, 10, rng)
+            instances = _pre_generate_instances(H, 0.50, 10, rng)
             r = run_mode(
                 "baseline", H, instances,
                 max_iters=50, enable_landscape=True,
             )
             results.append(r)
 
-        has_bc_0 = "basin_classifications" in results[0]
-        has_bc_1 = "basin_classifications" in results[1]
-        assert has_bc_0 == has_bc_1
-        if has_bc_0:
-            assert len(results[0]["basin_classifications"]) == len(results[1]["basin_classifications"])
-            for c1, c2 in zip(results[0]["basin_classifications"], results[1]["basin_classifications"]):
-                assert c1 == c2
+        # Verify multi-iteration traces exist so assertions are exercised.
+        for r in results:
+            multi_iter = [t for t in r.get("energy_traces", []) if len(t) >= 2]
+            assert multi_iter, "Expected at least one multi-iteration energy trace"
+
+        basin_classifications_0 = results[0].get("basin_classifications")
+        basin_classifications_1 = results[1].get("basin_classifications")
+        assert basin_classifications_0, "Expected 'basin_classifications' in result"
+        assert basin_classifications_1, "Expected 'basin_classifications' in result"
+
+        assert len(basin_classifications_0) == len(basin_classifications_1)
+        for c1, c2 in zip(basin_classifications_0, basin_classifications_1):
+            assert c1 == c2
+
+        # Verify all landscape metric fields exist in every classification.
+        for bc in basin_classifications_0:
+            assert "basin_stability_index" in bc
+            assert "attractor_distance_max" in bc
+            assert "attractor_distance_mean" in bc
+            assert "escape_energy" in bc
+            assert "escape_energy_plus" in bc
+            assert "escape_energy_minus" in bc
