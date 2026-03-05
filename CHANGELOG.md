@@ -6,6 +6,36 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.2.1] — 2026-03-05
+Diagnostics Refactor and Test Hardening
+
+Patch release improving the diagnostics implementation introduced in
+v4.2.0.  No decoder core changes.  Deterministic outputs preserved.
+
+Changed
+
+- Eliminates redundant BP decodes by sharing perturbation results
+  via new internal helper `_run_perturbation_decodes()`.
+  `classify_basin_switch()` and `compute_landscape_metrics()` now
+  reuse a single set of ±epsilon decode results.
+- Allows configurable epsilon sweep for escape-energy diagnostics:
+  `compute_escape_energy()` accepts optional `eps_values` parameter.
+  Default behavior remains identical to v4.2.0.
+- Strengthens landscape integration test to guarantee metric
+  validation: conditional guards replaced with explicit assertions
+  ensuring `basin_classifications` and all landscape metric fields
+  are always verified.
+
+Unchanged
+
+- Decoder core: no modifications to BP loops, scheduling, or iteration.
+- Schema: no SCHEMA_VERSION bump.
+- Canonical serialization, hashing, and identity: unchanged.
+- Baseline decoding outputs: byte-identical under identical inputs.
+- Classification logic and metric outputs: identical to v4.2.0.
+
+---
+
 [4.2.0] — 2026-03-05
 Deterministic Landscape Metrics
 

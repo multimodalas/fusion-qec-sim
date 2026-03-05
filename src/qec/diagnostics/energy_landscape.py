@@ -225,6 +225,71 @@ def _trace_converged(trace: List[float], tolerance: float = _TRACE_TOLERANCE) ->
     return abs(last_grad) < tolerance
 
 
+def _run_perturbation_decodes(
+    H: np.ndarray,
+    llr_base: np.ndarray,
+    base_correction: np.ndarray,
+    base_trace: List[float],
+    max_iters: int,
+    bp_mode: str,
+    schedule: str,
+    syndrome_vec: np.ndarray,
+) -> dict[str, Any]:
+    """Run ±epsilon perturbation decodes and return all results.
+
+    Performs two deterministic BP decodes (+epsilon and -epsilon) and
+    returns corrections and energy traces for baseline and both
+    perturbations.  This helper eliminates redundant decode calls when
+    multiple diagnostics need the same perturbation results.
+
+    All perturbations are deterministic.  Baseline inputs are never
+    modified in-place.  The decoder is treated as a pure function.
+
+    Returns
+    -------
+    dict with keys:
+        baseline_correction : np.ndarray
+        plus_correction : np.ndarray
+        minus_correction : np.ndarray
+        baseline_trace : List[float]
+        plus_trace : List[float]
+        minus_trace : List[float]
+    """
+    llr_base = np.asarray(llr_base, dtype=np.float64)
+    eps = _BASIN_EPSILON
+    s = _deterministic_sign(llr_base)
+
+    llr_plus = llr_base + eps * s
+    llr_minus = llr_base - eps * s
+
+    r_plus = bp_decode(
+        H, llr_plus,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+        energy_trace=True,
+    )
+
+    r_minus = bp_decode(
+        H, llr_minus,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+        energy_trace=True,
+    )
+
+    return {
+        "baseline_correction": base_correction,
+        "plus_correction": r_plus[0],
+        "minus_correction": r_minus[0],
+        "baseline_trace": list(base_trace),
+        "plus_trace": list(r_plus[-1]),
+        "minus_trace": list(r_minus[-1]),
+    }
+
+
 def classify_basin_switch(
     H: np.ndarray,
     llr_base: np.ndarray,
@@ -234,6 +299,8 @@ def classify_basin_switch(
     bp_mode: str,
     schedule: str,
     syndrome_vec: np.ndarray,
+    *,
+    _perturbation_results: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Improved basin switch classifier (v4.1.0).
 
@@ -252,45 +319,30 @@ def classify_basin_switch(
     All perturbations are deterministic.  Baseline inputs are never
     modified in-place.  The decoder is treated as a pure function.
 
+    Parameters
+    ----------
+    _perturbation_results : dict, optional
+        Pre-computed perturbation results from ``_run_perturbation_decodes``.
+        When provided, skips redundant BP decodes.
+
     Returns
     -------
     dict with keys:
         basin_switch_class : str
         basin_switch_evidence : dict
     """
-    llr_base = np.asarray(llr_base, dtype=np.float64)
-    corr_baseline = base_correction
-    trace_baseline = list(base_trace)
+    if _perturbation_results is None:
+        _perturbation_results = _run_perturbation_decodes(
+            H, llr_base, base_correction, base_trace,
+            max_iters, bp_mode, schedule, syndrome_vec,
+        )
 
-    # Deterministic perturbation vectors.
-    eps = _BASIN_EPSILON
-    s = _deterministic_sign(llr_base)
-
-    llr_plus = llr_base + eps * s
-    llr_minus = llr_base - eps * s
-
-    # Run perturbed decodes on explicit copies.
-    r_plus = bp_decode(
-        H, llr_plus,
-        max_iters=max_iters,
-        mode=bp_mode,
-        schedule=schedule,
-        syndrome_vec=syndrome_vec,
-        energy_trace=True,
-    )
-    corr_plus = r_plus[0]
-    trace_plus = list(r_plus[-1])
-
-    r_minus = bp_decode(
-        H, llr_minus,
-        max_iters=max_iters,
-        mode=bp_mode,
-        schedule=schedule,
-        syndrome_vec=syndrome_vec,
-        energy_trace=True,
-    )
-    corr_minus = r_minus[0]
-    trace_minus = list(r_minus[-1])
+    corr_baseline = _perturbation_results["baseline_correction"]
+    corr_plus = _perturbation_results["plus_correction"]
+    corr_minus = _perturbation_results["minus_correction"]
+    trace_baseline = _perturbation_results["baseline_trace"]
+    trace_plus = _perturbation_results["plus_trace"]
+    trace_minus = _perturbation_results["minus_trace"]
 
     # ── Collect evidence ───────────────────────────────────────────
     energy_baseline = trace_baseline[-1] if trace_baseline else 0.0
@@ -423,12 +475,20 @@ def compute_escape_energy(
     bp_mode: str,
     schedule: str,
     syndrome_vec: np.ndarray,
+    *,
+    eps_values: List[float] | None = None,
 ) -> dict[str, Any]:
     """Escape Energy (EE) — minimum perturbation for basin switch.
 
     Sweeps deterministic epsilon values to find the smallest perturbation
     that causes a correction different from baseline.  Probes +epsilon
     and -epsilon directions independently.
+
+    Parameters
+    ----------
+    eps_values : list of float, optional
+        Epsilon values to sweep.  Defaults to ``_ESCAPE_EPSILON_VALUES``
+        when *None*.
 
     Returns
     -------
@@ -437,13 +497,16 @@ def compute_escape_energy(
         escape_energy_plus : float | None
         escape_energy_minus : float | None
     """
+    if eps_values is None:
+        eps_values = _ESCAPE_EPSILON_VALUES
+
     llr_base = np.asarray(llr_base, dtype=np.float64)
     s = _deterministic_sign(llr_base)
 
     ee_plus: float | None = None
     ee_minus: float | None = None
 
-    for eps in _ESCAPE_EPSILON_VALUES:
+    for eps in eps_values:
         # +epsilon direction.
         if ee_plus is None:
             llr_plus = llr_base + eps * s
@@ -525,37 +588,21 @@ def compute_landscape_metrics(
         escape_energy_plus : float | None
         escape_energy_minus : float | None
     """
-    # Run classification (performs +ε/-ε decodes internally).
-    classification = classify_basin_switch(
+    # Run perturbation decodes once and share results.
+    perturb = _run_perturbation_decodes(
         H, llr_base, base_correction, base_trace,
         max_iters, bp_mode, schedule, syndrome_vec,
     )
 
-    # Re-run +ε/-ε to obtain corrections for BSI and AD.
-    llr_base = np.asarray(llr_base, dtype=np.float64)
-    eps = _BASIN_EPSILON
-    s = _deterministic_sign(llr_base)
-
-    llr_plus = llr_base + eps * s
-    llr_minus = llr_base - eps * s
-
-    r_plus = bp_decode(
-        H, llr_plus,
-        max_iters=max_iters,
-        mode=bp_mode,
-        schedule=schedule,
-        syndrome_vec=syndrome_vec,
+    # Classification reuses shared perturbation results.
+    classification = classify_basin_switch(
+        H, llr_base, base_correction, base_trace,
+        max_iters, bp_mode, schedule, syndrome_vec,
+        _perturbation_results=perturb,
     )
-    corr_plus = r_plus[0]
 
-    r_minus = bp_decode(
-        H, llr_minus,
-        max_iters=max_iters,
-        mode=bp_mode,
-        schedule=schedule,
-        syndrome_vec=syndrome_vec,
-    )
-    corr_minus = r_minus[0]
+    corr_plus = perturb["plus_correction"]
+    corr_minus = perturb["minus_correction"]
 
     # BSI.
     bsi = compute_basin_stability_index(base_correction, corr_plus, corr_minus)
