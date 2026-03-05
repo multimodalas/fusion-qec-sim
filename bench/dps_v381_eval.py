@@ -31,6 +31,7 @@ all modes.  No benchmark caching.  Deterministic loop ordering.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import math
 import sys
@@ -654,24 +655,48 @@ def print_basin_statistics(eval_result: dict[str, Any]) -> None:
                       f"  mean_delta={delta:.6f}")
 
 
+def _parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="v4.0.0 — BP Free-Energy Landscape Diagnostics",
+    )
+    parser.add_argument("--landscape", action="store_true",
+                        help="Enable landscape diagnostics and basin switching")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
+    parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
+    parser.add_argument("--bp-mode", type=str, default=DEFAULT_BP_MODE)
+    parser.add_argument("--distances", type=int, nargs="+",
+                        default=DEFAULT_DISTANCES)
+    parser.add_argument("--p-values", type=float, nargs="+",
+                        default=DEFAULT_P_VALUES)
+    return parser.parse_args()
+
+
 def main() -> None:
     """Run full evaluation and print all reports."""
-    enable_landscape = "--landscape" in sys.argv
+    args = _parse_args()
 
     print("v4.0.0 — BP Free-Energy Landscape Diagnostics")
-    print(f"Seed: {DEFAULT_SEED}")
-    print(f"Distances: {DEFAULT_DISTANCES}")
-    print(f"P values: {DEFAULT_P_VALUES}")
-    print(f"Trials: {DEFAULT_TRIALS}")
-    print(f"Max iters: {DEFAULT_MAX_ITERS}")
-    print(f"BP mode: {DEFAULT_BP_MODE}")
-    if enable_landscape:
+    print(f"Seed: {args.seed}")
+    print(f"Distances: {args.distances}")
+    print(f"P values: {args.p_values}")
+    print(f"Trials: {args.trials}")
+    print(f"Max iters: {args.max_iters}")
+    print(f"BP mode: {args.bp_mode}")
+    if args.landscape:
         print("Landscape diagnostics: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
-        enable_energy_trace=enable_landscape,
-        enable_landscape=enable_landscape,
+        seed=args.seed,
+        distances=args.distances,
+        p_values=args.p_values,
+        trials=args.trials,
+        max_iters=args.max_iters,
+        bp_mode=args.bp_mode,
+        enable_energy_trace=args.landscape,
+        enable_landscape=args.landscape,
     )
 
     # Print reports.
@@ -679,11 +704,15 @@ def main() -> None:
     print_dps_table(eval_result)
     print_energy_trace(eval_result)
 
-    if enable_landscape:
+    if args.landscape:
         print_basin_statistics(eval_result)
 
     # Determinism check.
-    det_result = run_determinism_check()
+    det_result = run_determinism_check(
+        seed=args.seed,
+        max_iters=args.max_iters,
+        bp_mode=args.bp_mode,
+    )
     print_determinism_result(det_result)
 
     # Exit code.
