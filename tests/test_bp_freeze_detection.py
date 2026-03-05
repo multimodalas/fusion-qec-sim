@@ -97,6 +97,22 @@ class TestFreezeDetected:
             assert result["freeze_iteration"] >= 0
             assert result["freeze_regime"] == "metastable_state"
 
+    def test_freeze_suppressed_by_high_threshold(self) -> None:
+        """Metastable regime but score below a very high threshold should not freeze."""
+        llr_trace, energy_trace = _metastable_trace()
+        high_threshold = 0.99
+        result = compute_bp_freeze_detection(
+            llr_trace,
+            energy_trace,
+            freeze_threshold=high_threshold,
+        )
+        # Score should remain in [0, 1] and below the high threshold.
+        assert isinstance(result["freeze_score"], float)
+        assert 0.0 <= result["freeze_score"] <= 1.0
+        assert result["freeze_score"] < high_threshold
+        # Thresholding alone must be able to suppress a freeze, even for metastable traces.
+        assert result["freeze_detected"] is False
+
     def test_freeze_score_bounded(self) -> None:
         llr_trace, energy_trace = _metastable_trace()
         result = compute_bp_freeze_detection(llr_trace, energy_trace)
