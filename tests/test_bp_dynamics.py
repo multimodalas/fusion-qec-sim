@@ -698,3 +698,42 @@ class TestParamsOverride:
         assert "cpi_strength_min" in DEFAULT_THRESHOLDS
         assert "msi_min" in DEFAULT_THRESHOLDS
         assert "tsl_min" in DEFAULT_THRESHOLDS
+
+
+# ── Test: Input Validation Guards ─────────────────────────────────────
+
+
+class TestInputValidation:
+    """Mismatched or invalid inputs must raise deterministic ValueErrors."""
+
+    def test_trace_length_mismatch_llr_vs_energy(self):
+        """llr_trace and energy_trace with different lengths → ValueError."""
+        llr = _make_stable_llr_trace(n_iters=10)
+        energy = _make_monotonic_energy(n_iters=15)
+        with pytest.raises(ValueError, match="Trace length mismatch"):
+            compute_bp_dynamics_metrics(llr, energy)
+
+    def test_trace_length_mismatch_llr_vs_correction_vectors(self):
+        """correction_vectors length != llr_trace length → ValueError."""
+        llr = _make_stable_llr_trace(n_iters=10)
+        energy = _make_monotonic_energy(n_iters=10)
+        cvs = _make_cycling_corrections(n_iters=7)
+        with pytest.raises(ValueError, match="Trace length mismatch"):
+            compute_bp_dynamics_metrics(llr, energy, correction_vectors=cvs)
+
+    def test_rank3_tensor_rejected(self):
+        """Rank-3 tensor in llr_trace → ValueError."""
+        rank3 = np.ones((2, 2, 2), dtype=np.float64)
+        llr = [rank3 for _ in range(5)]
+        energy = _make_monotonic_energy(n_iters=5)
+        with pytest.raises(ValueError, match="Unsupported llr vector rank"):
+            compute_bp_dynamics_metrics(llr, energy)
+
+    def test_llr_vector_length_mismatch(self):
+        """Inconsistent vector lengths within llr_trace → ValueError."""
+        llr = [np.ones(10, dtype=np.float64) for _ in range(5)]
+        # Make one vector a different length
+        llr[3] = np.ones(8, dtype=np.float64)
+        energy = _make_monotonic_energy(n_iters=5)
+        with pytest.raises(ValueError, match="LLR vector length mismatch"):
+            compute_bp_dynamics_metrics(llr, energy)

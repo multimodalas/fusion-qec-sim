@@ -53,12 +53,16 @@ def _normalize_llr_vector(x: Any) -> np.ndarray:
     """Convert a single LLR trace element to a 1-D float64 array.
 
     Handles shapes: (n,), (n,1), (1,n), (m,n) — uses row 0 if 2-D.
+    Rejects rank > 2 tensors with a deterministic ValueError.
     """
     arr = np.asarray(x, dtype=np.float64)
     arr = np.squeeze(arr)
     if arr.ndim == 0:
         arr = arr.reshape(1)
-    if arr.ndim > 1:
+    if arr.ndim > 2:
+        raise ValueError(f"Unsupported llr vector rank: ndim={arr.ndim}")
+    if arr.ndim == 2:
+        # Deterministic collapse: use row 0 for 2-D inputs
         arr = arr[0]
     return arr
 
@@ -316,6 +320,12 @@ def _compute_gos(
 
     tail = llr_trace[-w:]
     n_vars = len(tail[0])
+    for i, vec in enumerate(tail):
+        if len(vec) != n_vars:
+            raise ValueError(
+                f"GOS llr length mismatch in tail window: "
+                f"expected {n_vars}, got {len(vec)} at tail_index={i}"
+            )
     flips = np.zeros(n_vars, dtype=np.int32)
     for t in range(1, len(tail)):
         s_prev = _sign(tail[t - 1])
@@ -584,8 +594,33 @@ def compute_bp_dynamics_metrics(
     if params is not None:
         p.update(params)
 
+    # ── Trace length validation (fail-fast on mismatched inputs) ─────
+    T_llr = len(llr_trace) if llr_trace else 0
+    T_E = len(energy_trace) if energy_trace else 0
+    if T_llr > 0 and T_E > 0 and T_llr != T_E:
+        raise ValueError(
+            f"Trace length mismatch: llr_trace={T_llr}, energy_trace={T_E}"
+        )
+    if correction_vectors is not None and len(correction_vectors) >= 2 and T_llr > 0:
+        T_cv = len(correction_vectors)
+        if T_llr != T_cv:
+            raise ValueError(
+                f"Trace length mismatch: llr_trace={T_llr}, "
+                f"correction_vectors={T_cv}"
+            )
+
     # Normalize LLR trace
     normed_llr = _normalize_llr_trace(llr_trace) if llr_trace else []
+
+    # ── Per-vector length consistency check ──────────────────────────
+    if len(normed_llr) >= 2:
+        n_vars_expected = len(normed_llr[0])
+        for i, vec in enumerate(normed_llr[1:], start=1):
+            if len(vec) != n_vars_expected:
+                raise ValueError(
+                    f"LLR vector length mismatch: expected {n_vars_expected}, "
+                    f"got {len(vec)} at iteration {i}"
+                )
 
     # Compute all metrics
     msi = _compute_msi(normed_llr, energy_trace, p)
