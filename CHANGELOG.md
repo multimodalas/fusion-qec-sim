@@ -6,6 +6,57 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.5.0] — 2026-03-05
+Deterministic BP Regime Transition Analysis
+
+Adds deterministic per-iteration regime trace analysis that tracks how
+BP regimes evolve over time.  Diagnostics only.  Decoder behavior
+unchanged.
+
+Added
+
+- `compute_bp_regime_trace()`: constructs a per-iteration regime trace
+  using sliding-window classification, detects regime transitions,
+  measures dwell times, identifies instanton-like transition events,
+  and produces transition statistics.
+- Regime trace output: per-iteration regime label sequence.
+- Transition detection: records iteration index, source/target regime,
+  and instanton-like event flag for each regime change.
+- Dwell-time metrics: contiguous run lengths per regime.
+- Transition count matrix: deterministic `from->to` counts, sorted
+  lexicographically.
+- Summary statistics: `switch_rate`, `max_dwell`, `freeze_score`,
+  `num_events`.
+- Instanton-like event detection: flags transitions where energy change
+  exceeds `event_factor * median(|ΔE|)`.
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-transitions` flag.
+  When enabled, computes regime transition analysis per trial and stores
+  results under `bp_regime_trace`, `bp_transition_summary`, and
+  `bp_transition_counts`.
+- Comprehensive tests (`tests/test_bp_regime_trace.py`): determinism,
+  stable regime, oscillatory regime, metastable plateau, chaotic regime,
+  dwell-time consistency, edge cases, bench integration smoke tests.
+
+Improved
+
+- Added strict validation ensuring `llr_trace` and `energy_trace` lengths
+  match — raises `ValueError` on mismatch instead of silent misalignment.
+- Prevented regime-trace parameter (`event_factor`) leakage into
+  `bp_dynamics` metrics API.
+- Strengthened event-detection tests to assert actual event occurrence.
+- Added mismatched-trace edge-case test.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`) untouched.
+- Construction (`src/qec/construction/`) untouched.
+- Schema version unchanged.
+- Baseline decoding outputs byte-identical when diagnostics disabled.
+- All prior diagnostics (v4.1–v4.4) unchanged and fully backward
+  compatible.
+
+---
+
 [4.4.0] — 2026-03-05
 Deterministic BP Dynamics Regime Analysis
 

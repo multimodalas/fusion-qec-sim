@@ -66,6 +66,10 @@ from src.qec.diagnostics.bp_dynamics import (
     compute_bp_dynamics_metrics,
 )
 
+from src.qec.diagnostics.bp_regime_trace import (
+    compute_bp_regime_trace,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -257,6 +261,7 @@ def run_mode(
     enable_landscape: bool = False,
     enable_iteration_diagnostics: bool = False,
     enable_bp_dynamics: bool = False,
+    enable_bp_transitions: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -266,7 +271,10 @@ def run_mode(
     returns ``landscape_metrics``, ``basin_switch``, and
     ``energy_delta``.  When *enable_iteration_diagnostics* is True,
     also returns ``iteration_diagnostics``.  When *enable_bp_dynamics*
-    is True, also returns ``bp_dynamics``.
+    is True, also returns ``bp_dynamics``.  When
+    *enable_bp_transitions* is True, also returns
+    ``bp_regime_trace``, ``bp_transition_summary``, and
+    ``bp_transition_counts``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -278,6 +286,9 @@ def run_mode(
     # Iteration diagnostics implies energy trace.
     if enable_iteration_diagnostics:
         enable_energy_trace = True
+    # BP transitions implies BP dynamics.
+    if enable_bp_transitions:
+        enable_bp_dynamics = True
     # BP dynamics implies energy trace and LLR history.
     if enable_bp_dynamics:
         enable_energy_trace = True
@@ -293,6 +304,7 @@ def run_mode(
     all_basin_classifications: list[dict[str, Any]] = []
     all_iteration_diagnostics: list[dict[str, Any]] = []
     all_bp_dynamics: list[dict[str, Any]] = []
+    all_bp_regime_traces: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -391,6 +403,15 @@ def run_mode(
                 )
                 all_bp_dynamics.append(bp_dyn)
 
+                # v4.5.0: BP regime transition analysis.
+                if enable_bp_transitions:
+                    rt = compute_bp_regime_trace(
+                        llr_trace=llr_trace_list,
+                        energy_trace=list(trace),
+                        correction_vectors=None,
+                    )
+                    all_bp_regime_traces.append(rt)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -448,6 +469,35 @@ def run_mode(
             r = bd["regime"]
             regime_counts[r] = regime_counts.get(r, 0) + 1
         out["bp_regime_counts"] = regime_counts
+    if all_bp_regime_traces:
+        out["bp_regime_trace"] = all_bp_regime_traces
+        # Aggregate transition summary and counts across all trials.
+        agg_counts: dict[str, int] = {}
+        total_events = 0
+        total_transitions = 0
+        total_iters = 0
+        max_dwell_all = 0
+        for rt in all_bp_regime_traces:
+            for k, v in rt["transition_counts"].items():
+                agg_counts[k] = agg_counts.get(k, 0) + v
+            total_events += rt["summary"]["num_events"]
+            total_transitions += len(rt["transitions"])
+            total_iters += len(rt["regime_trace"])
+            if rt["summary"]["max_dwell"] > max_dwell_all:
+                max_dwell_all = rt["summary"]["max_dwell"]
+        out["bp_transition_counts"] = {
+            k: agg_counts[k] for k in sorted(agg_counts.keys())
+        }
+        out["bp_transition_summary"] = {
+            "total_transitions": total_transitions,
+            "total_events": total_events,
+            "total_iters": total_iters,
+            "max_dwell": max_dwell_all,
+            "aggregate_switch_rate": (
+                float(total_transitions) / float(total_iters)
+                if total_iters > 0 else 0.0
+            ),
+        }
     return out
 
 
@@ -487,6 +537,7 @@ def run_evaluation(
     enable_landscape: bool = False,
     enable_iteration_diagnostics: bool = False,
     enable_bp_dynamics: bool = False,
+    enable_bp_transitions: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -540,6 +591,7 @@ def run_evaluation(
                     enable_landscape=enable_landscape,
                     enable_iteration_diagnostics=enable_iteration_diagnostics,
                     enable_bp_dynamics=enable_bp_dynamics,
+                    enable_bp_transitions=enable_bp_transitions,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -758,6 +810,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable iteration-trace diagnostics (PEI, BOI, OD, CIS, CVF)")
     parser.add_argument("--bp-dynamics", action="store_true",
                         help="Enable BP dynamics regime analysis (MSI, CPI, TSL, LEC, CVNE, GOS, EDS, BTI)")
+    parser.add_argument("--bp-transitions", action="store_true",
+                        help="Enable BP regime transition analysis (regime trace, dwell times, events)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -786,6 +840,8 @@ def main() -> None:
         print("Iteration-trace diagnostics: ENABLED")
     if args.bp_dynamics:
         print("BP dynamics regime analysis: ENABLED")
+    if args.bp_transitions:
+        print("BP regime transition analysis: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -795,10 +851,11 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics,
-        enable_bp_dynamics=args.bp_dynamics,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions,
+        enable_bp_dynamics=args.bp_dynamics or args.bp_transitions,
+        enable_bp_transitions=args.bp_transitions,
     )
 
     # Print reports.

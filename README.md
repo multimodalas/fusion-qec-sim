@@ -1,29 +1,134 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v4.3.0](https://img.shields.io/badge/release-v4.3.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.3.0)
+[![Release v4.4.0](https://img.shields.io/badge/release-v4.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.4.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
-QEC — Deterministic QLDPC CSS Framework
+QEC is a **deterministic QLDPC CSS quantum error correction framework** for studying belief propagation decoding dynamics under controlled experimental conditions.
 
-Deterministic QLDPC CSS quantum error correction toolkit with invariant-safe algebraic construction, multi-mode belief propagation decoding, deterministic postprocessing, pluggable channel models, and reproducible FER/DPS benchmarking.
+The toolkit provides invariant-safe algebraic code construction, multi-mode belief propagation decoding, deterministic postprocessing, pluggable channel models, and reproducible FER / distance performance scaling (DPS) benchmarking.
 
-The framework is designed for controlled decoder experimentation under strict determinism guarantees.
+The framework is designed for **controlled decoder experimentation under strict determinism guarantees**.
 
-Core Goals
+---
+
+## Core Goals
 
 The system is engineered for:
 
-Reproducibility — byte-identical results across runs
+- **Reproducibility** — byte-identical results across runs  
+- **Interpretability** — explicit algorithmic behavior  
+- **Structural experimentation** — controlled topology and inference geometry changes  
+- **Deterministic benchmarking** — stable FER and distance-scaling measurements  
 
-Interpretability — explicit algorithmic behavior
+> If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
 
-Structural experimentation — controlled topology / inference geometry changes
+---
 
-Deterministic benchmarking — stable FER and distance-scaling measurements
+## Documentation
 
-If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
+Key project documentation:
+
+- `PROJECT_STATE.md` — current system architecture snapshot  
+- `ROADMAP.md` — research direction and upcoming work  
+- `CHANGELOG.md` — full release history  
+
+---
+
+## Current Release
 
 Current Release
+
+v4.4.0 — Deterministic BP Dynamics Regime Analysis
+
+The v4.4.0 release introduces deterministic diagnostics for analyzing the global dynamical behavior of belief propagation (BP) on QLDPC Tanner graphs.
+
+This release completes the first full BP observability stack in the QEC toolkit, enabling systematic analysis of decoder dynamics such as oscillatory convergence, metastability, trapping-set behavior, and chaotic inference regimes.
+
+All diagnostics remain trace-only and opt-in, preserving the deterministic decoding guarantees of the framework.
+
+Baseline decoding outputs remain byte-identical when diagnostics are disabled.
+
+Release:
+https://github.com/QSOLKCB/QEC/releases/tag/v4.4.0
+
+New in v4.4.0
+BP Dynamics Metric Suite
+
+The new diagnostics module computes deterministic metrics derived from BP iteration traces:
+
+Metric	Description
+MSI	Metastability Index — detects plateau behavior with residual oscillations
+CPI	Cycle Periodicity Index — deterministic detection of repeating BP states
+TSL	Trapping Set Likelihood — persistent sign disagreement indicator
+LEC	Local Energy Curvature — second-difference structure of the energy trace
+CVNE	Correction-Vector Norm Entropy (optional)
+GOS	Global Oscillation Score — aggregate oscillation signal
+EDS	Energy Descent Smoothness — monotonicity of BP descent
+BTI	Basin Transition Indicator — barrier crossings and state transitions
+
+These metrics provide a deterministic view of the energy landscape and dynamical structure of BP decoding.
+
+Deterministic Regime Classification
+
+BP trajectories are classified into six deterministic regimes:
+
+stable_convergence
+
+oscillatory_convergence
+
+metastable_state
+
+trapping_set_regime
+
+correction_cycling
+
+chaotic_behavior
+
+Each classification includes explicit metric evidence and threshold comparisons for reproducibility and interpretability.
+
+Bench Harness Integration
+
+The DPS benchmark harness now supports:
+
+--bp-dynamics
+
+When enabled:
+
+BP traces are analyzed using the new metric suite
+
+Results are appended to benchmark artifacts under
+
+bp_dynamics
+
+This feature is fully optional and does not alter baseline decoding behavior.
+
+Determinism Guarantees
+
+The v4.4 diagnostics layer preserves the core determinism guarantees of the QEC framework:
+
+No randomness introduced
+
+No Python hash() usage
+
+Deterministic CRC32 state signatures
+
+JSON-serializable outputs
+
+Byte-identical artifacts across repeated runs
+
+Determinism validation confirmed identical SHA-256 outputs across multiple benchmark executions.
+
+Diagnostics Stack
+
+The QEC toolkit now includes a layered diagnostics framework for studying BP dynamics:
+
+Version	Capability
+v4.1	Basin-switch detection
+v4.2	Energy landscape diagnostics
+v4.3	Iteration trajectory diagnostics
+v4.4	BP regime classification
+
+These tools enable systematic investigation of Distance Performance Scaling (DPS) inversion under syndrome-only inference.
 
 v4.3.0 — Deterministic Iteration-Trace Diagnostics
 
