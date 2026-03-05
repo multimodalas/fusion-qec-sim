@@ -318,12 +318,12 @@ def run_mode(
                 all_landscape_metrics.append(classify_energy_landscape(trace))
 
                 basin = detect_basin_switch(
-                    H_used, llr_used, structural,
+                    H_used, llr_used, correction, trace,
                     max_iters, bp_mode, schedule, s_used,
                 )
-                if basin["basin_switch"]:
+                if basin["switch"]:
                     basin_switches += 1
-                energy_deltas.append(basin["energy_delta"])
+                energy_deltas.append(abs(basin["energy_base"] - basin["energy_perturbed"]))
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.

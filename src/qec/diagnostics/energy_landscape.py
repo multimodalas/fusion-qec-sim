@@ -12,7 +12,6 @@ from typing import Any, List
 import numpy as np
 
 from src.qec_qldpc_codes import bp_decode, syndrome
-from src.qec.channel.geometry_post import apply_geometry_postprocessing
 
 
 # ── Energy Landscape Metrics ────────────────────────────────────────
@@ -128,7 +127,8 @@ _BASIN_EPSILON = 1e-3
 def detect_basin_switch(
     H: np.ndarray,
     llr_base: np.ndarray,
-    structural,
+    base_correction: np.ndarray,
+    base_trace: list,
     max_iters: int,
     bp_mode: str,
     schedule: str,
@@ -136,37 +136,41 @@ def detect_basin_switch(
 ) -> dict[str, Any]:
     """Detect geometry-induced basin switching.
 
-    Runs baseline and perturbed decodes, comparing corrections and
-    final energies to determine if the perturbation induces a switch
-    to a different free-energy basin.
+    Compares the existing baseline decode result against a small
+    deterministic perturbation to detect basin switches.
     """
     llr_base = np.asarray(llr_base, dtype=np.float64)
+    corr1 = base_correction
+    trace1 = base_trace
 
-    # Baseline decode.
-    r1 = bp_decode(
-        H, llr_base, max_iters=max_iters, mode=bp_mode,
-        schedule=schedule, syndrome_vec=syndrome_vec, energy_trace=True,
-    )
-    corr1, _iters1 = r1[0], r1[1]
-    trace1 = r1[-1]
+    # Small deterministic perturbation
+    eps = 1e-3
+    sign = np.sign(llr_base)
+    sign[sign == 0] = 1.0
+    llr_perturbed = llr_base + eps * sign
 
-    # Perturbed decode.
-    llr_perturbed = llr_base + _BASIN_EPSILON * np.sign(llr_base)
-    llr_perturbed = apply_geometry_postprocessing(llr_perturbed, structural)
-
+    # Run perturbed decode
     r2 = bp_decode(
-        H, llr_perturbed, max_iters=max_iters, mode=bp_mode,
-        schedule=schedule, syndrome_vec=syndrome_vec, energy_trace=True,
+        H,
+        llr_perturbed,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+        energy_trace=True,
     )
     corr2, _iters2 = r2[0], r2[1]
     trace2 = r2[-1]
 
-    e1 = trace1[-1] if trace1 else 0.0
-    e2 = trace2[-1] if trace2 else 0.0
-    delta = abs(e1 - e2)
-    switched = not np.array_equal(corr1, corr2) and delta > 0.0
+    energy1 = trace1[-1]
+    energy2 = trace2[-1]
+    switch = (
+        not np.array_equal(corr1, corr2)
+        or abs(energy1 - energy2) > 1e-9
+    )
 
     return {
-        "basin_switch": switched,
-        "energy_delta": delta,
+        "switch": bool(switch),
+        "energy_base": float(energy1),
+        "energy_perturbed": float(energy2),
     }
