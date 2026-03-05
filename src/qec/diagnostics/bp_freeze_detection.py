@@ -58,10 +58,18 @@ def compute_bp_freeze_detection(
         ``freeze_regime`` (str or None).
     All values are JSON-serializable.
     """
-    T = len(energy_trace)
+    # Validate trace lengths explicitly to avoid silent misalignment.
+    n_energy = len(energy_trace)
+    n_llr = len(llr_trace)
+    if n_energy != n_llr:
+        raise ValueError(
+            "llr_trace and energy_trace must have equal length "
+            f"(got {n_llr} and {n_energy})"
+        )
+    T = n_energy
 
     # Edge case: insufficient data.
-    if T < 2 or len(llr_trace) < 2:
+    if T < 2:
         return {
             "freeze_detected": False,
             "freeze_iteration": None,

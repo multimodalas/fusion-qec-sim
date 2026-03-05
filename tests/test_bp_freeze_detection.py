@@ -130,8 +130,8 @@ class TestEmptyTrace:
         assert result["freeze_regime"] is None
 
     def test_empty_llr_nonempty_energy(self) -> None:
-        result = compute_bp_freeze_detection([], [1.0, 2.0, 3.0])
-        assert result["freeze_detected"] is False
+        with pytest.raises(ValueError):
+            compute_bp_freeze_detection([], [1.0, 2.0, 3.0])
 
 
 class TestSingleIteration:
@@ -170,6 +170,22 @@ class TestDeterminism:
         deserialized = json.loads(serialized)
         assert deserialized["freeze_detected"] == result["freeze_detected"]
         assert deserialized["freeze_score"] == result["freeze_score"]
+
+
+class TestValidation:
+    """Input validation must reject mismatched trace lengths."""
+
+    def test_mismatched_trace_lengths_raises(self) -> None:
+        llr = [np.array([1.0, -1.0])] * 10
+        energy = [0.1] * 9
+        with pytest.raises(ValueError):
+            compute_bp_freeze_detection(llr, energy)
+
+    def test_mismatched_reverse_raises(self) -> None:
+        llr = [np.array([1.0, -1.0])] * 5
+        energy = [0.1] * 8
+        with pytest.raises(ValueError):
+            compute_bp_freeze_detection(llr, energy)
 
 
 class TestCustomParameters:
