@@ -6,6 +6,37 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.7.0] — 2026-03-05
+Deterministic BP Freeze Detection
+
+Adds deterministic early metastability / freeze detection for BP decoding
+dynamics.  Diagnostics only.  Decoder behavior unchanged.
+
+Added
+
+- `compute_bp_freeze_detection()`: detects early metastability in BP
+  decoding dynamics by computing a composite freeze score from MSI, EDS,
+  GOS, and CPI metrics over a sliding window.
+- Freeze is declared when `freeze_score > threshold` AND the regime is
+  `metastable_state`.  Returns `freeze_detected`, `freeze_iteration`,
+  `freeze_score`, and `freeze_regime`.
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-freeze-detection` flag.
+  When enabled, computes freeze detection per trial and stores results
+  under `bp_freeze_detection` with aggregate `bp_freeze_summary`.
+- Comprehensive tests (`tests/test_bp_freeze_detection.py`): determinism,
+  stable/metastable traces, edge cases, JSON serializability.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`): untouched.
+- Construction layer (`src/qec/construction/`): untouched.
+- Existing diagnostics modules: untouched.
+- Schema version: unchanged.
+- All existing tests pass without modification.
+- Baseline decoding output: byte-identical when diagnostics disabled.
+
+---
+
 [4.6.0] — 2026-03-05
 Deterministic BP Phase Diagram Analysis
 
