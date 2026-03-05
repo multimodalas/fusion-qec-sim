@@ -156,7 +156,7 @@ def detect_basin_switch(
     trace1 = base_trace
 
     # Small deterministic perturbation
-    eps = 1e-3
+    eps = _BASIN_EPSILON
     sign = _deterministic_sign(llr_base)
     llr_perturbed = llr_base + eps * sign
 
@@ -189,7 +189,8 @@ def detect_basin_switch(
 
 # ── Improved Basin Switch Classification (v4.1.0) ──────────────────
 
-_ENERGY_DELTA_THRESHOLD = 1e-6
+_TRACE_TOLERANCE = 1e-6
+_ENERGY_DELTA_THRESHOLD = _TRACE_TOLERANCE
 _GRADIENT_FLIP_THRESHOLD = 3
 
 
@@ -209,7 +210,7 @@ def _count_gradient_sign_flips(trace: List[float]) -> int:
     return flips
 
 
-def _trace_converged(trace: List[float], tolerance: float = 1e-6) -> bool:
+def _trace_converged(trace: List[float], tolerance: float = _TRACE_TOLERANCE) -> bool:
     """Check whether the energy trace has stabilised (diagnostic heuristic).
 
     This checks trace stability only — whether the final energy step is

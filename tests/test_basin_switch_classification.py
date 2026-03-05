@@ -282,13 +282,13 @@ class TestBaselineSafety:
         np.testing.assert_array_equal(llr, llr_original)
 
 
-# ── Synthetic Classification Tests ─────────────────────────────────
+# ── Classifier Helper Tests ────────────────────────────────────────
 
-class TestSyntheticClassification:
-    """Unit tests using synthetic data to verify classification logic.
+class TestClassifierHelpers:
+    """Unit tests for classifier helper functions.
 
-    These tests construct controlled scenarios by mocking the decode
-    results to test the classifier's decision logic directly.
+    These tests validate _count_gradient_sign_flips and _trace_converged
+    using synthetic traces with known properties.
     """
 
     def test_none_classification(self):
@@ -354,6 +354,13 @@ class TestHarnessIntegration:
                     "true_basin_switch",
                     "none",
                 )
+
+            # Verify aggregation counts match classification list.
+            recomputed = {}
+            for bc in result["basin_classifications"]:
+                cls = bc["basin_switch_class"]
+                recomputed[cls] = recomputed.get(cls, 0) + 1
+            assert recomputed == result["basin_class_counts"]
 
     def test_landscape_mode_deterministic(self, landscape_code):
         """Two identical landscape runs produce identical classifications."""

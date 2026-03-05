@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v4.0.0](https://img.shields.io/badge/release-v4.0.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.0.0)
+[![Release v4.1.0](https://img.shields.io/badge/release-v4.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.1.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 QEC — Deterministic QLDPC CSS Framework
@@ -24,9 +24,9 @@ Deterministic benchmarking — stable FER and distance-scaling measurements
 If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
 
 Current Release
-v4.0.0 — BP Free-Energy Landscape Diagnostics
+v4.1.0 — Improved Basin Switch Detection
 
-v4.0.0 introduces a decoder dynamics diagnostics layer for analyzing belief propagation (BP) energy landscapes during QLDPC decoding.
+v4.1.0 strengthens deterministic perturbation diagnostics by distinguishing metastable oscillation, shallow sensitivity, and true basin switching.
 
 This extends the structural experimentation framework introduced in v3.8–v3.9 and enables systematic study of BP convergence regimes, including plateau behavior, barrier crossings, and geometry-induced basin switching.
 
