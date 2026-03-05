@@ -54,6 +54,7 @@ from src.qec.channel.geometry_post import apply_geometry_postprocessing
 from src.qec.diagnostics.energy_landscape import (
     classify_energy_landscape,
     classify_basin_switch,
+    compute_landscape_metrics,
     detect_basin_switch,
 )
 
@@ -327,8 +328,8 @@ def run_mode(
                     basin_switches += 1
                 energy_deltas.append(abs(basin["energy_base"] - basin["energy_perturbed"]))
 
-                # v4.1.0: improved basin switch classification.
-                classification = classify_basin_switch(
+                # v4.2.0: landscape metrics (BSI, AD, EE) + classification.
+                classification = compute_landscape_metrics(
                     H_used, llr_used, correction, trace,
                     max_iters, bp_mode, schedule, s_used,
                 )

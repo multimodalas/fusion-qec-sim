@@ -356,3 +356,226 @@ def classify_basin_switch(
         "basin_switch_class": "none",
         "basin_switch_evidence": evidence,
     }
+
+
+# ── Landscape Metrics (v4.2.0) ───────────────────────────────────
+
+_ESCAPE_EPSILON_VALUES = [1e-3, 2e-3, 5e-3, 1e-2]
+
+
+def _hamming_distance(a: np.ndarray, b: np.ndarray) -> int:
+    """Hamming distance between two binary arrays.
+
+    Deterministic.  Does not modify inputs.
+    """
+    return int(np.sum(np.asarray(a) != np.asarray(b)))
+
+
+def compute_basin_stability_index(
+    corr_baseline: np.ndarray,
+    corr_plus: np.ndarray,
+    corr_minus: np.ndarray,
+) -> float:
+    """Basin Stability Index (BSI).
+
+    BSI = (# perturbations yielding same correction as baseline) / (# perturbations)
+
+    Two perturbations are used: +epsilon and -epsilon.
+    Returns a float in [0.0, 1.0].  Deterministic.
+    """
+    stable_count = 0
+    if np.array_equal(corr_baseline, corr_plus):
+        stable_count += 1
+    if np.array_equal(corr_baseline, corr_minus):
+        stable_count += 1
+    return float(stable_count) / 2.0
+
+
+def compute_attractor_distance(
+    corr_baseline: np.ndarray,
+    corr_plus: np.ndarray,
+    corr_minus: np.ndarray,
+) -> dict[str, Any]:
+    """Attractor Distance (AD) metrics.
+
+    Returns Hamming distances between baseline and perturbed corrections.
+    Deterministic.  Does not modify inputs.
+
+    Returns
+    -------
+    dict with keys:
+        attractor_distance_max : int
+        attractor_distance_mean : float
+    """
+    ad_plus = _hamming_distance(corr_baseline, corr_plus)
+    ad_minus = _hamming_distance(corr_baseline, corr_minus)
+    return {
+        "attractor_distance_max": max(ad_plus, ad_minus),
+        "attractor_distance_mean": (ad_plus + ad_minus) / 2.0,
+    }
+
+
+def compute_escape_energy(
+    H: np.ndarray,
+    llr_base: np.ndarray,
+    corr_baseline: np.ndarray,
+    max_iters: int,
+    bp_mode: str,
+    schedule: str,
+    syndrome_vec: np.ndarray,
+) -> dict[str, Any]:
+    """Escape Energy (EE) — minimum perturbation for basin switch.
+
+    Sweeps deterministic epsilon values to find the smallest perturbation
+    that causes a correction different from baseline.  Probes +epsilon
+    and -epsilon directions independently.
+
+    Returns
+    -------
+    dict with keys:
+        escape_energy : float | None
+        escape_energy_plus : float | None
+        escape_energy_minus : float | None
+    """
+    llr_base = np.asarray(llr_base, dtype=np.float64)
+    s = _deterministic_sign(llr_base)
+
+    ee_plus: float | None = None
+    ee_minus: float | None = None
+
+    for eps in _ESCAPE_EPSILON_VALUES:
+        # +epsilon direction.
+        if ee_plus is None:
+            llr_plus = llr_base + eps * s
+            r_plus = bp_decode(
+                H, llr_plus,
+                max_iters=max_iters,
+                mode=bp_mode,
+                schedule=schedule,
+                syndrome_vec=syndrome_vec,
+            )
+            if not np.array_equal(corr_baseline, r_plus[0]):
+                ee_plus = float(eps)
+
+        # -epsilon direction.
+        if ee_minus is None:
+            llr_minus = llr_base - eps * s
+            r_minus = bp_decode(
+                H, llr_minus,
+                max_iters=max_iters,
+                mode=bp_mode,
+                schedule=schedule,
+                syndrome_vec=syndrome_vec,
+            )
+            if not np.array_equal(corr_baseline, r_minus[0]):
+                ee_minus = float(eps)
+
+        # Early exit if both found.
+        if ee_plus is not None and ee_minus is not None:
+            break
+
+    # Minimum barrier.
+    ee: float | None = None
+    if ee_plus is not None and ee_minus is not None:
+        ee = min(ee_plus, ee_minus)
+    elif ee_plus is not None:
+        ee = ee_plus
+    elif ee_minus is not None:
+        ee = ee_minus
+
+    return {
+        "escape_energy": ee,
+        "escape_energy_plus": ee_plus,
+        "escape_energy_minus": ee_minus,
+    }
+
+
+def compute_landscape_metrics(
+    H: np.ndarray,
+    llr_base: np.ndarray,
+    base_correction: np.ndarray,
+    base_trace: List[float],
+    max_iters: int,
+    bp_mode: str,
+    schedule: str,
+    syndrome_vec: np.ndarray,
+) -> dict[str, Any]:
+    """Compute all v4.2.0 landscape metrics: BSI, AD, and EE.
+
+    Performs deterministic perturbation probes (+epsilon, -epsilon) and
+    computes:
+      - Basin Stability Index (BSI)
+      - Attractor Distance (AD) — max and mean
+      - Escape Energy (EE) — directional and minimum
+
+    Also includes the basin switch classification from v4.1.0.
+
+    All perturbations are deterministic.  Baseline inputs are never
+    modified in-place.  The decoder is treated as a pure function.
+
+    Returns
+    -------
+    dict with keys:
+        basin_switch_class : str
+        basin_switch_evidence : dict
+        basin_stability_index : float
+        attractor_distance_max : int
+        attractor_distance_mean : float
+        escape_energy : float | None
+        escape_energy_plus : float | None
+        escape_energy_minus : float | None
+    """
+    # Run classification (performs +ε/-ε decodes internally).
+    classification = classify_basin_switch(
+        H, llr_base, base_correction, base_trace,
+        max_iters, bp_mode, schedule, syndrome_vec,
+    )
+
+    # Re-run +ε/-ε to obtain corrections for BSI and AD.
+    llr_base = np.asarray(llr_base, dtype=np.float64)
+    eps = _BASIN_EPSILON
+    s = _deterministic_sign(llr_base)
+
+    llr_plus = llr_base + eps * s
+    llr_minus = llr_base - eps * s
+
+    r_plus = bp_decode(
+        H, llr_plus,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+    )
+    corr_plus = r_plus[0]
+
+    r_minus = bp_decode(
+        H, llr_minus,
+        max_iters=max_iters,
+        mode=bp_mode,
+        schedule=schedule,
+        syndrome_vec=syndrome_vec,
+    )
+    corr_minus = r_minus[0]
+
+    # BSI.
+    bsi = compute_basin_stability_index(base_correction, corr_plus, corr_minus)
+
+    # AD.
+    ad = compute_attractor_distance(base_correction, corr_plus, corr_minus)
+
+    # EE (escape energy sweep).
+    ee = compute_escape_energy(
+        H, llr_base, base_correction,
+        max_iters, bp_mode, schedule, syndrome_vec,
+    )
+
+    return {
+        "basin_switch_class": classification["basin_switch_class"],
+        "basin_switch_evidence": classification["basin_switch_evidence"],
+        "basin_stability_index": bsi,
+        "attractor_distance_max": ad["attractor_distance_max"],
+        "attractor_distance_mean": ad["attractor_distance_mean"],
+        "escape_energy": ee["escape_energy"],
+        "escape_energy_plus": ee["escape_energy_plus"],
+        "escape_energy_minus": ee["escape_energy_minus"],
+    }
