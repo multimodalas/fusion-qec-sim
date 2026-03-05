@@ -27,6 +27,23 @@ quickly understand:
 
 This file should be updated whenever a major release changes the research state of the system.
 
+Authoritative Project Documents
+
+The following files define the canonical documentation for the QEC system:
+
+• README.md — project overview and entry point  
+• PROJECT_STATE.md — current architecture and research state  
+• ROADMAP.md — long-term research direction and feature planning  
+• CHANGELOG.md — release history and version evolution  
+
+Interpretation guidance:
+
+PROJECT_STATE.md reflects the **current architectural state** of the system.  
+ROADMAP.md describes the **future research direction**.  
+CHANGELOG.md records **what has already been implemented**.
+
+Contributors and automated agents should consult these documents before proposing architectural changes.
+
 Current Stable Version
 
 v4.3.0
