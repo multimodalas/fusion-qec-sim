@@ -28,6 +28,16 @@ Added
 - Comprehensive tests (`tests/test_bp_phase_diagram.py`): determinism,
   correct aggregation, empty input handling, bench integration smoke tests.
 
+Improved
+
+- Clarified CLI help text for `--bp-phase-diagram` (implicitly enables
+  `--bp-transitions`; users need not specify both).
+- Added input validation for malformed phase-diagram inputs
+  (`TypeError` / `ValueError` on missing keys).
+- Improved type hints: `TypedDict` structures (`RegimeTraceSummary`,
+  `RegimeTraceResult`, `RunResult`, `BpPhaseDiagram`).
+- Added edge-case test for empty regime traces.
+
 Unchanged
 
 - Decoder core (`src/qec/decoder/`): untouched.

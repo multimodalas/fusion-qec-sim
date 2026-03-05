@@ -12,28 +12,102 @@ No use of Python ``hash()`` (salted per process; forbidden).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from collections.abc import Sequence
+from typing import Any, Dict, List, TypedDict
+
+
+# ── Typed structures ─────────────────────────────────────────────────
+
+
+class RegimeTraceSummary(TypedDict):
+    """Per-trial regime trace summary fields."""
+
+    freeze_score: float
+    switch_rate: float
+    max_dwell: int
+    num_events: int
+
+
+class RegimeTraceResult(TypedDict):
+    """Per-trial regime trace result."""
+
+    regime_trace: list[str]
+    summary: RegimeTraceSummary
+
+
+class RunResult(TypedDict):
+    """Input entry for phase diagram aggregation."""
+
+    distance: int
+    noise: float
+    regime_trace_results: list[RegimeTraceResult]
+
+
+BpPhaseDiagram = dict[str, Any]
 
 
 # ── Defaults ─────────────────────────────────────────────────────────
 
 DEFAULT_METASTABLE_THRESHOLD = 0.5
 
+_REQUIRED_SUMMARY_KEYS = ("freeze_score", "switch_rate", "max_dwell", "num_events")
+
+
+# ── Validation ───────────────────────────────────────────────────────
+
+
+def _validate_run_results(run_results: Sequence[RunResult]) -> None:
+    """Validate run_results structure.  Raises on malformed input."""
+    if not isinstance(run_results, Sequence):
+        raise TypeError("run_results must be a sequence")
+    for i, entry in enumerate(run_results):
+        if "distance" not in entry or "noise" not in entry:
+            raise ValueError(
+                f"run_results[{i}] missing required key 'distance' or 'noise'"
+            )
+        if "regime_trace_results" not in entry:
+            raise ValueError(
+                f"run_results[{i}] missing required key 'regime_trace_results'"
+            )
+        rtr = entry["regime_trace_results"]
+        if not isinstance(rtr, Sequence):
+            raise TypeError(
+                f"run_results[{i}]['regime_trace_results'] must be a sequence"
+            )
+        for j, rt in enumerate(rtr):
+            if "regime_trace" not in rt:
+                raise ValueError(
+                    f"run_results[{i}]['regime_trace_results'][{j}] "
+                    "missing 'regime_trace'"
+                )
+            if "summary" not in rt:
+                raise ValueError(
+                    f"run_results[{i}]['regime_trace_results'][{j}] "
+                    "missing 'summary'"
+                )
+            summary = rt["summary"]
+            for key in _REQUIRED_SUMMARY_KEYS:
+                if key not in summary:
+                    raise ValueError(
+                        f"run_results[{i}]['regime_trace_results'][{j}]"
+                        f"['summary'] missing '{key}'"
+                    )
+
 
 # ── Public API ───────────────────────────────────────────────────────
 
 
 def compute_bp_phase_diagram(
-    run_results: list[dict],
+    run_results: Sequence[RunResult],
     *,
     metastable_threshold: float = DEFAULT_METASTABLE_THRESHOLD,
-) -> dict:
+) -> BpPhaseDiagram:
     """Aggregate regime-trace diagnostics across decoding runs to compute
     deterministic BP phase statistics.
 
     Parameters
     ----------
-    run_results : list of dict
+    run_results : Sequence[RunResult]
         Each entry must contain:
         - ``"distance"`` : int
         - ``"noise"`` : float
@@ -47,10 +121,18 @@ def compute_bp_phase_diagram(
 
     Returns
     -------
-    dict
+    BpPhaseDiagram
         JSON-serializable phase diagram dataset with keys:
         ``phase_points``, ``distance_levels``, ``noise_levels``,
         ``phase_statistics``.
+
+    Raises
+    ------
+    TypeError
+        If *run_results* is not a sequence or contains non-sequence
+        regime trace results.
+    ValueError
+        If any entry is missing required keys.
     """
     if not run_results:
         return {
@@ -62,6 +144,8 @@ def compute_bp_phase_diagram(
                 "total_parameter_points": 0,
             },
         }
+
+    _validate_run_results(run_results)
 
     # ── Group runs by (distance, noise) ───────────────────────────────
     groups: Dict[tuple, List[dict]] = {}

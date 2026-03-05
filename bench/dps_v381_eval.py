@@ -840,7 +840,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--bp-transitions", action="store_true",
                         help="Enable BP regime transition analysis (regime trace, dwell times, events)")
     parser.add_argument("--bp-phase-diagram", action="store_true",
-                        help="Enable BP phase diagram analysis (requires --bp-transitions)")
+                        help="Enable BP phase diagram aggregation (implicitly enables --bp-transitions)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)

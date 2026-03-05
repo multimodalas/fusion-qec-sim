@@ -19,6 +19,10 @@ import pytest
 from src.qec.diagnostics.bp_phase_diagram import (
     compute_bp_phase_diagram,
     DEFAULT_METASTABLE_THRESHOLD,
+    RegimeTraceSummary,
+    RegimeTraceResult,
+    RunResult,
+    BpPhaseDiagram,
 )
 
 
@@ -342,6 +346,108 @@ class TestSerialization:
         freqs = result["phase_points"][0]["regime_frequencies"]
         keys = list(freqs.keys())
         assert keys == sorted(keys)
+
+
+# ── Test: Bench integration smoke test ───────────────────────────────
+
+
+# ── Test: Empty regime traces edge case ───────────────────────────────
+
+
+class TestEmptyRegimeTraces:
+    def test_empty_regime_traces(self):
+        """Runs with empty regime_trace but valid summary fields."""
+        traces = [
+            _make_regime_trace_result([], freeze_score=0.2),
+            _make_regime_trace_result([], freeze_score=0.4),
+        ]
+        entry = _make_run_result(7, 0.01, traces)
+        result = compute_bp_phase_diagram([entry])
+
+        pt = result["phase_points"][0]
+        assert pt["regime_frequencies"] == {}
+        assert pt["mean_freeze_score"] == pytest.approx(0.3)
+        assert pt["num_runs"] == 2
+        assert pt["metastable_probability"] == pytest.approx(0.0)
+
+    def test_mixed_empty_and_nonempty_traces(self):
+        """Mix of empty and non-empty regime traces."""
+        traces = [
+            _make_regime_trace_result([], freeze_score=0.2),
+            _make_regime_trace_result(
+                ["stable_convergence"] * 10, freeze_score=0.6,
+            ),
+        ]
+        entry = _make_run_result(7, 0.01, traces)
+        result = compute_bp_phase_diagram([entry])
+
+        pt = result["phase_points"][0]
+        # Only 10 labels from the non-empty trace.
+        assert pt["regime_frequencies"] == {"stable_convergence": 1.0}
+        assert pt["mean_freeze_score"] == pytest.approx(0.4)
+
+
+# ── Test: Input validation ────────────────────────────────────────────
+
+
+class TestInputValidation:
+    def test_not_a_sequence(self):
+        with pytest.raises(TypeError, match="must be a sequence"):
+            compute_bp_phase_diagram(42)  # type: ignore[arg-type]
+
+    def test_missing_distance(self):
+        with pytest.raises(ValueError, match="missing required key 'distance' or 'noise'"):
+            compute_bp_phase_diagram([{"noise": 0.01, "regime_trace_results": []}])
+
+    def test_missing_noise(self):
+        with pytest.raises(ValueError, match="missing required key 'distance' or 'noise'"):
+            compute_bp_phase_diagram([{"distance": 7, "regime_trace_results": []}])
+
+    def test_missing_regime_trace_results(self):
+        with pytest.raises(ValueError, match="missing required key 'regime_trace_results'"):
+            compute_bp_phase_diagram([{"distance": 7, "noise": 0.01}])
+
+    def test_missing_summary_in_trace(self):
+        entry = {
+            "distance": 7,
+            "noise": 0.01,
+            "regime_trace_results": [{"regime_trace": ["s"]}],
+        }
+        with pytest.raises(ValueError, match="missing 'summary'"):
+            compute_bp_phase_diagram([entry])
+
+    def test_missing_regime_trace_in_trace(self):
+        entry = {
+            "distance": 7,
+            "noise": 0.01,
+            "regime_trace_results": [{"summary": {"freeze_score": 0.1, "switch_rate": 0.0, "max_dwell": 1, "num_events": 0}}],
+        }
+        with pytest.raises(ValueError, match="missing 'regime_trace'"):
+            compute_bp_phase_diagram([entry])
+
+    def test_missing_summary_key(self):
+        entry = {
+            "distance": 7,
+            "noise": 0.01,
+            "regime_trace_results": [{
+                "regime_trace": ["s"],
+                "summary": {"freeze_score": 0.1},  # missing switch_rate, max_dwell, num_events
+            }],
+        }
+        with pytest.raises(ValueError, match="missing 'switch_rate'"):
+            compute_bp_phase_diagram([entry])
+
+
+# ── Test: Type exports ────────────────────────────────────────────────
+
+
+class TestTypeExports:
+    def test_typed_dict_exports(self):
+        """TypedDict types are importable."""
+        assert RegimeTraceSummary is not None
+        assert RegimeTraceResult is not None
+        assert RunResult is not None
+        assert BpPhaseDiagram is not None
 
 
 # ── Test: Bench integration smoke test ───────────────────────────────
