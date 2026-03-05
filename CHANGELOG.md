@@ -22,7 +22,7 @@ Added
   and classifies the result as `metastable_oscillation`,
   `shallow_sensitivity`, `true_basin_switch`, or `none`.
 - Helper functions `_count_gradient_sign_flips()` and
-  `_check_convergence()` for trace analysis.
+  `_trace_converged()` for trace analysis.
 - DPS harness (`bench/dps_v381_eval.py`) now emits `basin_classifications`
   and `basin_class_counts` when `--landscape` mode is enabled.
 - Comprehensive tests: determinism, baseline safety, classification
