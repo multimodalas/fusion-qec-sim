@@ -466,15 +466,21 @@ class TestHarnessLandscapeMetrics:
             "baseline", H, instances,
             max_iters=50, enable_landscape=True,
         )
+
+        # Ensure this test always exercises the new landscape metrics.
         multi_iter = [t for t in result.get("energy_traces", []) if len(t) >= 2]
-        if multi_iter and "basin_classifications" in result:
-            for bc in result["basin_classifications"]:
-                assert "basin_stability_index" in bc
-                assert "attractor_distance_max" in bc
-                assert "attractor_distance_mean" in bc
-                assert "escape_energy" in bc
-                assert "escape_energy_plus" in bc
-                assert "escape_energy_minus" in bc
+        assert multi_iter, "Expected at least one multi-iteration energy trace when landscape is enabled"
+
+        basin_classifications = result.get("basin_classifications")
+        assert basin_classifications, "Expected 'basin_classifications' in landscape result"
+
+        for bc in basin_classifications:
+            assert "basin_stability_index" in bc
+            assert "attractor_distance_max" in bc
+            assert "attractor_distance_mean" in bc
+            assert "escape_energy" in bc
+            assert "escape_energy_plus" in bc
+            assert "escape_energy_minus" in bc
 
     def test_landscape_deterministic(self, landscape_code):
         """Two identical landscape runs produce identical metrics."""
