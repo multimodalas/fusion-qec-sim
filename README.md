@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v4.3.0](https://img.shields.io/badge/release-v4.3.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.3.0)
+[![Release v4.4.0](https://img.shields.io/badge/release-v4.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.4.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 QEC — Deterministic QLDPC CSS Framework
