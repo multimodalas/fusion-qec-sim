@@ -1,12 +1,11 @@
 """
-v3.9.0 — Structural Geometry DPS Evaluation Harness.
+v3.9.1 — Structural Geometry DPS Evaluation Harness.
 
-Extends v3.8.1 harness with channel-geometry interventions:
-  - Centered syndrome-field projection
-  - Parity-derived pseudo-prior injection
-  - Optional BP energy trace diagnostics
+Extends v3.9.0 harness with geometry field controls:
+  - Geometry strength scaling (geometry_strength)
+  - Deterministic field normalization (normalize_geometry)
 
-Evaluates Distance Penalty Slope (DPS) across twelve modes:
+Evaluates Distance Penalty Slope (DPS) across fourteen modes:
   baseline           — flooding, all interventions disabled
   rpc_only           — flooding, RPC augmentation
   geom_v1_only       — geom_v1 schedule
@@ -18,6 +17,9 @@ Evaluates Distance Penalty Slope (DPS) across twelve modes:
   geom_centered_prior — geom_v1 + centered field + pseudo-prior
   rpc_centered       — RPC + centered field
   rpc_centered_prior — RPC + centered field + pseudo-prior
+  centered_strong    — centered field + geometry_strength=2.0
+  centered_normalized — centered field + normalize_geometry
+  centered_prior_normalized — centered + prior + normalize_geometry
 
 FER uses syndrome-consistency semantics:
   frame_error := syndrome(H, correction) != syndrome(H, error)
@@ -104,6 +106,28 @@ MODES: dict[str, dict[str, Any]] = {
             rpc=_RPC_ON, centered_field=True, pseudo_prior=True,
         ),
     },
+    # ── v3.9.1 geometry field control modes ──
+    "centered_strong": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(
+            rpc=_RPC_OFF, centered_field=True,
+            pseudo_prior=False, geometry_strength=2.0,
+        ),
+    },
+    "centered_normalized": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(
+            rpc=_RPC_OFF, centered_field=True,
+            normalize_geometry=True,
+        ),
+    },
+    "centered_prior_normalized": {
+        "schedule": "flooding",
+        "structural": StructuralConfig(
+            rpc=_RPC_OFF, centered_field=True,
+            pseudo_prior=True, normalize_geometry=True,
+        ),
+    },
 }
 
 MODE_ORDER = [
@@ -111,6 +135,7 @@ MODE_ORDER = [
     "centered", "prior", "centered_prior",
     "geom_centered", "geom_centered_prior",
     "rpc_centered", "rpc_centered_prior",
+    "centered_strong", "centered_normalized", "centered_prior_normalized",
 ]
 
 # ── Default parameters ───────────────────────────────────────────────
@@ -565,7 +590,7 @@ def print_energy_trace(eval_result: dict[str, Any]) -> None:
 
 def main() -> None:
     """Run full evaluation and print all reports."""
-    print("v3.9.0 — Structural Geometry DPS Evaluation")
+    print("v3.9.1 — Structural Geometry DPS Evaluation")
     print(f"Seed: {DEFAULT_SEED}")
     print(f"Distances: {DEFAULT_DISTANCES}")
     print(f"P values: {DEFAULT_P_VALUES}")

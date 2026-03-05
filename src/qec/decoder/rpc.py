@@ -61,6 +61,14 @@ class StructuralConfig:
         Coupling strength κ for pseudo-prior injection.
     energy_trace : bool
         Enable per-iteration BP energy trace diagnostic.
+    geometry_strength : float
+        Scalar multiplier applied to the constructed geometry LLR field
+        after centered_field and pseudo_prior are applied.  Default 1.0
+        (no scaling).
+    normalize_geometry : bool
+        When True, normalize the constructed geometry LLR field to unit
+        variance before passing to BP.  Only applies when geometry
+        interventions are active.
     """
 
     rpc: RPCConfig = field(default_factory=RPCConfig)
@@ -68,6 +76,8 @@ class StructuralConfig:
     pseudo_prior: bool = False
     pseudo_prior_strength: float = 0.25
     energy_trace: bool = False
+    geometry_strength: float = 1.0
+    normalize_geometry: bool = False
 
 
 def build_rpc_augmented_system(
