@@ -74,6 +74,10 @@ from src.qec.diagnostics.bp_phase_diagram import (
     compute_bp_phase_diagram,
 )
 
+from src.qec.diagnostics.bp_freeze_detection import (
+    compute_bp_freeze_detection,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -267,6 +271,7 @@ def run_mode(
     enable_bp_dynamics: bool = False,
     enable_bp_transitions: bool = False,
     enable_bp_phase_diagram: bool = False,
+    enable_bp_freeze_detection: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -279,7 +284,8 @@ def run_mode(
     is True, also returns ``bp_dynamics``.  When
     *enable_bp_transitions* is True, also returns
     ``bp_regime_trace``, ``bp_transition_summary``, and
-    ``bp_transition_counts``.
+    ``bp_transition_counts``.  When *enable_bp_freeze_detection* is
+    True, also returns ``bp_freeze_detection``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -291,6 +297,9 @@ def run_mode(
     # Phase diagram implies BP transitions.
     if enable_bp_phase_diagram:
         enable_bp_transitions = True
+    # Freeze detection implies BP dynamics.
+    if enable_bp_freeze_detection:
+        enable_bp_dynamics = True
     # Iteration diagnostics implies energy trace.
     if enable_iteration_diagnostics:
         enable_energy_trace = True
@@ -313,6 +322,7 @@ def run_mode(
     all_iteration_diagnostics: list[dict[str, Any]] = []
     all_bp_dynamics: list[dict[str, Any]] = []
     all_bp_regime_traces: list[dict[str, Any]] = []
+    all_bp_freeze_detections: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -420,6 +430,14 @@ def run_mode(
                     )
                     all_bp_regime_traces.append(rt)
 
+                # v4.7.0: BP freeze detection.
+                if enable_bp_freeze_detection:
+                    fd = compute_bp_freeze_detection(
+                        llr_trace=llr_trace_list,
+                        energy_trace=list(trace),
+                    )
+                    all_bp_freeze_detections.append(fd)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -506,6 +524,22 @@ def run_mode(
                 if total_iters > 0 else 0.0
             ),
         }
+    if all_bp_freeze_detections:
+        out["bp_freeze_detection"] = all_bp_freeze_detections
+        # Aggregate: count how many trials had freeze detected.
+        freeze_count = sum(
+            1 for fd in all_bp_freeze_detections if fd["freeze_detected"]
+        )
+        out["bp_freeze_summary"] = {
+            "freeze_count": freeze_count,
+            "freeze_fraction": (
+                float(freeze_count) / float(len(all_bp_freeze_detections))
+                if all_bp_freeze_detections else 0.0
+            ),
+            "max_freeze_score": max(
+                fd["freeze_score"] for fd in all_bp_freeze_detections
+            ),
+        }
     return out
 
 
@@ -547,6 +581,7 @@ def run_evaluation(
     enable_bp_dynamics: bool = False,
     enable_bp_transitions: bool = False,
     enable_bp_phase_diagram: bool = False,
+    enable_bp_freeze_detection: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -602,6 +637,7 @@ def run_evaluation(
                     enable_bp_dynamics=enable_bp_dynamics,
                     enable_bp_transitions=enable_bp_transitions,
                     enable_bp_phase_diagram=enable_bp_phase_diagram,
+                    enable_bp_freeze_detection=enable_bp_freeze_detection,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -841,6 +877,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP regime transition analysis (regime trace, dwell times, events)")
     parser.add_argument("--bp-phase-diagram", action="store_true",
                         help="Enable BP phase diagram aggregation (implicitly enables --bp-transitions)")
+    parser.add_argument("--bp-freeze-detection", action="store_true",
+                        help="Enable BP freeze detection (early metastability detection)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -873,6 +911,8 @@ def main() -> None:
         print("BP regime transition analysis: ENABLED")
     if args.bp_phase_diagram:
         print("BP phase diagram analysis: ENABLED")
+    if args.bp_freeze_detection:
+        print("BP freeze detection: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -882,12 +922,13 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram,
-        enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
+        enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
+        enable_bp_freeze_detection=args.bp_freeze_detection,
     )
 
     # Print reports.
