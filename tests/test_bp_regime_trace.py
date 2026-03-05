@@ -234,7 +234,7 @@ class TestMetastablePlateau:
             n_iters=40, plateau_len=30, drop=50.0,
         )
         out = compute_bp_regime_trace(llr, energy)
-        assert out["summary"]["num_events"] >= 0  # may or may not trigger
+        assert any(tr["event"] for tr in out["transitions"])
 
 
 # ── Test: Chaotic Regime ─────────────────────────────────────────────
@@ -343,6 +343,12 @@ class TestEdgeCases:
         energy = [50.0, 45.0]
         out = compute_bp_regime_trace(llr, energy)
         assert len(out["regime_trace"]) == 2
+
+    def test_mismatched_trace_lengths_raises(self):
+        llr = _make_stable_llr_trace(n_iters=10)
+        energy = _make_monotonic_energy(n_iters=9)
+        with pytest.raises(ValueError):
+            compute_bp_regime_trace(llr, energy)
 
     def test_window_larger_than_trace(self):
         """Window=16 but trace has only 5 iterations."""

@@ -37,6 +37,15 @@ Added
   stable regime, oscillatory regime, metastable plateau, chaotic regime,
   dwell-time consistency, edge cases, bench integration smoke tests.
 
+Improved
+
+- Added strict validation ensuring `llr_trace` and `energy_trace` lengths
+  match — raises `ValueError` on mismatch instead of silent misalignment.
+- Prevented regime-trace parameter (`event_factor`) leakage into
+  `bp_dynamics` metrics API.
+- Strengthened event-detection tests to assert actual event occurrence.
+- Added mismatched-trace edge-case test.
+
 Unchanged
 
 - Decoder core (`src/qec/decoder/`) untouched.

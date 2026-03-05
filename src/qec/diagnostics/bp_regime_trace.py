@@ -70,11 +70,25 @@ def compute_bp_regime_trace(
     n_iters = len(llr_trace)
     n_energy = len(energy_trace)
 
-    # Merge user params with defaults.
-    p = dict(DEFAULT_REGIME_TRACE_PARAMS)
+    if n_iters != n_energy:
+        raise ValueError(
+            f"llr_trace and energy_trace must have equal length "
+            f"(got {n_iters} and {n_energy})"
+        )
+
+    # Extract regime-trace parameters, separate from metrics API params.
+    trace_params = DEFAULT_REGIME_TRACE_PARAMS.copy()
+    if params:
+        trace_params.update(params)
+    event_factor = float(trace_params["event_factor"])
+
+    # Filter out regime-trace-only keys before forwarding to metrics API.
+    metrics_params = None
     if params is not None:
-        p.update(params)
-    event_factor = float(p["event_factor"])
+        metrics_params = {
+            k: v for k, v in params.items()
+            if k != "event_factor"
+        }
 
     # ── Empty / trivial trace handling ───────────────────────────────
     if n_iters == 0 or n_energy == 0:
@@ -92,6 +106,11 @@ def compute_bp_regime_trace(
         }
 
     # ── 1) Sliding-window regime classification ─────────────────────
+    # NOTE: This loop is O(T²) in the worst case due to per-iteration
+    # metric recomputation.  Possible future optimizations:
+    #   - Metric caching across overlapping windows
+    #   - Regime stabilization early exit
+    #   - Fixed-step sampling for long traces
     regime_trace: List[str] = []
 
     for t in range(n_iters):
@@ -113,7 +132,7 @@ def compute_bp_regime_trace(
             llr_window,
             energy_window,
             correction_vectors=cv_window,
-            params=params,
+            params=metrics_params,
         )
 
         # Classify using v4.4 classifier.
