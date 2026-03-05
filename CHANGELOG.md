@@ -6,6 +6,46 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.4.0] — 2026-03-05
+Deterministic BP Dynamics Regime Analysis
+
+Adds a deterministic BP dynamics metric suite and regime classifier that
+analyses iteration traces to classify decoder dynamics into one of six
+regimes.  Diagnostics-only, decoder-safe: does not modify BP decoder
+internals.
+
+Added
+
+- `compute_bp_dynamics_metrics()`: computes eight deterministic metrics
+  from BP traces — Metastability Index (MSI), Cycle Periodicity Index
+  (CPI), Trapping Set Likelihood (TSL), Local Energy Curvature (LEC),
+  Correction-Vector Norm Entropy (CVNE), Global Oscillation Score (GOS),
+  Energy Descent Smoothness (EDS), Basin Transition Indicator (BTI).
+- `classify_bp_regime()`: deterministic first-match rule ladder classifier
+  producing one of six regimes: `stable_convergence`,
+  `oscillatory_convergence`, `metastable_state`, `trapping_set_regime`,
+  `correction_cycling`, `chaotic_behavior`.
+- CVNE metrics return `None` when correction vectors are unavailable
+  (consistent with v4.3.0 correction-vector semantics).
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-dynamics` flag.
+  When enabled, computes BP dynamics metrics per trial and stores
+  them under `result["bp_dynamics"]` with aggregate `bp_regime_counts`.
+- Comprehensive tests (`tests/test_bp_dynamics.py`): determinism,
+  zero-sign handling, optional correction vectors, regime branch
+  coverage (all six regimes), trace normalization, edge cases, bench
+  integration smoke tests.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`) untouched.
+- Construction (`src/qec/construction/`) untouched.
+- Schema version unchanged.
+- Baseline decoding outputs byte-identical when diagnostics disabled.
+- v4.3.0 iteration-trace semantics preserved (BOI sign logic, CVF None
+  pattern).
+
+---
+
 [4.3.0] — 2026-03-05
 Deterministic Iteration-Trace Diagnostics
 

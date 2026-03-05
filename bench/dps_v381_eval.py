@@ -62,6 +62,10 @@ from src.qec.diagnostics.iteration_trace import (
     compute_iteration_trace_metrics,
 )
 
+from src.qec.diagnostics.bp_dynamics import (
+    compute_bp_dynamics_metrics,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -252,6 +256,7 @@ def run_mode(
     enable_energy_trace: bool = False,
     enable_landscape: bool = False,
     enable_iteration_diagnostics: bool = False,
+    enable_bp_dynamics: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -260,7 +265,8 @@ def run_mode(
     returns ``energy_traces``.  When *enable_landscape* is True, also
     returns ``landscape_metrics``, ``basin_switch``, and
     ``energy_delta``.  When *enable_iteration_diagnostics* is True,
-    also returns ``iteration_diagnostics``.
+    also returns ``iteration_diagnostics``.  When *enable_bp_dynamics*
+    is True, also returns ``bp_dynamics``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -272,6 +278,10 @@ def run_mode(
     # Iteration diagnostics implies energy trace.
     if enable_iteration_diagnostics:
         enable_energy_trace = True
+    # BP dynamics implies energy trace and LLR history.
+    if enable_bp_dynamics:
+        enable_energy_trace = True
+        enable_iteration_diagnostics = True
 
     frame_errors = 0
     residual_mismatches = 0
@@ -282,6 +292,7 @@ def run_mode(
     energy_deltas: list[float] = []
     all_basin_classifications: list[dict[str, Any]] = []
     all_iteration_diagnostics: list[dict[str, Any]] = []
+    all_bp_dynamics: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -371,6 +382,15 @@ def run_mode(
             )
             all_iteration_diagnostics.append(iter_diag)
 
+            # v4.4.0: BP dynamics regime analysis.
+            if enable_bp_dynamics:
+                bp_dyn = compute_bp_dynamics_metrics(
+                    llr_trace=llr_trace_list,
+                    energy_trace=list(trace),
+                    correction_vectors=None,
+                )
+                all_bp_dynamics.append(bp_dyn)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -420,6 +440,14 @@ def run_mode(
         out["basin_class_counts"] = class_counts
     if all_iteration_diagnostics:
         out["iteration_diagnostics"] = all_iteration_diagnostics
+    if all_bp_dynamics:
+        out["bp_dynamics"] = all_bp_dynamics
+        # Aggregate regime counts.
+        regime_counts: dict[str, int] = {}
+        for bd in all_bp_dynamics:
+            r = bd["regime"]
+            regime_counts[r] = regime_counts.get(r, 0) + 1
+        out["bp_regime_counts"] = regime_counts
     return out
 
 
@@ -458,6 +486,7 @@ def run_evaluation(
     enable_energy_trace: bool = False,
     enable_landscape: bool = False,
     enable_iteration_diagnostics: bool = False,
+    enable_bp_dynamics: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -510,6 +539,7 @@ def run_evaluation(
                     enable_energy_trace=enable_energy_trace,
                     enable_landscape=enable_landscape,
                     enable_iteration_diagnostics=enable_iteration_diagnostics,
+                    enable_bp_dynamics=enable_bp_dynamics,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -726,6 +756,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable landscape diagnostics and basin switching")
     parser.add_argument("--iteration-diagnostics", action="store_true",
                         help="Enable iteration-trace diagnostics (PEI, BOI, OD, CIS, CVF)")
+    parser.add_argument("--bp-dynamics", action="store_true",
+                        help="Enable BP dynamics regime analysis (MSI, CPI, TSL, LEC, CVNE, GOS, EDS, BTI)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -752,6 +784,8 @@ def main() -> None:
         print("Landscape diagnostics: ENABLED")
     if args.iteration_diagnostics:
         print("Iteration-trace diagnostics: ENABLED")
+    if args.bp_dynamics:
+        print("BP dynamics regime analysis: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -761,9 +795,10 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics,
+        enable_bp_dynamics=args.bp_dynamics,
     )
 
     # Print reports.
