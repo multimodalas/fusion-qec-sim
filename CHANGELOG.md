@@ -6,6 +6,43 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.0.0] — 2026-03-06
+BP Attractor Landscape Mapping
+
+Introduces deterministic mapping of BP attractor landscapes and automatic
+pseudocodeword detection.  Diagnostics only.  Decoder behavior unchanged.
+
+Added
+
+- `compute_bp_landscape_map()`: maps the decoder attractor landscape by
+  sampling deterministic perturbations of the initial belief state.  Measures
+  attractor enumeration, basin size distribution, largest basin fraction,
+  correct/incorrect/degenerate attractor fractions, and pseudocodeword
+  detection.
+- Attractor identification via CRC32 of the final LLR sign pattern, grouping
+  runs that converge to the same fixed point.
+- Automatic pseudocodeword detection: incorrect fixed-point attractors that
+  remain stable under small perturbations are flagged as pseudocodewords.
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-landscape-map` flag.
+  When enabled, computes landscape mapping per trial and stores results under
+  `bp_landscape_map` with aggregate `bp_landscape_summary` including
+  `mean_num_attractors`, `mean_largest_basin_fraction`, and
+  `total_pseudocodewords`.
+- Comprehensive tests (`tests/test_bp_landscape_mapping.py`): single attractor,
+  multiple attractors, pseudocodeword detection, determinism, JSON
+  serializability, attractor ID computation.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`): untouched.
+- Construction layer (`src/qec/construction/`): untouched.
+- Existing diagnostics modules: untouched.
+- Schema version: unchanged.
+- All existing tests pass without modification.
+- Baseline decoding output: byte-identical when diagnostics disabled.
+
+---
+
 [4.9.0] — 2026-03-06
 Basin-of-Attraction and Boundary Analysis
 

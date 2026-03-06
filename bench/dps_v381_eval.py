@@ -282,6 +282,7 @@ def run_mode(
     enable_bp_freeze_detection: bool = False,
     enable_bp_fixed_point_analysis: bool = False,
     enable_bp_basin_analysis: bool = False,
+    enable_bp_landscape_map: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -300,6 +301,8 @@ def run_mode(
     ``bp_fixed_point_analysis`` and ``bp_fixed_point_summary``.
     When *enable_bp_basin_analysis* is True, also returns
     ``bp_basin_analysis`` and ``bp_basin_summary``.
+    When *enable_bp_landscape_map* is True, also returns
+    ``bp_landscape_map`` and ``bp_landscape_summary``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -311,6 +314,9 @@ def run_mode(
     # Phase diagram implies BP transitions.
     if enable_bp_phase_diagram:
         enable_bp_transitions = True
+    # Landscape map implies basin analysis.
+    if enable_bp_landscape_map:
+        enable_bp_basin_analysis = True
     # Basin analysis implies fixed-point analysis.
     if enable_bp_basin_analysis:
         enable_bp_fixed_point_analysis = True
@@ -346,6 +352,7 @@ def run_mode(
     all_bp_freeze_detections: list[dict[str, Any]] = []
     all_bp_fixed_point_analyses: list[dict[str, Any]] = []
     all_bp_basin_analyses: list[dict[str, Any]] = []
+    all_bp_landscape_maps: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -496,6 +503,22 @@ def run_mode(
                     syndrome_original=s,
                 )
                 all_bp_basin_analyses.append(basin_result)
+
+            # v5.0.0: BP attractor landscape mapping.
+            if enable_bp_landscape_map:
+                from src.qec.diagnostics.bp_landscape_mapping import (
+                    compute_bp_landscape_map,
+                )
+                landscape_map_result = compute_bp_landscape_map(
+                    H=H,
+                    llr=llr_used,
+                    max_iters=max_iters,
+                    bp_mode=bp_mode,
+                    schedule=schedule,
+                    syndrome_vec=s_used,
+                    syndrome_original=s,
+                )
+                all_bp_landscape_maps.append(landscape_map_result)
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
@@ -667,6 +690,27 @@ def run_mode(
             "total_perturbations": total_perturbations,
             "total_trials": n_ba,
         }
+    if all_bp_landscape_maps:
+        out["bp_landscape_map"] = all_bp_landscape_maps
+        # Aggregate landscape statistics.
+        n_lm = len(all_bp_landscape_maps)
+        total_attractors = sum(
+            lm["num_attractors"] for lm in all_bp_landscape_maps
+        )
+        total_pseudocodewords = sum(
+            lm["num_pseudocodewords"] for lm in all_bp_landscape_maps
+        )
+        basin_fractions = [
+            lm["largest_basin_fraction"] for lm in all_bp_landscape_maps
+        ]
+        out["bp_landscape_summary"] = {
+            "mean_largest_basin_fraction": (
+                float(sum(basin_fractions)) / float(n_lm)
+            ),
+            "mean_num_attractors": float(total_attractors) / float(n_lm),
+            "total_pseudocodewords": total_pseudocodewords,
+            "total_trials": n_lm,
+        }
     return out
 
 
@@ -711,6 +755,7 @@ def run_evaluation(
     enable_bp_freeze_detection: bool = False,
     enable_bp_fixed_point_analysis: bool = False,
     enable_bp_basin_analysis: bool = False,
+    enable_bp_landscape_map: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -769,6 +814,7 @@ def run_evaluation(
                     enable_bp_freeze_detection=enable_bp_freeze_detection,
                     enable_bp_fixed_point_analysis=enable_bp_fixed_point_analysis,
                     enable_bp_basin_analysis=enable_bp_basin_analysis,
+                    enable_bp_landscape_map=enable_bp_landscape_map,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -1014,6 +1060,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP fixed-point trap analysis (correct/incorrect/degenerate classification)")
     parser.add_argument("--bp-basin-analysis", action="store_true",
                         help="Enable BP basin-of-attraction analysis (perturbation-based basin geometry)")
+    parser.add_argument("--bp-landscape-map", action="store_true",
+                        help="Enable BP attractor landscape mapping (attractor enumeration, pseudocodeword detection)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -1052,6 +1100,8 @@ def main() -> None:
         print("BP fixed-point trap analysis: ENABLED")
     if args.bp_basin_analysis:
         print("BP basin-of-attraction analysis: ENABLED")
+    if args.bp_landscape_map:
+        print("BP attractor landscape mapping: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -1061,15 +1111,16 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map,
         enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
         enable_bp_freeze_detection=args.bp_freeze_detection,
-        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis or args.bp_basin_analysis,
-        enable_bp_basin_analysis=args.bp_basin_analysis,
+        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map,
+        enable_bp_basin_analysis=args.bp_basin_analysis or args.bp_landscape_map,
+        enable_bp_landscape_map=args.bp_landscape_map,
     )
 
     # Print reports.
