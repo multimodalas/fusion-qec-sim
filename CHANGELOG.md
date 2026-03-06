@@ -6,6 +6,42 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.8.0] — 2026-03-06
+Deterministic Fixed-Point Trap Analysis
+
+Introduces diagnostics for classifying BP fixed-point outcomes.
+Diagnostics only.  Decoder behavior unchanged.
+
+Added
+
+- `compute_bp_fixed_point_analysis()`: classifies BP decoding outcomes as
+  `correct_fixed_point`, `incorrect_fixed_point`, `degenerate_fixed_point`,
+  or `no_convergence` using deterministic analysis of energy traces, LLR
+  entropy, LLR variance, and final syndrome weight.
+- Degenerate fixed-point detection via LLR entropy and variance thresholds
+  to identify symmetric attractors.
+- Energy convergence detection via tail-window stability analysis.
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-fixed-point-analysis`
+  flag.  When enabled, computes fixed-point classification per trial and
+  stores results under `bp_fixed_point_analysis` with aggregate
+  `bp_fixed_point_summary` including `correct_fixed_point_probability`,
+  `incorrect_fixed_point_probability`, `degenerate_fixed_point_probability`,
+  and `mean_iterations_to_fixed_point`.
+- Comprehensive tests (`tests/test_bp_fixed_point_analysis.py`): determinism,
+  correct/incorrect/degenerate/no-convergence classification, edge cases,
+  JSON serializability, custom parameters.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`): untouched.
+- Construction layer (`src/qec/construction/`): untouched.
+- Existing diagnostics modules: untouched.
+- Schema version: unchanged.
+- All existing tests pass without modification.
+- Baseline decoding output: byte-identical when diagnostics disabled.
+
+---
+
 [4.7.0] — 2026-03-05
 Deterministic BP Freeze Detection
 
