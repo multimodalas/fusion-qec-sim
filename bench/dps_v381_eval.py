@@ -41,6 +41,7 @@ import numpy as np
 
 from src.qec_qldpc_codes import bp_decode, syndrome, channel_llr, create_code
 from src.qec.decoder.rpc import RPCConfig, StructuralConfig, build_rpc_augmented_system
+from src.qec.decoder.decoder_interface import get_decoder
 
 from src.qec.channel.geometry import (
     centered_syndrome_field,
@@ -284,6 +285,8 @@ def run_mode(
     enable_bp_transitions: bool = False,
     enable_bp_phase_diagram: bool = False,
     enable_bp_freeze_detection: bool = False,
+    decoder_fn=None,
+    compare_decoders: bool = False,
     enable_bp_fixed_point_analysis: bool = False,
     enable_bp_basin_analysis: bool = False,
     enable_bp_landscape_map: bool = False,
@@ -311,6 +314,9 @@ def run_mode(
     When *enable_bp_barrier_analysis* is True, also returns
     ``bp_barrier_analysis`` and ``bp_barrier_summary``.
     """
+    if decoder_fn is None:
+        decoder_fn = bp_decode
+
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
     structural: StructuralConfig = mode_cfg["structural"]
@@ -364,6 +370,7 @@ def run_mode(
     all_bp_basin_analyses: list[dict[str, Any]] = []
     all_bp_landscape_maps: list[dict[str, Any]] = []
     all_bp_barrier_analyses: list[dict[str, Any]] = []
+    comparison_results: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -396,7 +403,7 @@ def run_mode(
         # Decode.
         use_energy = enable_energy_trace or structural.energy_trace
         use_llr_history = max_iters if enable_iteration_diagnostics else 0
-        result = bp_decode(
+        result = decoder_fn(
             H_used, llr_used,
             max_iters=max_iters,
             mode=bp_mode,
@@ -406,6 +413,41 @@ def run_mode(
             llr_history=use_llr_history,
         )
         correction, iters = result[0], result[1]
+
+        # ── Decoder comparison mode ──
+        if compare_decoders:
+            ref_fn = get_decoder("reference")
+            exp_fn = get_decoder("experimental")
+            ref_result = ref_fn(
+                H_used, llr_used,
+                max_iters=max_iters,
+                mode=bp_mode,
+                schedule=schedule,
+                syndrome_vec=s_used,
+            )
+            exp_result = exp_fn(
+                H_used, llr_used,
+                max_iters=max_iters,
+                mode=bp_mode,
+                schedule=schedule,
+                syndrome_vec=s_used,
+            )
+            ref_corr, ref_iters = ref_result[0], ref_result[1]
+            exp_corr, exp_iters = exp_result[0], exp_result[1]
+            s_ref = syndrome(H, ref_corr)
+            s_exp = syndrome(H, exp_corr)
+            comparison_results.append({
+                "reference": {
+                    "success": bool(np.array_equal(s_ref, s)),
+                    "iterations": int(ref_iters),
+                    "syndrome_weight": int(np.sum(s_ref != s)),
+                },
+                "experimental": {
+                    "success": bool(np.array_equal(s_exp, s)),
+                    "iterations": int(exp_iters),
+                    "syndrome_weight": int(np.sum(s_exp != s)),
+                },
+            })
         # Extract optional outputs based on what was requested.
         llr_hist = None
         trace = None
@@ -786,6 +828,8 @@ def run_mode(
             ),
             "num_trials": total_trials_sum,
         }
+    if comparison_results:
+        out["decoder_comparison"] = comparison_results
     return out
 
 
@@ -832,6 +876,8 @@ def run_evaluation(
     enable_bp_basin_analysis: bool = False,
     enable_bp_landscape_map: bool = False,
     enable_bp_barrier_analysis: bool = False,
+    decoder_fn=None,
+    compare_decoders: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -892,6 +938,8 @@ def run_evaluation(
                     enable_bp_basin_analysis=enable_bp_basin_analysis,
                     enable_bp_landscape_map=enable_bp_landscape_map,
                     enable_bp_barrier_analysis=enable_bp_barrier_analysis,
+                    decoder_fn=decoder_fn,
+                    compare_decoders=compare_decoders,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -1141,6 +1189,11 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP attractor landscape mapping (attractor enumeration, pseudocodeword detection)")
     parser.add_argument("--bp-barrier-analysis", action="store_true",
                         help="Enable BP free-energy barrier estimation (escape perturbation measurement)")
+    parser.add_argument("--decoder", type=str, default="reference",
+                        choices=["reference", "experimental"],
+                        help="Decoder implementation to use (default: reference)")
+    parser.add_argument("--compare-decoders", action="store_true",
+                        help="Run both reference and experimental decoders on each instance")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -1183,6 +1236,12 @@ def main() -> None:
         print("BP attractor landscape mapping: ENABLED")
     if args.bp_barrier_analysis:
         print("BP free-energy barrier estimation: ENABLED")
+    print(f"Decoder: {args.decoder}")
+    if args.compare_decoders:
+        print("Decoder comparison mode: ENABLED")
+
+    # Resolve decoder callable.
+    selected_decoder = get_decoder(args.decoder)
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -1203,6 +1262,8 @@ def main() -> None:
         enable_bp_basin_analysis=args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_landscape_map=args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_barrier_analysis=args.bp_barrier_analysis,
+        decoder_fn=selected_decoder,
+        compare_decoders=args.compare_decoders,
     )
 
     # Print reports.
