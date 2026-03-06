@@ -5,7 +5,8 @@ Provides energy-landscape analysis, basin-switching detection,
 iteration-trace diagnostics, BP dynamics regime analysis,
 regime transition analysis, phase diagram aggregation,
 freeze detection, fixed-point trap analysis, basin-of-attraction
-analysis, and attractor landscape mapping for BP convergence traces.
+analysis, attractor landscape mapping, and free-energy barrier
+estimation for BP convergence traces.
 Does not modify decoder internals.
 """
 
@@ -16,3 +17,4 @@ from .bp_freeze_detection import compute_bp_freeze_detection
 from .bp_fixed_point_analysis import compute_bp_fixed_point_analysis
 from .bp_basin_analysis import compute_bp_basin_analysis
 from .bp_landscape_mapping import compute_bp_landscape_map
+from .bp_barrier_analysis import compute_bp_barrier_analysis

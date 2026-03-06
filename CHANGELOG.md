@@ -6,6 +6,44 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.1.0] — 2026-03-06
+Free-Energy Barrier Estimation
+
+Introduces deterministic barrier estimation around BP attractors.  Measures
+the minimum perturbation required to escape the current attractor basin,
+estimating the free-energy barrier height around BP fixed points.
+Diagnostics only.  Decoder behavior unchanged.
+
+Added
+
+- `compute_bp_barrier_analysis()`: deterministic barrier estimation around BP
+  attractors via ordered perturbation probing.  Returns baseline attractor
+  classification, barrier epsilon (smallest perturbation causing escape),
+  escape status, and trial count.
+- Deterministic perturbation patterns `[+1, -1, +2, -2]` with configurable
+  epsilon schedule (default `[1e-4, 5e-4, 1e-3, 2e-3, 5e-3]`).
+- Early termination: stops at the first perturbation that changes attractor
+  classification, returning the barrier epsilon.
+- Integration with attractor landscape diagnostics (`--bp-landscape-map`
+  dependency).
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-barrier-analysis` flag.
+  When enabled, computes barrier analysis per trial and stores results under
+  `bp_barrier_analysis` with aggregate `bp_barrier_summary` including
+  `mean_barrier_eps`, `escape_probability`, and `num_trials`.
+- Comprehensive tests (`tests/test_bp_barrier_analysis.py`): correct attractor
+  barrier detection, incorrect attractor barrier detection, no escape case,
+  determinism across runs, JSON serializability, custom eps schedule.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`): untouched.
+- Construction layer (`src/qec/construction/`): untouched.
+- Existing diagnostics modules: untouched.
+- Schema version: unchanged.
+- All existing tests pass without modification.
+
+---
+
 [5.0.0] — 2026-03-06
 BP Attractor Landscape Mapping
 

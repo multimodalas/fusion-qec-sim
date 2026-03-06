@@ -86,6 +86,10 @@ from src.qec.diagnostics.bp_basin_analysis import (
     compute_bp_basin_analysis,
 )
 
+from src.qec.diagnostics.bp_barrier_analysis import (
+    compute_bp_barrier_analysis,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -283,6 +287,7 @@ def run_mode(
     enable_bp_fixed_point_analysis: bool = False,
     enable_bp_basin_analysis: bool = False,
     enable_bp_landscape_map: bool = False,
+    enable_bp_barrier_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -303,6 +308,8 @@ def run_mode(
     ``bp_basin_analysis`` and ``bp_basin_summary``.
     When *enable_bp_landscape_map* is True, also returns
     ``bp_landscape_map`` and ``bp_landscape_summary``.
+    When *enable_bp_barrier_analysis* is True, also returns
+    ``bp_barrier_analysis`` and ``bp_barrier_summary``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -314,6 +321,9 @@ def run_mode(
     # Phase diagram implies BP transitions.
     if enable_bp_phase_diagram:
         enable_bp_transitions = True
+    # Barrier analysis implies landscape map.
+    if enable_bp_barrier_analysis:
+        enable_bp_landscape_map = True
     # Landscape map implies basin analysis.
     if enable_bp_landscape_map:
         enable_bp_basin_analysis = True
@@ -353,6 +363,7 @@ def run_mode(
     all_bp_fixed_point_analyses: list[dict[str, Any]] = []
     all_bp_basin_analyses: list[dict[str, Any]] = []
     all_bp_landscape_maps: list[dict[str, Any]] = []
+    all_bp_barrier_analyses: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -519,6 +530,48 @@ def run_mode(
                     syndrome_original=s,
                 )
                 all_bp_landscape_maps.append(landscape_map_result)
+
+            # v5.1.0: BP free-energy barrier estimation.
+            if enable_bp_barrier_analysis:
+                def _barrier_decode_fn(llr_vec):
+                    """Decode wrapper for barrier analysis."""
+                    _result = bp_decode(
+                        H, llr_vec,
+                        max_iters=max_iters,
+                        mode=bp_mode,
+                        schedule=schedule,
+                        syndrome_vec=s_used,
+                        energy_trace=True,
+                        llr_history=max_iters,
+                    )
+                    _correction, _iters = _result[0], _result[1]
+                    _llr_hist = _result[2]
+                    _trace = _result[-1]
+
+                    _llr_trace_list = (
+                        [_llr_hist[i] for i in range(_llr_hist.shape[0])]
+                        if _llr_hist is not None and _llr_hist.shape[0] > 0
+                        else []
+                    )
+                    _energy_list = list(_trace) if _trace is not None else []
+
+                    _s_correction = syndrome(H, _correction)
+                    _final_sw = int(np.sum(_s_correction != s))
+
+                    _syndrome_trace = [_final_sw] * len(_energy_list)
+
+                    return {
+                        "llr_trace": _llr_trace_list if _llr_trace_list else [np.zeros(H.shape[1])],
+                        "energy_trace": _energy_list if _energy_list else [0.0],
+                        "syndrome_trace": _syndrome_trace if _syndrome_trace else [_final_sw],
+                        "final_syndrome_weight": _final_sw,
+                    }
+
+                barrier_result = compute_bp_barrier_analysis(
+                    decode_fn=_barrier_decode_fn,
+                    llr_init=llr_used,
+                )
+                all_bp_barrier_analyses.append(barrier_result)
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
@@ -711,6 +764,28 @@ def run_mode(
             "total_pseudocodewords": total_pseudocodewords,
             "total_trials": n_lm,
         }
+    if all_bp_barrier_analyses:
+        out["bp_barrier_analysis"] = all_bp_barrier_analyses
+        # Aggregate barrier statistics.
+        n_bar = len(all_bp_barrier_analyses)
+        escaped_count = sum(
+            1 for ba in all_bp_barrier_analyses if ba["escaped"]
+        )
+        barrier_eps_values = [
+            ba["barrier_eps"] for ba in all_bp_barrier_analyses
+            if ba["barrier_eps"] is not None
+        ]
+        total_trials_sum = sum(
+            ba["num_trials"] for ba in all_bp_barrier_analyses
+        )
+        out["bp_barrier_summary"] = {
+            "escape_probability": float(escaped_count) / float(n_bar),
+            "mean_barrier_eps": (
+                float(sum(barrier_eps_values)) / float(len(barrier_eps_values))
+                if barrier_eps_values else None
+            ),
+            "num_trials": total_trials_sum,
+        }
     return out
 
 
@@ -756,6 +831,7 @@ def run_evaluation(
     enable_bp_fixed_point_analysis: bool = False,
     enable_bp_basin_analysis: bool = False,
     enable_bp_landscape_map: bool = False,
+    enable_bp_barrier_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -815,6 +891,7 @@ def run_evaluation(
                     enable_bp_fixed_point_analysis=enable_bp_fixed_point_analysis,
                     enable_bp_basin_analysis=enable_bp_basin_analysis,
                     enable_bp_landscape_map=enable_bp_landscape_map,
+                    enable_bp_barrier_analysis=enable_bp_barrier_analysis,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -1062,6 +1139,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP basin-of-attraction analysis (perturbation-based basin geometry)")
     parser.add_argument("--bp-landscape-map", action="store_true",
                         help="Enable BP attractor landscape mapping (attractor enumeration, pseudocodeword detection)")
+    parser.add_argument("--bp-barrier-analysis", action="store_true",
+                        help="Enable BP free-energy barrier estimation (escape perturbation measurement)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -1102,6 +1181,8 @@ def main() -> None:
         print("BP basin-of-attraction analysis: ENABLED")
     if args.bp_landscape_map:
         print("BP attractor landscape mapping: ENABLED")
+    if args.bp_barrier_analysis:
+        print("BP free-energy barrier estimation: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -1111,16 +1192,17 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
         enable_bp_freeze_detection=args.bp_freeze_detection,
-        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map,
-        enable_bp_basin_analysis=args.bp_basin_analysis or args.bp_landscape_map,
-        enable_bp_landscape_map=args.bp_landscape_map,
+        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
+        enable_bp_basin_analysis=args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
+        enable_bp_landscape_map=args.bp_landscape_map or args.bp_barrier_analysis,
+        enable_bp_barrier_analysis=args.bp_barrier_analysis,
     )
 
     # Print reports.
