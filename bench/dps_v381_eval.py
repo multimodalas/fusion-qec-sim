@@ -82,6 +82,10 @@ from src.qec.diagnostics.bp_fixed_point_analysis import (
     compute_bp_fixed_point_analysis,
 )
 
+from src.qec.diagnostics.bp_basin_analysis import (
+    compute_bp_basin_analysis,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -277,6 +281,7 @@ def run_mode(
     enable_bp_phase_diagram: bool = False,
     enable_bp_freeze_detection: bool = False,
     enable_bp_fixed_point_analysis: bool = False,
+    enable_bp_basin_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -293,6 +298,8 @@ def run_mode(
     True, also returns ``bp_freeze_detection``.  When
     *enable_bp_fixed_point_analysis* is True, also returns
     ``bp_fixed_point_analysis`` and ``bp_fixed_point_summary``.
+    When *enable_bp_basin_analysis* is True, also returns
+    ``bp_basin_analysis`` and ``bp_basin_summary``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -304,6 +311,9 @@ def run_mode(
     # Phase diagram implies BP transitions.
     if enable_bp_phase_diagram:
         enable_bp_transitions = True
+    # Basin analysis implies fixed-point analysis.
+    if enable_bp_basin_analysis:
+        enable_bp_fixed_point_analysis = True
     # Fixed-point analysis implies energy trace and iteration diagnostics.
     if enable_bp_fixed_point_analysis:
         enable_energy_trace = True
@@ -335,6 +345,7 @@ def run_mode(
     all_bp_regime_traces: list[dict[str, Any]] = []
     all_bp_freeze_detections: list[dict[str, Any]] = []
     all_bp_fixed_point_analyses: list[dict[str, Any]] = []
+    all_bp_basin_analyses: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -472,6 +483,20 @@ def run_mode(
             )
             all_bp_fixed_point_analyses.append(fp_result)
 
+            # v4.9.0: BP basin-of-attraction analysis.
+            if enable_bp_basin_analysis:
+                basin_result = compute_bp_basin_analysis(
+                    H=H,
+                    llr=llr_used,
+                    baseline_fixed_point_type=fp_result["fixed_point_type"],
+                    max_iters=max_iters,
+                    bp_mode=bp_mode,
+                    schedule=schedule,
+                    syndrome_vec=s_used,
+                    syndrome_original=s,
+                )
+                all_bp_basin_analyses.append(basin_result)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -605,6 +630,43 @@ def run_mode(
                 for k in sorted(fp_type_counts.keys())
             },
         }
+    if all_bp_basin_analyses:
+        out["bp_basin_analysis"] = all_bp_basin_analyses
+        # Aggregate basin statistics.
+        n_ba = len(all_bp_basin_analyses)
+        total_correct = sum(ba["num_correct"] for ba in all_bp_basin_analyses)
+        total_incorrect = sum(ba["num_incorrect"] for ba in all_bp_basin_analyses)
+        total_degenerate = sum(ba["num_degenerate"] for ba in all_bp_basin_analyses)
+        total_perturbations = sum(ba["num_perturbations"] for ba in all_bp_basin_analyses)
+        boundary_values = [
+            ba["basin_boundary_eps"]
+            for ba in all_bp_basin_analyses
+            if ba["basin_boundary_eps"] is not None
+        ]
+        out["bp_basin_summary"] = {
+            "mean_basin_correct_probability": (
+                float(total_correct) / float(total_perturbations)
+                if total_perturbations > 0 else 0.0
+            ),
+            "mean_basin_incorrect_probability": (
+                float(total_incorrect) / float(total_perturbations)
+                if total_perturbations > 0 else 0.0
+            ),
+            "mean_basin_degenerate_probability": (
+                float(total_degenerate) / float(total_perturbations)
+                if total_perturbations > 0 else 0.0
+            ),
+            "num_trials_with_boundary": len(boundary_values),
+            "mean_boundary_eps": (
+                float(sum(boundary_values)) / float(len(boundary_values))
+                if boundary_values else None
+            ),
+            "min_boundary_eps": (
+                float(min(boundary_values)) if boundary_values else None
+            ),
+            "total_perturbations": total_perturbations,
+            "total_trials": n_ba,
+        }
     return out
 
 
@@ -648,6 +710,7 @@ def run_evaluation(
     enable_bp_phase_diagram: bool = False,
     enable_bp_freeze_detection: bool = False,
     enable_bp_fixed_point_analysis: bool = False,
+    enable_bp_basin_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -705,6 +768,7 @@ def run_evaluation(
                     enable_bp_phase_diagram=enable_bp_phase_diagram,
                     enable_bp_freeze_detection=enable_bp_freeze_detection,
                     enable_bp_fixed_point_analysis=enable_bp_fixed_point_analysis,
+                    enable_bp_basin_analysis=enable_bp_basin_analysis,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -948,6 +1012,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP freeze detection (early metastability detection)")
     parser.add_argument("--bp-fixed-point-analysis", action="store_true",
                         help="Enable BP fixed-point trap analysis (correct/incorrect/degenerate classification)")
+    parser.add_argument("--bp-basin-analysis", action="store_true",
+                        help="Enable BP basin-of-attraction analysis (perturbation-based basin geometry)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -984,6 +1050,8 @@ def main() -> None:
         print("BP freeze detection: ENABLED")
     if args.bp_fixed_point_analysis:
         print("BP fixed-point trap analysis: ENABLED")
+    if args.bp_basin_analysis:
+        print("BP basin-of-attraction analysis: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -993,14 +1061,15 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis,
         enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
         enable_bp_freeze_detection=args.bp_freeze_detection,
-        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis,
+        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis or args.bp_basin_analysis,
+        enable_bp_basin_analysis=args.bp_basin_analysis,
     )
 
     # Print reports.
