@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v5.1.0](https://img.shields.io/badge/release-v5.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v5.1.0)
+[![Release v5.2.0](https://img.shields.io/badge/release-v5.2.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v5.2.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 Deterministic QLDPC CSS framework for studying belief propagation attractor geometry and decoding dynamics.
@@ -36,96 +36,160 @@ Key project documentation:
 
 ---
 
-## Current Release
+Current Release
 
-v5.1.0 — Deterministic BP Attractor Geometry & Barrier Analysis
+v5.2.0 — Decoder Experiment Framework & Deterministic Paired Experiments
 
-The v5.x series transforms the QSOLKCB/QEC framework into a deterministic
-instrument for studying **belief propagation attractor geometry in QLDPC decoding**.
+This release introduces the Decoder Experiment Framework, enabling controlled
+A/B experiments between a frozen reference BP decoder and an experimental sandbox
+decoder.
 
-Earlier diagnostics layers revealed that under syndrome-only inference,
-BP decoding failures arise from **incorrect fixed-point selection** rather than
-metastable oscillation or chaotic inference.
+The goal is to allow safe exploration of decoder modifications while preserving
+a permanent deterministic baseline for reproducible experiments.
 
-The v5.x diagnostics extend this analysis by mapping attractor landscapes,
-basin geometry, and free-energy barriers between BP fixed points.
+A new decoder interface layer allows the benchmark harness to dynamically select
+between decoder implementations without modifying the decoding API.
 
 Release:
-https://github.com/QSOLKCB/QEC/releases/tag/v5.1.0
+https://github.com/QSOLKCB/QEC/releases/tag/v5.2.0
 
----
+Decoder Experiment Framework (v5.2)
 
-## BP Attractor Geometry Diagnostics
+Two decoder roles are now defined:
 
-The toolkit now includes a layered deterministic diagnostics framework
+src/qec/decoder/
+bp_decoder_reference.py
+bp_decoder_experimental.py
+decoder_interface.py
+
+Reference Decoder
+
+The reference decoder re-exports the original bp_decode implementation and
+serves as the immutable baseline implementation.
+
+This module must never be modified, ensuring historical experiments remain
+reproducible.
+
+Experimental Decoder
+
+The experimental decoder provides a safe sandbox for testing decoder
+modifications without affecting the baseline.
+
+Both decoders expose the same API and can be selected dynamically by the
+benchmark harness.
+
+Deterministic Decoder Comparison
+
+The benchmark harness now supports controlled decoder comparison experiments.
+
+New options:
+
+--decoder {reference, experimental}
+--compare-decoders
+
+Comparison mode runs both decoders on identical inputs during each trial,
+allowing deterministic A/B experiments.
+
+Comparison results are recorded under:
+
+decoder_comparison
+Deterministic Paired Experiments
+
+Two additional options guarantee strict pairing of error realizations:
+
+--paired-seed
+--paired-errors
+
+These ensure that both decoders observe identical channel error patterns
+throughout the FER sweep.
+
+This enables scientifically rigorous decoder comparisons.
+
+Decoder Comparison Report
+
+A convenience reporting option is now available:
+
+--decoder-report
+
+When comparison mode is active, the harness prints a summary table:
+
+Decoder Comparison Report
+-----------------------------------------------------------
+mode                     distance         p   FER_ref   FER_exp      ΔFER
+-----------------------------------------------------------
+baseline                       32    0.0300    0.41      0.29     -0.12
+rpc_only                       32    0.0300    0.53      0.34     -0.19
+
+This provides immediate visibility into performance differences between
+decoder implementations.
+
+BP Attractor Geometry Diagnostics
+
+The toolkit includes a layered deterministic diagnostics framework
 for analyzing BP convergence behavior.
 
-| Version | Capability |
-|-------|-------------|
-| v4.1 | Basin-switch detection |
-| v4.2 | Energy landscape diagnostics |
-| v4.3 | Iteration trajectory diagnostics |
-| v4.4 | BP regime classification |
-| v4.5 | Regime transition tracing |
-| v4.6 | Phase diagram aggregation |
-| v4.7 | Freeze detection diagnostics |
-| v4.8 | Fixed-point trap analysis |
-| v4.9 | Basin-of-attraction estimation |
-| v5.0 | Attractor landscape mapping |
-| v5.1 | Free-energy barrier estimation |
+Version	Capability
+v4.1	Basin-switch detection
+v4.2	Energy landscape diagnostics
+v4.3	Iteration trajectory diagnostics
+v4.4	BP regime classification
+v4.5	Regime transition tracing
+v4.6	Phase diagram aggregation
+v4.7	Freeze detection diagnostics
+v4.8	Fixed-point trap analysis
+v4.9	Basin-of-attraction estimation
+v5.0	Attractor landscape mapping
+v5.1	Free-energy barrier estimation
+v5.2	Decoder experiment framework
 
 Together these layers provide deterministic measurement of:
 
-- BP convergence regimes
-- attractor basin geometry
-- incorrect fixed-point probability
-- escape barrier heights
-- pseudocodeword boundary structure
+BP convergence regimes
 
-All diagnostics remain **trace-only and opt-in**, preserving deterministic
+attractor basin geometry
+
+incorrect fixed-point probability
+
+escape barrier heights
+
+pseudocodeword boundary structure
+
+decoder intervention effects
+
+All diagnostics remain trace-only and opt-in, preserving deterministic
 decoding guarantees.
 
-Baseline decoding outputs remain **byte-identical when diagnostics are disabled**.
+Baseline decoding outputs remain byte-identical when diagnostics are disabled.
 
----
+Free-Energy Barrier Estimation (v5.1)
 
-## Free-Energy Barrier Estimation (v5.1)
-
-v5.1 introduces deterministic escape-barrier estimation for BP attractors.
+v5.1 introduced deterministic escape-barrier estimation for BP attractors.
 
 New module:
 
 src/qec/diagnostics/bp_barrier_analysis.py
 
-
 The diagnostic applies deterministic perturbations to the initial belief state
-and determines the **minimum perturbation magnitude required to escape the
-current BP attractor basin**.
+and determines the minimum perturbation magnitude required to escape the
+current BP attractor basin.
 
 Perturbation schedule:
-
 
 eps = [1e-4, 5e-4, 1e-3, 2e-3, 5e-3]
 patterns = [+1, −1, +2, −2]
 
-
 Returned metrics:
-
 
 baseline_attractor
 barrier_eps
 escaped
 num_trials
 
+These measurements approximate free-energy barriers surrounding BP attractors.
 
-These measurements approximate **free-energy barriers surrounding BP attractors**.
+Benchmark Harness Integration
 
----
-
-## Benchmark Harness Integration
-
-The deterministic DPS evaluation harness now supports the full diagnostics stack:
-
+The deterministic DPS evaluation harness supports the full diagnostics stack:
 
 --bp-dynamics
 --bp-transitions
@@ -135,26 +199,30 @@ The deterministic DPS evaluation harness now supports the full diagnostics stack
 --bp-basin-analysis
 --bp-landscape-map
 --bp-barrier-analysis
-
+--compare-decoders
+--paired-seed
+--paired-errors
 
 Diagnostics results are appended to benchmark artifacts without modifying
 decoder behavior.
 
-All diagnostics remain **fully optional**.
+All diagnostics remain fully optional.
 
----
-
-## Determinism Guarantees
+Determinism Guarantees
 
 The QEC framework maintains strict deterministic execution:
 
-- no randomness introduced
-- no Python `hash()` usage
-- deterministic perturbation schedules
-- JSON-serializable artifacts
-- byte-identical results across repeated runs
+no randomness introduced
 
-Decoder outputs remain **identical when diagnostics are disabled**.
+no Python hash() usage
+
+deterministic perturbation schedules
+
+JSON-serializable artifacts
+
+byte-identical results across repeated runs
+
+Decoder outputs remain identical when diagnostics are disabled.
 
 ---
 
