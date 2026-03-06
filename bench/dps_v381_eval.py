@@ -78,6 +78,10 @@ from src.qec.diagnostics.bp_freeze_detection import (
     compute_bp_freeze_detection,
 )
 
+from src.qec.diagnostics.bp_fixed_point_analysis import (
+    compute_bp_fixed_point_analysis,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -272,6 +276,7 @@ def run_mode(
     enable_bp_transitions: bool = False,
     enable_bp_phase_diagram: bool = False,
     enable_bp_freeze_detection: bool = False,
+    enable_bp_fixed_point_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -285,7 +290,9 @@ def run_mode(
     *enable_bp_transitions* is True, also returns
     ``bp_regime_trace``, ``bp_transition_summary``, and
     ``bp_transition_counts``.  When *enable_bp_freeze_detection* is
-    True, also returns ``bp_freeze_detection``.
+    True, also returns ``bp_freeze_detection``.  When
+    *enable_bp_fixed_point_analysis* is True, also returns
+    ``bp_fixed_point_analysis`` and ``bp_fixed_point_summary``.
     """
     mode_cfg = MODES[mode_name]
     schedule = mode_cfg["schedule"]
@@ -297,6 +304,10 @@ def run_mode(
     # Phase diagram implies BP transitions.
     if enable_bp_phase_diagram:
         enable_bp_transitions = True
+    # Fixed-point analysis implies energy trace and iteration diagnostics.
+    if enable_bp_fixed_point_analysis:
+        enable_energy_trace = True
+        enable_iteration_diagnostics = True
     # Freeze detection implies BP dynamics.
     if enable_bp_freeze_detection:
         enable_bp_dynamics = True
@@ -323,6 +334,7 @@ def run_mode(
     all_bp_dynamics: list[dict[str, Any]] = []
     all_bp_regime_traces: list[dict[str, Any]] = []
     all_bp_freeze_detections: list[dict[str, Any]] = []
+    all_bp_fixed_point_analyses: list[dict[str, Any]] = []
 
     for inst in instances:
         e = inst["e"]
@@ -438,6 +450,28 @@ def run_mode(
                     )
                     all_bp_freeze_detections.append(fd)
 
+        # v4.8.0: BP fixed-point trap analysis.
+        if enable_bp_fixed_point_analysis and trace is not None:
+            llr_trace_for_fp = (
+                [llr_hist[i] for i in range(llr_hist.shape[0])]
+                if llr_hist is not None and llr_hist.shape[0] > 0
+                else []
+            )
+            energy_list = list(trace)
+            # Build syndrome trace from per-iteration correction syndromes.
+            # Use final syndrome weight from the correction.
+            s_correction = syndrome(H, correction)
+            final_sw = int(np.sum(s_correction != s))
+            # Build per-iteration syndrome weights from energy trace length.
+            syndrome_trace_fp = [final_sw] * len(energy_list)
+            fp_result = compute_bp_fixed_point_analysis(
+                llr_trace=llr_trace_for_fp if llr_trace_for_fp else [np.zeros(H.shape[1])],
+                energy_trace=energy_list if energy_list else [0.0],
+                syndrome_trace=syndrome_trace_fp if syndrome_trace_fp else [final_sw],
+                final_syndrome_weight=final_sw,
+            )
+            all_bp_fixed_point_analyses.append(fp_result)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -540,6 +574,37 @@ def run_mode(
                 fd["freeze_score"] for fd in all_bp_freeze_detections
             ),
         }
+    if all_bp_fixed_point_analyses:
+        out["bp_fixed_point_analysis"] = all_bp_fixed_point_analyses
+        # Aggregate fixed-point type counts.
+        fp_type_counts: dict[str, int] = {}
+        total_iters_to_fp: list[int] = []
+        for fpa in all_bp_fixed_point_analyses:
+            fpt = fpa["fixed_point_type"]
+            fp_type_counts[fpt] = fp_type_counts.get(fpt, 0) + 1
+            total_iters_to_fp.append(fpa["iterations_to_fixed_point"])
+        n_fp = len(all_bp_fixed_point_analyses)
+        out["bp_fixed_point_summary"] = {
+            "correct_fixed_point_probability": float(
+                fp_type_counts.get("correct_fixed_point", 0)
+            ) / float(n_fp),
+            "degenerate_fixed_point_probability": float(
+                fp_type_counts.get("degenerate_fixed_point", 0)
+            ) / float(n_fp),
+            "incorrect_fixed_point_probability": float(
+                fp_type_counts.get("incorrect_fixed_point", 0)
+            ) / float(n_fp),
+            "mean_iterations_to_fixed_point": (
+                float(sum(total_iters_to_fp)) / float(n_fp)
+            ),
+            "no_convergence_probability": float(
+                fp_type_counts.get("no_convergence", 0)
+            ) / float(n_fp),
+            "type_counts": {
+                k: fp_type_counts[k]
+                for k in sorted(fp_type_counts.keys())
+            },
+        }
     return out
 
 
@@ -582,6 +647,7 @@ def run_evaluation(
     enable_bp_transitions: bool = False,
     enable_bp_phase_diagram: bool = False,
     enable_bp_freeze_detection: bool = False,
+    enable_bp_fixed_point_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run the full DPS evaluation across all modes, distances, and p values.
 
@@ -638,6 +704,7 @@ def run_evaluation(
                     enable_bp_transitions=enable_bp_transitions,
                     enable_bp_phase_diagram=enable_bp_phase_diagram,
                     enable_bp_freeze_detection=enable_bp_freeze_detection,
+                    enable_bp_fixed_point_analysis=enable_bp_fixed_point_analysis,
                 )
                 results[mode_name][p][distance] = result
                 audits[mode_name][p][distance] = result["audit_summary"]
@@ -879,6 +946,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP phase diagram aggregation (implicitly enables --bp-transitions)")
     parser.add_argument("--bp-freeze-detection", action="store_true",
                         help="Enable BP freeze detection (early metastability detection)")
+    parser.add_argument("--bp-fixed-point-analysis", action="store_true",
+                        help="Enable BP fixed-point trap analysis (correct/incorrect/degenerate classification)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--max-iters", type=int, default=DEFAULT_MAX_ITERS)
@@ -913,6 +982,8 @@ def main() -> None:
         print("BP phase diagram analysis: ENABLED")
     if args.bp_freeze_detection:
         print("BP freeze detection: ENABLED")
+    if args.bp_fixed_point_analysis:
+        print("BP fixed-point trap analysis: ENABLED")
 
     # Full evaluation.
     eval_result = run_evaluation(
@@ -922,13 +993,14 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis,
         enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
         enable_bp_freeze_detection=args.bp_freeze_detection,
+        enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis,
     )
 
     # Print reports.
