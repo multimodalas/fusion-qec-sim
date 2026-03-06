@@ -6,6 +6,42 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[4.9.0] — 2026-03-06
+Basin-of-Attraction and Boundary Analysis
+
+Introduces deterministic perturbation experiments to estimate the basin
+geometry of BP fixed points.  Diagnostics only.  Decoder behavior unchanged.
+
+Added
+
+- `compute_bp_basin_analysis()`: estimates basin-of-attraction geometry via
+  deterministic perturbation of the initial LLR vector.  Measures correct
+  attractor probability, incorrect attractor probability, degenerate attractor
+  probability, and basin boundary distance.
+- Basin boundary estimation: finds minimum perturbation magnitude that changes
+  the fixed-point classification, approximating the distance to the nearest
+  pseudocodeword basin boundary.
+- DPS harness (`bench/dps_v381_eval.py`): new `--bp-basin-analysis` flag.
+  When enabled, computes basin analysis per trial and stores results under
+  `bp_basin_analysis` with aggregate `bp_basin_summary` including
+  `mean_basin_correct_probability`, `mean_basin_incorrect_probability`,
+  `mean_basin_degenerate_probability`, `mean_boundary_eps`, and
+  `min_boundary_eps`.
+- Comprehensive tests (`tests/test_bp_basin_analysis.py`): correct basin,
+  mixed basin, boundary detection, determinism, JSON serializability,
+  custom epsilon values.
+
+Unchanged
+
+- Decoder core (`src/qec/decoder/`): untouched.
+- Construction layer (`src/qec/construction/`): untouched.
+- Existing diagnostics modules: untouched.
+- Schema version: unchanged.
+- All existing tests pass without modification.
+- Baseline decoding output: byte-identical when diagnostics disabled.
+
+---
+
 [4.8.0] — 2026-03-06
 Deterministic Fixed-Point Trap Analysis
 
