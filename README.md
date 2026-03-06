@@ -37,6 +37,117 @@ Key project documentation:
 ## Current Release
 
 Current Release
+v4.7.1 — BP Phase Transition Experiments & Fixed-Point Diagnostics
+
+The v4.7 series completes the first full BP observability stack in the QSOLKCB/QEC framework and introduces deterministic experimental tooling for investigating decoder dynamics and failure mechanisms in QLDPC belief propagation.
+
+Extensive deterministic experiments performed using the new diagnostics stack show that under the BSC syndrome channel, decoding failures are not caused by oscillatory metastability or freeze dynamics. Instead, BP rapidly converges to fixed points, and decoding failure arises from incorrect attractor selection.
+
+This release packages the deterministic experiment tooling and analysis artifacts used to investigate this behavior.
+
+Release:
+https://github.com/QSOLKCB/QEC/releases/tag/v4.7.1
+
+Diagnostics Stack
+
+The QEC toolkit now includes a layered diagnostics framework for studying belief propagation behavior on QLDPC Tanner graphs.
+
+Version	Capability
+v4.1	Basin-switch detection
+v4.2	Energy landscape diagnostics
+v4.3	Iteration trajectory diagnostics
+v4.4	BP regime classification
+v4.5	Regime transition tracing
+v4.6	Phase diagram aggregation
+v4.7	Freeze detection diagnostics
+
+Together these layers provide a deterministic observability framework for studying:
+
+convergence regimes
+
+trapping-set behavior
+
+oscillatory inference
+
+attractor landscapes
+
+decoding stability
+
+All diagnostics remain trace-only and opt-in, preserving deterministic decoding guarantees.
+
+Baseline decoding outputs remain byte-identical when diagnostics are disabled.
+
+BP Phase Transition Experiments (v4.7.1)
+
+Using the full diagnostics stack, deterministic experiments were performed across parameter grids:
+
+distance ∈ {5,7,9,11,13}
+noise ∈ {0.001 … 0.08}
+
+Measured metrics included:
+
+FER
+
+freeze probability
+
+metastable probability
+
+regime transitions
+
+BP switch rate
+
+freeze score
+
+mean BP iterations
+
+Results showed:
+
+freeze_probability = 0
+switch_rate = 0
+event_rate = 0
+
+across all evaluated parameter points.
+
+BP trajectories converge directly to fixed points without oscillatory or freeze behavior.
+
+Decoding failures arise because BP converges to incorrect fixed points, not because of metastable trapping.
+
+Determinism Guarantees
+
+The diagnostics framework preserves the core determinism guarantees of the QEC toolkit:
+
+No randomness introduced
+
+No Python hash() usage
+
+Deterministic CRC32 state signatures
+
+JSON-serializable artifacts
+
+Byte-identical outputs across repeated runs
+
+Determinism validation confirmed identical SHA-256 hashes across multiple benchmark executions.
+
+Bench Harness Integration
+
+The DPS benchmark harness now supports the following optional diagnostics:
+
+--bp-dynamics
+--bp-transitions
+--bp-phase-diagram
+--bp-freeze-detection
+
+When enabled, BP traces are analyzed and appended to benchmark artifacts without altering decoder behavior.
+
+Diagnostics are fully optional and remain strictly observational.
+
+Research Context
+
+These diagnostics enable systematic investigation of Distance Performance Scaling (DPS) inversion under syndrome-only inference.
+
+Experimental results suggest that DPS inversion in this setting arises from incorrect fixed-point selection in BP, rather than from metastable or chaotic inference dynamics.
+
+The diagnostics stack therefore transforms the QEC toolkit from a decoder implementation into a deterministic instrument for studying BP attractor landscapes in QLDPC decoding.
 
 v4.4.0 — Deterministic BP Dynamics Regime Analysis
 
