@@ -1,0 +1,560 @@
+{
+  "version": "v4.7.1-extended",
+  "config": {
+    "seed": 42,
+    "trials": 200,
+    "max_iters": 50,
+    "bp_mode": "min_sum",
+    "schedule": "flooding",
+    "channel": "bsc_syndrome",
+    "distances": [
+      5,
+      7,
+      9,
+      11,
+      13
+    ],
+    "p_values": [
+      0.01,
+      0.02,
+      0.03,
+      0.05,
+      0.08
+    ]
+  },
+  "extended_noise_sweep": [
+    {
+      "fer": 0.46,
+      "frame_errors": 92,
+      "trials": 200,
+      "mean_iters": 23.54,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 92
+      },
+      "traces_analyzed": 92,
+      "distance": 5,
+      "noise": 0.01
+    },
+    {
+      "fer": 0.66,
+      "frame_errors": 132,
+      "trials": 200,
+      "mean_iters": 33.34,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 132
+      },
+      "traces_analyzed": 132,
+      "distance": 5,
+      "noise": 0.02
+    },
+    {
+      "fer": 0.805,
+      "frame_errors": 161,
+      "trials": 200,
+      "mean_iters": 40.445,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 161
+      },
+      "traces_analyzed": 161,
+      "distance": 5,
+      "noise": 0.03
+    },
+    {
+      "fer": 0.935,
+      "frame_errors": 187,
+      "trials": 200,
+      "mean_iters": 46.815,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 187
+      },
+      "traces_analyzed": 187,
+      "distance": 5,
+      "noise": 0.05
+    },
+    {
+      "fer": 0.975,
+      "frame_errors": 195,
+      "trials": 200,
+      "mean_iters": 48.775,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 195
+      },
+      "traces_analyzed": 195,
+      "distance": 5,
+      "noise": 0.08
+    },
+    {
+      "fer": 0.56,
+      "frame_errors": 112,
+      "trials": 200,
+      "mean_iters": 28.44,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 112
+      },
+      "traces_analyzed": 112,
+      "distance": 7,
+      "noise": 0.01
+    },
+    {
+      "fer": 0.765,
+      "frame_errors": 153,
+      "trials": 200,
+      "mean_iters": 38.485,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 153
+      },
+      "traces_analyzed": 153,
+      "distance": 7,
+      "noise": 0.02
+    },
+    {
+      "fer": 0.89,
+      "frame_errors": 178,
+      "trials": 200,
+      "mean_iters": 44.61,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 178
+      },
+      "traces_analyzed": 178,
+      "distance": 7,
+      "noise": 0.03
+    },
+    {
+      "fer": 0.98,
+      "frame_errors": 196,
+      "trials": 200,
+      "mean_iters": 49.02,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 196
+      },
+      "traces_analyzed": 196,
+      "distance": 7,
+      "noise": 0.05
+    },
+    {
+      "fer": 1.0,
+      "frame_errors": 200,
+      "trials": 200,
+      "mean_iters": 50.0,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 200
+      },
+      "traces_analyzed": 200,
+      "distance": 7,
+      "noise": 0.08
+    },
+    {
+      "fer": 0.665,
+      "frame_errors": 133,
+      "trials": 200,
+      "mean_iters": 33.585,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 133
+      },
+      "traces_analyzed": 133,
+      "distance": 9,
+      "noise": 0.01
+    },
+    {
+      "fer": 0.835,
+      "frame_errors": 167,
+      "trials": 200,
+      "mean_iters": 41.915,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 167
+      },
+      "traces_analyzed": 167,
+      "distance": 9,
+      "noise": 0.02
+    },
+    {
+      "fer": 0.94,
+      "frame_errors": 188,
+      "trials": 200,
+      "mean_iters": 47.06,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 188
+      },
+      "traces_analyzed": 188,
+      "distance": 9,
+      "noise": 0.03
+    },
+    {
+      "fer": 0.985,
+      "frame_errors": 197,
+      "trials": 200,
+      "mean_iters": 49.265,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 197
+      },
+      "traces_analyzed": 197,
+      "distance": 9,
+      "noise": 0.05
+    },
+    {
+      "fer": 1.0,
+      "frame_errors": 200,
+      "trials": 200,
+      "mean_iters": 50.0,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 200
+      },
+      "traces_analyzed": 200,
+      "distance": 9,
+      "noise": 0.08
+    },
+    {
+      "fer": 0.775,
+      "frame_errors": 155,
+      "trials": 200,
+      "mean_iters": 38.975,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 155
+      },
+      "traces_analyzed": 155,
+      "distance": 11,
+      "noise": 0.01
+    },
+    {
+      "fer": 0.93,
+      "frame_errors": 186,
+      "trials": 200,
+      "mean_iters": 46.57,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 186
+      },
+      "traces_analyzed": 186,
+      "distance": 11,
+      "noise": 0.02
+    },
+    {
+      "fer": 0.975,
+      "frame_errors": 195,
+      "trials": 200,
+      "mean_iters": 48.775,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 195
+      },
+      "traces_analyzed": 195,
+      "distance": 11,
+      "noise": 0.03
+    },
+    {
+      "fer": 1.0,
+      "frame_errors": 200,
+      "trials": 200,
+      "mean_iters": 50.0,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 200
+      },
+      "traces_analyzed": 200,
+      "distance": 11,
+      "noise": 0.05
+    },
+    {
+      "fer": 1.0,
+      "frame_errors": 200,
+      "trials": 200,
+      "mean_iters": 50.0,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 200
+      },
+      "traces_analyzed": 200,
+      "distance": 11,
+      "noise": 0.08
+    },
+    {
+      "fer": 0.805,
+      "frame_errors": 161,
+      "trials": 200,
+      "mean_iters": 40.445,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 161
+      },
+      "traces_analyzed": 161,
+      "distance": 13,
+      "noise": 0.01
+    },
+    {
+      "fer": 0.95,
+      "frame_errors": 190,
+      "trials": 200,
+      "mean_iters": 47.55,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999996,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 190
+      },
+      "traces_analyzed": 190,
+      "distance": 13,
+      "noise": 0.02
+    },
+    {
+      "fer": 0.995,
+      "frame_errors": 199,
+      "trials": 200,
+      "mean_iters": 49.755,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.19999999999999998,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 199
+      },
+      "traces_analyzed": 199,
+      "distance": 13,
+      "noise": 0.03
+    },
+    {
+      "fer": 1.0,
+      "frame_errors": 200,
+      "trials": 200,
+      "mean_iters": 50.0,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 200
+      },
+      "traces_analyzed": 200,
+      "distance": 13,
+      "noise": 0.05
+    },
+    {
+      "fer": 1.0,
+      "frame_errors": 200,
+      "trials": 200,
+      "mean_iters": 50.0,
+      "freeze_probability": 0.0,
+      "mean_freeze_iteration": null,
+      "mean_freeze_score": 0.2,
+      "metastable_probability": 1.0,
+      "switch_rate": 0.0,
+      "event_rate": 0.0,
+      "regime_frequencies": {
+        "stable_convergence": 1.0
+      },
+      "dynamics_regime_counts": {
+        "stable_convergence": 200
+      },
+      "traces_analyzed": 200,
+      "distance": 13,
+      "noise": 0.08
+    }
+  ],
+  "determinism_check": {
+    "passed": true,
+    "json_hash": "4b190a62b667f575ae2f8fb7d555222bda7aeef65d23107171e17009e6223fb5",
+    "config": {
+      "distance": 9,
+      "noise": 0.05
+    }
+  }
+}

@@ -288,6 +288,178 @@ Configuration: d=7, p=0.007, 200 trials, seed=42.
 
 ---
 
+---
+
+## 7. Extended Noise Sweep (Phase Transition Probe)
+
+### Motivation
+
+The initial sweep (p <= 0.015) showed freeze_probability = 0 and mean_freeze_score = 0.2
+at all operating points. To determine whether higher noise activates BP metastability
+and freeze dynamics, we extend the sweep to:
+
+**p in {0.01, 0.02, 0.03, 0.05, 0.08}**
+
+All other parameters are identical to the initial sweep (seed=42, trials=200,
+max_iters=50, min_sum, flooding, BSC syndrome-only channel).
+
+### Extended Sweep Results
+
+| distance | noise | FER    | freeze_prob | mean_freeze_score | metastable_prob | switch_rate | event_rate | mean_iters |
+|----------|-------|--------|-------------|-------------------|-----------------|-------------|------------|------------|
+| 5        | 0.010 | 0.4600 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 23.5       |
+| 5        | 0.020 | 0.6600 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 33.3       |
+| 5        | 0.030 | 0.8050 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 40.4       |
+| 5        | 0.050 | 0.9350 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 46.8       |
+| 5        | 0.080 | 0.9750 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 48.8       |
+| 7        | 0.010 | 0.5600 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 28.4       |
+| 7        | 0.020 | 0.7650 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 38.5       |
+| 7        | 0.030 | 0.8900 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 44.6       |
+| 7        | 0.050 | 0.9800 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 49.0       |
+| 7        | 0.080 | 1.0000 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 50.0       |
+| 9        | 0.010 | 0.6650 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 33.6       |
+| 9        | 0.020 | 0.8350 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 41.9       |
+| 9        | 0.030 | 0.9400 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 47.1       |
+| 9        | 0.050 | 0.9850 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 49.3       |
+| 9        | 0.080 | 1.0000 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 50.0       |
+| 11       | 0.010 | 0.7750 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 39.0       |
+| 11       | 0.020 | 0.9300 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 46.6       |
+| 11       | 0.030 | 0.9750 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 48.8       |
+| 11       | 0.050 | 1.0000 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 50.0       |
+| 11       | 0.080 | 1.0000 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 50.0       |
+| 13       | 0.010 | 0.8050 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 40.4       |
+| 13       | 0.020 | 0.9500 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 47.5       |
+| 13       | 0.030 | 0.9950 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 49.8       |
+| 13       | 0.050 | 1.0000 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 50.0       |
+| 13       | 0.080 | 1.0000 | 0.0000      | 0.2000            | 1.0000          | 0.0000      | 0.0000     | 50.0       |
+
+### Extended Phase Transition Plot
+
+![Extended BP Phase Transition Plot](bp_phase_transition_plot_extended.png)
+
+The six-panel plot shows:
+
+1. **FER vs Noise** (top-left): FER saturates toward 1.0 at high noise. Larger distances
+   reach saturation earlier. At p=0.08, d >= 7 achieves FER = 1.0. DPS inversion persists
+   across the entire extended range.
+
+2. **Freeze Probability vs Noise** (top-right): Remains uniformly zero across all 25
+   parameter points. Even at p=0.08 where FER = 1.0, no freeze events are detected.
+
+3. **Metastable Probability vs Noise** (top-right panel): Uniformly 1.0 everywhere.
+   The regime trace freeze_score (max_dwell/total_iters) remains 1.0 because the decoder
+   stays in `stable_convergence` for the entire trace.
+
+4. **Freeze Score vs Noise** (bottom-left): Constant at 0.2 across all points. The
+   composite score formula produces a floor value because all dynamics metrics (MSI, GOS,
+   CPI, EDS) remain at their trivial fixed-point values.
+
+5. **Switch Rate vs Noise** (bottom-center): Zero everywhere. No regime transitions occur.
+
+6. **Mean Iterations vs Noise** (bottom-right): Increases with noise and saturates at
+   max_iters=50 for high noise + large distance. At p=0.08, d >= 9 hits the iteration cap.
+
+### Interpretation
+
+**Does freeze probability increase with noise?**
+
+No. Freeze probability remains exactly zero across the entire extended range
+p in {0.01, 0.02, 0.03, 0.05, 0.08}. The BP freeze detector does not trigger at any
+noise level.
+
+**Does the curve resemble a phase transition?**
+
+No. The expected phase-transition shape (low noise -> stable, transition region ->
+metastability onset, high noise -> freeze dominated) is absent. Instead, the FER curve
+shows a smooth sigmoid from low to high FER with no accompanying change in BP dynamics.
+The only "transition" is from partial decoding success to total decoding failure — but
+this manifests as fixed-point quality degradation, not dynamical regime change.
+
+**Does distance shift the transition point?**
+
+There is no dynamical transition to shift. FER saturation occurs earlier for larger
+distances (d=13 reaches FER=1.0 by p=0.05; d=5 still has FER=0.975 at p=0.08), but
+this reflects the structural weakness of larger codes under uniform-prior decoding,
+not a phase boundary in BP dynamics.
+
+### Why No Metastability Emerges
+
+The extended sweep confirms that the absence of metastability is **structural**, not a
+threshold effect. The root cause is the interaction of three factors:
+
+1. **Uniform initial beliefs:** The BSC syndrome channel gives identical LLR magnitude
+   to every variable node, creating a fully symmetric initial state.
+
+2. **Regular Tanner graph:** The lifted-product QLDPC codes have uniform variable degree
+   and check degree, so message passing preserves the symmetry of the initial state.
+
+3. **Immediate fixed point:** Under min-sum flooding with symmetric initial messages on
+   a regular graph, BP reaches a fixed point within 1 iteration. The energy trace is
+   constant from iteration 0. There are zero LLR sign changes across all 50 iterations.
+
+This means the decoder's trajectory through belief space is trivially short — it steps
+to a fixed point and stays there. The fixed point is either syndrome-consistent (correct
+decode) or syndrome-inconsistent (frame error), but in neither case does the trajectory
+exhibit the oscillatory dynamics, sign flips, or energy plateaus that the freeze detector
+is designed to capture.
+
+Higher noise does not change the dynamical regime — it only changes the probability that
+the fixed point is incorrect. The FER increases smoothly because more error weight pushes
+the syndrome further from the codespace, making correct fixed points less accessible.
+
+### Implications
+
+1. **The freeze detection diagnostics (v4.7.0) are correctly calibrated** for oscillatory
+   metastability but structurally cannot trigger on fixed-point trapping. The composite
+   score formula `0.4*MSI + 0.3*(1-EDS) + 0.2*(1-GOS) + 0.1*CPI` produces a floor of
+   0.2 when dynamics are trivially stable, well below the 0.85 threshold.
+
+2. **To observe classical spin-glass BP dynamics**, one would need to break the initial
+   symmetry. Possible approaches:
+   - Use a channel model that provides per-variable information (e.g., AWGN soft output)
+   - Apply syndrome-field initialization (`centered_syndrome_field` or `pseudo_prior`)
+     to create asymmetric initial beliefs
+   - Use serial (layered) scheduling instead of flooding to introduce iteration-dependent
+     asymmetry
+   - Use damped BP or stochastic perturbation to prevent immediate fixed-point convergence
+
+3. **The DPS inversion is a fixed-point selection problem**, not a dynamical instability.
+   Larger codes have exponentially more fixed points of BP, and under symmetric
+   initialization, the basin of attraction of the correct fixed point shrinks relative to
+   the total fixed-point landscape.
+
+### Extended Determinism Verification
+
+Configuration: d=9, p=0.05, 200 trials, seed=42.
+
+| Metric | Run 1 | Run 2 | Match |
+|--------|-------|-------|-------|
+| FER | 0.985000 | 0.985000 | Yes |
+| freeze_probability | 0.000000 | 0.000000 | Yes |
+| mean_freeze_score | 0.200000 | 0.200000 | Yes |
+| metastable_probability | 1.000000 | 1.000000 | Yes |
+| switch_rate | 0.000000 | 0.000000 | Yes |
+
+JSON hash (SHA-256): `4b190a62b667f575ae2f8fb7d555222bda7aeef65d23107171e17009e6223fb5`
+
+**Result: PASSED** — All outputs and JSON hashes are identical across both runs.
+
+---
+
+## Artifacts
+
+| File | Description |
+|------|-------------|
+| `bp_phase_transition_data.json` | Initial sweep results (JSON) |
+| `bp_phase_transition_plot.png` | Initial four-panel phase transition plot |
+| `bp_phase_transition_data_extended.json` | Extended sweep results (JSON) |
+| `bp_phase_transition_plot_extended.png` | Extended six-panel phase transition plot |
+| `bench/bp_phase_transition_experiments.py` | Initial experiment script |
+| `bench/bp_phase_transition_extended.py` | Extended sweep script |
+| `BP_DYNAMICS_EXPERIMENTS_v4.7.1.md` | This report |
+
+---
+
 ## Architectural Compliance
 
 This analysis is observation-only:
