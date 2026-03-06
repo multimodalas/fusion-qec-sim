@@ -1,7 +1,9 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v4.4.0](https://img.shields.io/badge/release-v4.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v4.4.0)
+[![Release v5.1.0](https://img.shields.io/badge/release-v5.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v5.1.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
+
+Deterministic QLDPC CSS framework for studying belief propagation attractor geometry and decoding dynamics.
 
 QEC is a **deterministic QLDPC CSS quantum error correction framework** for studying belief propagation decoding dynamics under controlled experimental conditions.
 
@@ -36,118 +38,140 @@ Key project documentation:
 
 ## Current Release
 
-Current Release
-v4.7.1 — BP Phase Transition Experiments & Fixed-Point Diagnostics
+v5.1.0 — Deterministic BP Attractor Geometry & Barrier Analysis
 
-The v4.7 series completes the first full BP observability stack in the QSOLKCB/QEC framework and introduces deterministic experimental tooling for investigating decoder dynamics and failure mechanisms in QLDPC belief propagation.
+The v5.x series transforms the QSOLKCB/QEC framework into a deterministic
+instrument for studying **belief propagation attractor geometry in QLDPC decoding**.
 
-Extensive deterministic experiments performed using the new diagnostics stack show that under the BSC syndrome channel, decoding failures are not caused by oscillatory metastability or freeze dynamics. Instead, BP rapidly converges to fixed points, and decoding failure arises from incorrect attractor selection.
+Earlier diagnostics layers revealed that under syndrome-only inference,
+BP decoding failures arise from **incorrect fixed-point selection** rather than
+metastable oscillation or chaotic inference.
 
-This release packages the deterministic experiment tooling and analysis artifacts used to investigate this behavior.
+The v5.x diagnostics extend this analysis by mapping attractor landscapes,
+basin geometry, and free-energy barriers between BP fixed points.
 
 Release:
-https://github.com/QSOLKCB/QEC/releases/tag/v4.7.1
+https://github.com/QSOLKCB/QEC/releases/tag/v5.1.0
 
-Diagnostics Stack
+---
 
-The QEC toolkit now includes a layered diagnostics framework for studying belief propagation behavior on QLDPC Tanner graphs.
+## BP Attractor Geometry Diagnostics
 
-Version	Capability
-v4.1	Basin-switch detection
-v4.2	Energy landscape diagnostics
-v4.3	Iteration trajectory diagnostics
-v4.4	BP regime classification
-v4.5	Regime transition tracing
-v4.6	Phase diagram aggregation
-v4.7	Freeze detection diagnostics
+The toolkit now includes a layered deterministic diagnostics framework
+for analyzing BP convergence behavior.
 
-Together these layers provide a deterministic observability framework for studying:
+| Version | Capability |
+|-------|-------------|
+| v4.1 | Basin-switch detection |
+| v4.2 | Energy landscape diagnostics |
+| v4.3 | Iteration trajectory diagnostics |
+| v4.4 | BP regime classification |
+| v4.5 | Regime transition tracing |
+| v4.6 | Phase diagram aggregation |
+| v4.7 | Freeze detection diagnostics |
+| v4.8 | Fixed-point trap analysis |
+| v4.9 | Basin-of-attraction estimation |
+| v5.0 | Attractor landscape mapping |
+| v5.1 | Free-energy barrier estimation |
 
-convergence regimes
+Together these layers provide deterministic measurement of:
 
-trapping-set behavior
+- BP convergence regimes
+- attractor basin geometry
+- incorrect fixed-point probability
+- escape barrier heights
+- pseudocodeword boundary structure
 
-oscillatory inference
+All diagnostics remain **trace-only and opt-in**, preserving deterministic
+decoding guarantees.
 
-attractor landscapes
+Baseline decoding outputs remain **byte-identical when diagnostics are disabled**.
 
-decoding stability
+---
 
-All diagnostics remain trace-only and opt-in, preserving deterministic decoding guarantees.
+## Free-Energy Barrier Estimation (v5.1)
 
-Baseline decoding outputs remain byte-identical when diagnostics are disabled.
+v5.1 introduces deterministic escape-barrier estimation for BP attractors.
 
-BP Phase Transition Experiments (v4.7.1)
+New module:
 
-Using the full diagnostics stack, deterministic experiments were performed across parameter grids:
+src/qec/diagnostics/bp_barrier_analysis.py
 
-distance ∈ {5,7,9,11,13}
-noise ∈ {0.001 … 0.08}
 
-Measured metrics included:
+The diagnostic applies deterministic perturbations to the initial belief state
+and determines the **minimum perturbation magnitude required to escape the
+current BP attractor basin**.
 
-FER
+Perturbation schedule:
 
-freeze probability
 
-metastable probability
+eps = [1e-4, 5e-4, 1e-3, 2e-3, 5e-3]
+patterns = [+1, −1, +2, −2]
 
-regime transitions
 
-BP switch rate
+Returned metrics:
 
-freeze score
 
-mean BP iterations
+baseline_attractor
+barrier_eps
+escaped
+num_trials
 
-Results showed:
 
-freeze_probability = 0
-switch_rate = 0
-event_rate = 0
+These measurements approximate **free-energy barriers surrounding BP attractors**.
 
-across all evaluated parameter points.
+---
 
-BP trajectories converge directly to fixed points without oscillatory or freeze behavior.
+## Benchmark Harness Integration
 
-Decoding failures arise because BP converges to incorrect fixed points, not because of metastable trapping.
+The deterministic DPS evaluation harness now supports the full diagnostics stack:
 
-Determinism Guarantees
-
-The diagnostics framework preserves the core determinism guarantees of the QEC toolkit:
-
-No randomness introduced
-
-No Python hash() usage
-
-Deterministic CRC32 state signatures
-
-JSON-serializable artifacts
-
-Byte-identical outputs across repeated runs
-
-Determinism validation confirmed identical SHA-256 hashes across multiple benchmark executions.
-
-Bench Harness Integration
-
-The DPS benchmark harness now supports the following optional diagnostics:
 
 --bp-dynamics
 --bp-transitions
 --bp-phase-diagram
 --bp-freeze-detection
+--bp-fixed-point-analysis
+--bp-basin-analysis
+--bp-landscape-map
+--bp-barrier-analysis
 
-When enabled, BP traces are analyzed and appended to benchmark artifacts without altering decoder behavior.
 
-Diagnostics are fully optional and remain strictly observational.
+Diagnostics results are appended to benchmark artifacts without modifying
+decoder behavior.
 
-Research Context
+All diagnostics remain **fully optional**.
 
-These diagnostics enable systematic investigation of Distance Performance Scaling (DPS) inversion under syndrome-only inference.
+---
 
-Experimental results suggest that DPS inversion in this setting arises from incorrect fixed-point selection in BP, rather than from metastable or chaotic inference dynamics.
+## Determinism Guarantees
 
-The diagnostics stack therefore transforms the QEC toolkit from a decoder implementation into a deterministic instrument for studying BP attractor landscapes in QLDPC decoding.
+The QEC framework maintains strict deterministic execution:
+
+- no randomness introduced
+- no Python `hash()` usage
+- deterministic perturbation schedules
+- JSON-serializable artifacts
+- byte-identical results across repeated runs
+
+Decoder outputs remain **identical when diagnostics are disabled**.
+
+---
+
+## Research Context
+
+These diagnostics enable systematic investigation of **Distance Performance Scaling (DPS)** behavior under syndrome-only inference.
+
+Experiments performed using the diagnostics stack show that BP decoding failures arise from **incorrect attractor selection** rather than metastable oscillation.
+
+The toolkit therefore functions as a deterministic experimental platform for studying:
+
+- BP attractor geometry
+- basin stability
+- pseudocodeword structure
+- decoding landscape topology
+
+in QLDPC Tanner graphs.
 
 v4.4.0 — Deterministic BP Dynamics Regime Analysis
 
