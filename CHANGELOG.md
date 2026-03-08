@@ -6,6 +6,66 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.2.0] — 2026-03-06
+Decoder Experiment Framework & Deterministic Paired Experiments
+
+Introduces the Decoder Experiment Framework, enabling controlled A/B
+experiments between a frozen reference BP decoder and an experimental
+sandbox decoder.
+
+This infrastructure allows decoder modifications to be tested while
+preserving a permanent deterministic baseline implementation. All
+baseline experiments remain byte-identical.
+
+Added
+
+Decoder experiment framework (src/qec/decoder/):
+
+bp_decoder_reference.py: frozen reference decoder re-exporting the
+existing bp_decode implementation. Serves as the immutable baseline
+decoder for reproducible experiments.
+
+bp_decoder_experimental.py: experimental decoder sandbox. Initially
+identical to the reference decoder and intended for future algorithm
+experimentation.
+
+decoder_interface.py: decoder registry and selection interface
+(DECODER_REGISTRY, get_decoder()) enabling dynamic decoder selection
+without modifying the decoding API.
+
+Harness decoder selection (bench/dps_v381_eval.py):
+
+--decoder {reference, experimental}: selects which decoder implementation
+to run. Default is reference, preserving existing behavior.
+
+--compare-decoders: executes both decoders on identical inputs during
+each trial, enabling deterministic A/B comparison experiments.
+
+Deterministic paired experiment controls:
+
+--paired-seed: guarantees both decoders share the same deterministic
+seed sequence during the FER sweep.
+
+--paired-errors: copies the LLR vector before passing to each decoder,
+ensuring both decoders observe identical error realizations and
+preventing in-place mutation from affecting paired trials.
+
+Decoder comparison reporting:
+
+--decoder-report: prints a console FER comparison table summarizing
+decoder performance differences (FER_ref, FER_exp, ΔFER) during
+comparison experiments.
+
+Unchanged
+
+Decoder core logic (src/qec_qldpc_codes.py): untouched.
+Construction layer (src/qec/construction/): untouched.
+Diagnostics modules (src/qec/diagnostics/): unchanged.
+Experiment schema and output formats: unchanged.
+Baseline decoding behavior remains byte-identical when new flags are disabled.
+
+All existing tests pass without modification.
+
 [5.1.0] — 2026-03-06
 Free-Energy Barrier Estimation
 

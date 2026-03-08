@@ -91,6 +91,10 @@ from src.qec.diagnostics.bp_barrier_analysis import (
     compute_bp_barrier_analysis,
 )
 
+from src.qec.diagnostics.bp_boundary_analysis import (
+    compute_bp_boundary_analysis,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -293,6 +297,7 @@ def run_mode(
     enable_bp_basin_analysis: bool = False,
     enable_bp_landscape_map: bool = False,
     enable_bp_barrier_analysis: bool = False,
+    enable_bp_boundary_analysis: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -315,6 +320,8 @@ def run_mode(
     ``bp_landscape_map`` and ``bp_landscape_summary``.
     When *enable_bp_barrier_analysis* is True, also returns
     ``bp_barrier_analysis`` and ``bp_barrier_summary``.
+    When *enable_bp_boundary_analysis* is True, also returns
+    ``bp_boundary_analysis`` and ``bp_boundary_summary``.
     """
     if decoder_fn is None:
         decoder_fn = bp_decode
@@ -372,6 +379,7 @@ def run_mode(
     all_bp_basin_analyses: list[dict[str, Any]] = []
     all_bp_landscape_maps: list[dict[str, Any]] = []
     all_bp_barrier_analyses: list[dict[str, Any]] = []
+    all_bp_boundary_analyses: list[dict[str, Any]] = []
     comparison_results: list[dict[str, Any]] = []
 
     for trial_idx, inst in enumerate(instances):
@@ -621,6 +629,26 @@ def run_mode(
                 )
                 all_bp_barrier_analyses.append(barrier_result)
 
+            # v5.3.0: BP boundary analysis (attractor basin distance).
+            if enable_bp_boundary_analysis:
+                def _boundary_decode_fn(llr_vec):
+                    """Decode wrapper for boundary analysis."""
+                    _result = bp_decode(
+                        H, llr_vec,
+                        max_iters=max_iters,
+                        mode=bp_mode,
+                        schedule=schedule,
+                        syndrome_vec=s_used,
+                    )
+                    return _result[0]
+
+                boundary_result = compute_bp_boundary_analysis(
+                    llr_vector=llr_used,
+                    decoder_fn=_boundary_decode_fn,
+                    parity_check_matrix=H,
+                )
+                all_bp_boundary_analyses.append(boundary_result)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -834,6 +862,28 @@ def run_mode(
             ),
             "num_trials": total_trials_sum,
         }
+    if all_bp_boundary_analyses:
+        out["bp_boundary_analysis"] = all_bp_boundary_analyses
+        # Aggregate boundary statistics.
+        n_bnd = len(all_bp_boundary_analyses)
+        crossed_count = sum(
+            1 for ba in all_bp_boundary_analyses if ba["boundary_crossed"]
+        )
+        boundary_eps_values = [
+            ba["boundary_eps"] for ba in all_bp_boundary_analyses
+            if ba["boundary_eps"] is not None
+        ]
+        total_boundary_directions = sum(
+            ba["num_directions"] for ba in all_bp_boundary_analyses
+        )
+        out["bp_boundary_summary"] = {
+            "boundary_cross_probability": float(crossed_count) / float(n_bnd),
+            "mean_boundary_eps": (
+                float(sum(boundary_eps_values)) / float(len(boundary_eps_values))
+                if boundary_eps_values else None
+            ),
+            "num_directions": total_boundary_directions,
+        }
     if comparison_results:
         out["decoder_comparison"] = comparison_results
     return out
@@ -882,6 +932,7 @@ def run_evaluation(
     enable_bp_basin_analysis: bool = False,
     enable_bp_landscape_map: bool = False,
     enable_bp_barrier_analysis: bool = False,
+    enable_bp_boundary_analysis: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -946,6 +997,7 @@ def run_evaluation(
                     enable_bp_basin_analysis=enable_bp_basin_analysis,
                     enable_bp_landscape_map=enable_bp_landscape_map,
                     enable_bp_barrier_analysis=enable_bp_barrier_analysis,
+                    enable_bp_boundary_analysis=enable_bp_boundary_analysis,
                     decoder_fn=decoder_fn,
                     compare_decoders=compare_decoders,
                     paired_seed=paired_seed,
@@ -1230,6 +1282,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP attractor landscape mapping (attractor enumeration, pseudocodeword detection)")
     parser.add_argument("--bp-barrier-analysis", action="store_true",
                         help="Enable BP free-energy barrier estimation (escape perturbation measurement)")
+    parser.add_argument("--bp-boundary-analysis", action="store_true",
+                        help="Enable BP boundary analysis (attractor basin distance estimation)")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1283,6 +1337,8 @@ def main() -> None:
         print("BP attractor landscape mapping: ENABLED")
     if args.bp_barrier_analysis:
         print("BP free-energy barrier estimation: ENABLED")
+    if args.bp_boundary_analysis:
+        print("BP boundary analysis: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1315,6 +1371,7 @@ def main() -> None:
         enable_bp_basin_analysis=args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_landscape_map=args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_barrier_analysis=args.bp_barrier_analysis,
+        enable_bp_boundary_analysis=args.bp_boundary_analysis,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
