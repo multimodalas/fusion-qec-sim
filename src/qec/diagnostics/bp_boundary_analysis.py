@@ -123,7 +123,7 @@ def compute_bp_boundary_analysis(
         ``boundary_eps`` (float or None),
         ``boundary_direction`` (list or None),
         ``boundary_crossed`` (bool),
-        ``num_trials`` (int).
+        ``num_directions`` (int).
     All values are JSON-serializable.
     """
     merged_params: dict[str, Any] = {**DEFAULT_PARAMS, **(params or {})}
@@ -144,7 +144,7 @@ def compute_bp_boundary_analysis(
             "boundary_eps": None,
             "boundary_direction": None,
             "boundary_crossed": False,
-            "num_trials": 0,
+            "num_directions": 0,
         }
 
     eps_max_param = float(merged_params["epsilon_max"])
@@ -152,10 +152,10 @@ def compute_bp_boundary_analysis(
 
     best_boundary_eps: Optional[float] = None
     best_boundary_direction: Optional[np.ndarray] = None
-    num_trials = 0
+    num_directions = 0
 
     for d in directions:
-        num_trials += 1
+        num_directions += 1
 
         # Binary search for boundary along direction d.
         eps_min = 0.0
@@ -197,5 +197,5 @@ def compute_bp_boundary_analysis(
         "boundary_eps": float(best_boundary_eps) if best_boundary_eps is not None else None,
         "boundary_direction": best_boundary_direction.tolist() if best_boundary_direction is not None else None,
         "boundary_crossed": boundary_crossed,
-        "num_trials": num_trials,
+        "num_directions": num_directions,
     }

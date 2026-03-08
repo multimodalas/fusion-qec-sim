@@ -873,8 +873,8 @@ def run_mode(
             ba["boundary_eps"] for ba in all_bp_boundary_analyses
             if ba["boundary_eps"] is not None
         ]
-        total_boundary_trials = sum(
-            ba["num_trials"] for ba in all_bp_boundary_analyses
+        total_boundary_directions = sum(
+            ba["num_directions"] for ba in all_bp_boundary_analyses
         )
         out["bp_boundary_summary"] = {
             "boundary_cross_probability": float(crossed_count) / float(n_bnd),
@@ -882,7 +882,7 @@ def run_mode(
                 float(sum(boundary_eps_values)) / float(len(boundary_eps_values))
                 if boundary_eps_values else None
             ),
-            "num_trials": total_boundary_trials,
+            "num_directions": total_boundary_directions,
         }
     if comparison_results:
         out["decoder_comparison"] = comparison_results

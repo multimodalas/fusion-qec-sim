@@ -171,7 +171,7 @@ class TestBoundaryDetection:
         assert result["boundary_direction"] is not None
         assert isinstance(result["boundary_direction"], list)
         assert len(result["boundary_direction"]) == small_llr.shape[0]
-        assert result["num_trials"] >= 1
+        assert result["num_directions"] >= 1
 
     def test_boundary_eps_is_float(self, small_llr, small_H,
                                     baseline_correction, alt_correction):
@@ -220,7 +220,7 @@ class TestNoCrossing:
         assert result["boundary_crossed"] is False
         assert result["boundary_eps"] is None
         assert result["boundary_direction"] is None
-        assert result["num_trials"] > 0
+        assert result["num_directions"] > 0
 
     def test_no_crossing_high_threshold(self, small_llr, small_H,
                                          baseline_correction, alt_correction):
@@ -256,7 +256,7 @@ class TestEdgeCases:
         )
 
         assert result["boundary_crossed"] is False
-        assert result["num_trials"] >= 0
+        assert result["num_directions"] >= 0
 
     def test_no_directions(self, baseline_correction):
         """Empty H and zero LLR — sign direction has zero norm."""
@@ -275,7 +275,7 @@ class TestEdgeCases:
         # And zero LLR means sign_vec=[0,0,0], norm=0, so no sign dir.
         # But H is empty so no H dirs either.
         assert result["boundary_crossed"] is False
-        assert result["num_trials"] == 0
+        assert result["num_directions"] == 0
         assert result["boundary_eps"] is None
         assert result["boundary_direction"] is None
 
@@ -383,6 +383,6 @@ class TestJSONSerializable:
             "boundary_crossed",
             "boundary_direction",
             "boundary_eps",
-            "num_trials",
+            "num_directions",
         }
         assert set(result.keys()) == expected_keys
