@@ -120,6 +120,9 @@ def compute_tanner_spectral_analysis(
         v_localized = v_localized / norm_loc
 
     v_variables = v_localized[:n]
+    var_norm_loc = np.linalg.norm(v_variables)
+    if var_norm_loc > 0.0:
+        v_variables = v_variables / var_norm_loc
     weights = np.abs(v_variables)
 
     # Sort by descending weight (deterministic — use negative for stable sort).
@@ -129,6 +132,15 @@ def compute_tanner_spectral_analysis(
 
     localized_variable_nodes = [int(idx) for idx in top_nodes]
     localized_variable_weights = [float(weights[idx]) for idx in top_nodes]
+
+    # Localized variable fraction: proportion of mass in top nodes.
+    total_mass = float(np.sum(weights))
+    if total_mass > 0.0:
+        localized_variable_fraction = float(
+            np.sum(weights[top_nodes]) / total_mass
+        )
+    else:
+        localized_variable_fraction = 0.0
 
     return {
         "num_variable_nodes": n,
@@ -145,4 +157,5 @@ def compute_tanner_spectral_analysis(
         "most_localized_mode_index": most_localized_mode_index,
         "localized_variable_nodes": localized_variable_nodes,
         "localized_variable_weights": localized_variable_weights,
+        "localized_variable_fraction": localized_variable_fraction,
     }

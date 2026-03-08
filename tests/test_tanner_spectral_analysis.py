@@ -99,6 +99,7 @@ class TestOutputStructure:
         "most_localized_mode_index": int,
         "localized_variable_nodes": list,
         "localized_variable_weights": list,
+        "localized_variable_fraction": float,
     }
 
     def test_all_keys_present(self):
@@ -259,6 +260,23 @@ class TestNodeLocalization:
         out = compute_tanner_spectral_analysis(_dense_H())
         for w in out["localized_variable_weights"]:
             assert w >= 0.0
+
+    def test_localized_variable_fraction_present(self):
+        out = compute_tanner_spectral_analysis(_small_H())
+        assert "localized_variable_fraction" in out
+
+    def test_localized_variable_fraction_range(self):
+        for H in [_small_H(), _identity_H(), _dense_H(), _single_check_H()]:
+            out = compute_tanner_spectral_analysis(H)
+            assert 0.0 <= out["localized_variable_fraction"] <= 1.0, (
+                f"Fraction out of range: {out['localized_variable_fraction']}"
+            )
+
+    def test_localized_variable_fraction_all_nodes(self):
+        """When top_k_nodes >= n, fraction should be 1.0."""
+        H = _single_check_H()
+        out = compute_tanner_spectral_analysis(H, top_k_nodes=100)
+        assert abs(out["localized_variable_fraction"] - 1.0) < 1e-10
 
 
 # ── Input handling tests ─────────────────────────────────────────────
