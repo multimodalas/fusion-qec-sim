@@ -169,6 +169,8 @@ class TestBoundaryDetection:
         assert result["boundary_eps"] is not None
         assert result["boundary_eps"] > 0
         assert result["boundary_direction"] is not None
+        assert isinstance(result["boundary_direction"], list)
+        assert len(result["boundary_direction"]) == small_llr.shape[0]
         assert result["num_trials"] >= 1
 
     def test_boundary_eps_is_float(self, small_llr, small_H,
