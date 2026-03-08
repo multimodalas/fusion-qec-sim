@@ -6,6 +6,206 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.4.0] — 2026-03-08
+Tanner Spectral Fragility Diagnostics
+
+Introduces deterministic spectral diagnostics for Tanner graphs,
+enabling structural analysis of QLDPC parity-check matrices through
+global spectral metrics and localized eigenmode analysis.
+
+Unlike previous diagnostics in the v5.x series, this analysis operates
+purely on the graph structure and does not run belief propagation
+decoding.
+
+The diagnostic measures both global connectivity properties and
+localized spectral modes of the Tanner graph, providing structural
+signals that may correlate with decoding fragility and pseudocodeword
+behavior.
+
+Added
+
+Tanner spectral analysis diagnostic (src/qec/diagnostics/):
+
+tanner_spectral_analysis.py: deterministic Tanner graph spectral
+analysis module implementing compute_tanner_spectral_analysis().
+
+Constructs the bipartite Tanner adjacency matrix from the parity-check
+matrix and computes global spectral metrics including:
+
+largest_eigenvalue
+adjacency_spectral_gap
+laplacian_second_eigenvalue
+spectral_ratio
+
+Eigenmode localization diagnostics:
+
+Computes Inverse Participation Ratio (IPR) for the leading adjacency
+eigenmodes to measure spectral mode localization across the graph.
+
+Localization is reported for both the full graph spectrum and the
+variable-node component:
+
+mode_iprs
+variable_mode_iprs
+
+Localized spectral node mapping:
+
+Identifies the variable nodes contributing most strongly to the most
+localized spectral mode.
+
+Outputs include:
+
+localized_variable_nodes
+localized_variable_weights
+localized_variable_fraction
+
+The localized_variable_fraction metric measures the proportion of
+spectral mass contained in the top localized nodes, providing a simple
+indicator of structural fragility concentration.
+
+Benchmark harness integration (bench/dps_v381_eval.py):
+
+--tanner-spectral-analysis: runs Tanner spectral diagnostics once per
+code instance and appends results to benchmark artifacts under
+tanner_spectral_analysis.
+
+Improved interpretability:
+
+Normalized variable eigenvector components prior to weight extraction
+to ensure consistent localization metrics across graph instances.
+
+Added localized_variable_fraction metric quantifying spectral mass
+concentration within the top localized variable nodes.
+
+Tests
+
+New test suite (tests/test_tanner_spectral_analysis.py):
+
+deterministic outputs across runs
+correct node and edge counts
+eigenvalue ordering validation
+valid IPR ranges
+localized node ordering
+JSON serialization compatibility
+
+Total tests: 33, all passing.
+
+Unchanged
+
+Decoder core logic (src/qec_qldpc_codes.py): untouched.
+Construction layer (src/qec/construction/): untouched.
+Belief propagation decoding algorithms: unchanged.
+Benchmark harness behavior unchanged when diagnostics are disabled.
+
+All diagnostics remain fully optional and observational.
+
+Baseline decoding outputs remain byte-identical when diagnostics are disabled.
+
+[5.3.0] — 2026-03-07
+Deterministic BP Decision Boundary Analysis
+
+Introduces deterministic boundary analysis for belief propagation (BP)
+decoding, enabling estimation of the distance in LLR space to the
+nearest competing BP attractor basin.
+
+This diagnostic complements the v5.1 barrier analysis, which measures
+the difficulty of escaping the current attractor basin. Boundary
+analysis instead measures how close the current decoding state lies to
+a competing attractor.
+
+Together these diagnostics enable experimental study of BP attractor
+geometry, including basin stability, escape barriers, and decision
+boundary proximity.
+
+Added
+
+BP boundary analysis diagnostic (src/qec/diagnostics/):
+
+bp_boundary_analysis.py: deterministic boundary probing module
+implementing compute_bp_boundary_analysis().
+
+The diagnostic probes structured perturbation directions derived from:
+
+parity-check constraints  
+least-reliable bit structure  
+global belief alignment
+
+and performs deterministic binary search along each direction to
+determine the minimal perturbation magnitude required to change the
+decoder outcome.
+
+Returned metrics include:
+
+baseline_attractor  
+boundary_eps  
+boundary_direction  
+boundary_crossed  
+num_directions
+
+where boundary_eps represents the smallest perturbation magnitude that
+changes the decoder attractor.
+
+Deterministic perturbation directions:
+
+Three structured direction families are evaluated in deterministic order:
+
+parity-check hyperplane directions  
+least-reliable bit directions  
+global sign direction
+
+Binary search boundary detection:
+
+For each direction d, the diagnostic searches along:
+
+λ' = λ + ε·d
+
+to determine the minimal ε producing a different decoder outcome.
+
+The smallest ε across all directions defines the estimated boundary
+distance.
+
+Benchmark harness integration (bench/dps_v381_eval.py):
+
+--bp-boundary-analysis: runs boundary analysis per trial and records
+results under bp_boundary_analysis.
+
+Aggregate statistics are recorded under bp_boundary_summary including:
+
+mean_boundary_eps  
+boundary_cross_probability  
+num_trials
+
+Improved robustness:
+
+LLR inputs are copied prior to perturbation to prevent accidental
+in-place mutation.
+
+Attractor comparison uses tolerance-based equality to avoid spurious
+boundary crossings due to floating-point noise.
+
+Tests
+
+New test suite (tests/test_bp_boundary_analysis.py):
+
+deterministic outputs across runs  
+successful boundary detection  
+no-crossing scenarios  
+edge cases (zero LLR, empty parity matrix)  
+JSON serialization compatibility
+
+Total tests: 17, all passing.
+
+Unchanged
+
+Decoder core logic (src/qec_qldpc_codes.py): untouched.
+Construction layer (src/qec/construction/): untouched.
+Belief propagation decoding algorithms: unchanged.
+Benchmark harness behavior unchanged when diagnostics are disabled.
+
+All diagnostics remain fully optional and observational.
+
+Baseline decoding outputs remain byte-identical when diagnostics are disabled.
+
 [5.2.0] — 2026-03-06
 Decoder Experiment Framework & Deterministic Paired Experiments
 
