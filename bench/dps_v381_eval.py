@@ -933,6 +933,7 @@ def run_evaluation(
     enable_bp_landscape_map: bool = False,
     enable_bp_barrier_analysis: bool = False,
     enable_bp_boundary_analysis: bool = False,
+    enable_tanner_spectral_analysis: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -967,6 +968,17 @@ def run_evaluation(
         codes[distance] = H
         for p in p_values:
             all_instances[(distance, p)] = _pre_generate_instances(H, p, trials, rng)
+
+    # v5.4.0: Tanner spectral analysis (once per code instance).
+    tanner_spectral_results: dict[int, dict[str, Any]] = {}
+    if enable_tanner_spectral_analysis:
+        from src.qec.diagnostics.tanner_spectral_analysis import (
+            compute_tanner_spectral_analysis,
+        )
+        for distance in distances:
+            tanner_spectral_results[distance] = compute_tanner_spectral_analysis(
+                codes[distance],
+            )
 
     # Deterministic loop order: modes → p_values → distances.
     for mode_name in MODE_ORDER:
@@ -1022,6 +1034,12 @@ def run_evaluation(
             "bp_mode": bp_mode,
         },
     }
+
+    # v5.4.0: Tanner spectral analysis results.
+    if tanner_spectral_results:
+        out["tanner_spectral_analysis"] = {
+            int(d): tanner_spectral_results[d] for d in sorted(tanner_spectral_results.keys())
+        }
 
     # v4.6.0: BP phase diagram aggregation.
     if enable_bp_phase_diagram:
@@ -1284,6 +1302,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP free-energy barrier estimation (escape perturbation measurement)")
     parser.add_argument("--bp-boundary-analysis", action="store_true",
                         help="Enable BP boundary analysis (attractor basin distance estimation)")
+    parser.add_argument("--tanner-spectral-analysis", action="store_true",
+                        help="Enable Tanner spectral fragility diagnostics (spectral gap, eigenmode localization)")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1339,6 +1359,8 @@ def main() -> None:
         print("BP free-energy barrier estimation: ENABLED")
     if args.bp_boundary_analysis:
         print("BP boundary analysis: ENABLED")
+    if args.tanner_spectral_analysis:
+        print("Tanner spectral fragility diagnostics: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1372,6 +1394,7 @@ def main() -> None:
         enable_bp_landscape_map=args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_barrier_analysis=args.bp_barrier_analysis,
         enable_bp_boundary_analysis=args.bp_boundary_analysis,
+        enable_tanner_spectral_analysis=args.tanner_spectral_analysis,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
