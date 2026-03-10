@@ -5,8 +5,9 @@ Provides risk-aware decoder experiments that use spectral structural
 signals (v6.0–v6.4) to guide decoder behaviour.  Each experiment runs
 two deterministic decodes (baseline and experimental) and returns
 comparison metrics.  Includes Tanner graph fragility repair (v6.6),
-spectral Tanner graph optimization (v6.7), and BP prediction
-validation (v6.9), and spectral instability phase map (v7.2).
+spectral Tanner graph optimization (v6.7), BP prediction
+validation (v6.9), spectral instability phase map (v7.2), and
+spectral graph repair loop (v7.3).
 
 Does not modify decoder internals.  Fully deterministic.
 """
@@ -20,4 +21,8 @@ from .spectral_instability_phase_map import (
     compute_spectral_instability_score,
     run_spectral_phase_map_experiment,
     compute_phase_map_aggregate_metrics,
+)
+from .spectral_graph_repair_loop import (
+    run_spectral_graph_repair_loop,
+    compute_repair_loop_aggregate_metrics,
 )
