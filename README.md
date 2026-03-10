@@ -1,6 +1,6 @@
 # QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
 
-[![Release v5.2.0](https://img.shields.io/badge/release-v5.2.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v5.2.0)
+[![Release v5.4.0](https://img.shields.io/badge/release-v5.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v5.4.0)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
 Deterministic QLDPC CSS framework for studying belief propagation attractor geometry and decoding dynamics.
@@ -38,95 +38,65 @@ Key project documentation:
 
 Current Release
 
-v5.2.0 — Decoder Experiment Framework & Deterministic Paired Experiments
+Current Release
+v5.4.0 — Tanner Spectral Fragility Diagnostics
 
-This release introduces the Decoder Experiment Framework, enabling controlled
-A/B experiments between a frozen reference BP decoder and an experimental sandbox
-decoder.
+The current release introduces deterministic spectral diagnostics for Tanner graphs, enabling structural analysis of QLDPC parity-check matrices through global spectral metrics and localized eigenmode analysis.
 
-The goal is to allow safe exploration of decoder modifications while preserving
-a permanent deterministic baseline for reproducible experiments.
-
-A new decoder interface layer allows the benchmark harness to dynamically select
-between decoder implementations without modifying the decoding API.
+Unlike earlier diagnostics that analyze belief-propagation dynamics, this diagnostic operates purely on graph structure and does not run BP decoding.
 
 Release:
-https://github.com/QSOLKCB/QEC/releases/tag/v5.2.0
+https://github.com/QSOLKCB/QEC/releases/tag/v5.4.0
 
-Decoder Experiment Framework (v5.2)
+Tanner Spectral Fragility Diagnostics (v5.4)
 
-Two decoder roles are now defined:
+New module:
 
-src/qec/decoder/
-bp_decoder_reference.py
-bp_decoder_experimental.py
-decoder_interface.py
+src/qec/diagnostics/tanner_spectral_analysis.py
 
-Reference Decoder
+Main API:
 
-The reference decoder re-exports the original bp_decode implementation and
-serves as the immutable baseline implementation.
+compute_tanner_spectral_analysis(...)
 
-This module must never be modified, ensuring historical experiments remain
-reproducible.
+The diagnostic constructs the bipartite Tanner adjacency matrix from the parity-check matrix and computes deterministic spectral metrics including:
 
-Experimental Decoder
+largest_eigenvalue
+adjacency_spectral_gap
+laplacian_second_eigenvalue
+spectral_ratio
 
-The experimental decoder provides a safe sandbox for testing decoder
-modifications without affecting the baseline.
+These measurements characterize global Tanner graph connectivity and expansion quality.
 
-Both decoders expose the same API and can be selected dynamically by the
-benchmark harness.
+Eigenmode Localization Analysis
 
-Deterministic Decoder Comparison
+The diagnostic also measures localization of spectral modes using the Inverse Participation Ratio (IPR):
 
-The benchmark harness now supports controlled decoder comparison experiments.
+IPR(v) = Σ v_i^4
 
-New options:
+Low values indicate delocalized modes, while higher values indicate localized eigenmodes concentrated on a small subset of nodes.
 
---decoder {reference, experimental}
---compare-decoders
+Localization metrics include:
 
-Comparison mode runs both decoders on identical inputs during each trial,
-allowing deterministic A/B experiments.
+mode_iprs
+variable_mode_iprs
 
-Comparison results are recorded under:
+allowing detection of spectral modes concentrated specifically on variable nodes.
 
-decoder_comparison
-Deterministic Paired Experiments
+Localized Node Mapping
 
-Two additional options guarantee strict pairing of error realizations:
+For the most localized spectral mode, the diagnostic identifies the variable nodes contributing the largest spectral mass.
 
---paired-seed
---paired-errors
+Outputs include:
 
-These ensure that both decoders observe identical channel error patterns
-throughout the FER sweep.
+localized_variable_nodes
+localized_variable_weights
+localized_variable_fraction
 
-This enables scientifically rigorous decoder comparisons.
-
-Decoder Comparison Report
-
-A convenience reporting option is now available:
-
---decoder-report
-
-When comparison mode is active, the harness prints a summary table:
-
-Decoder Comparison Report
------------------------------------------------------------
-mode                     distance         p   FER_ref   FER_exp      ΔFER
------------------------------------------------------------
-baseline                       32    0.0300    0.41      0.29     -0.12
-rpc_only                       32    0.0300    0.53      0.34     -0.19
-
-This provides immediate visibility into performance differences between
-decoder implementations.
+localized_variable_fraction indicates how much spectral mass is concentrated in the top localized nodes, providing a simple structural fragility indicator.
 
 BP Attractor Geometry Diagnostics
 
-The toolkit includes a layered deterministic diagnostics framework
-for analyzing BP convergence behavior.
+The toolkit includes a layered deterministic diagnostics framework for analyzing BP convergence behavior and Tanner graph structure.
 
 Version	Capability
 v4.1	Basin-switch detection
@@ -141,6 +111,8 @@ v4.9	Basin-of-attraction estimation
 v5.0	Attractor landscape mapping
 v5.1	Free-energy barrier estimation
 v5.2	Decoder experiment framework
+v5.3	Decision boundary estimation
+v5.4	Tanner spectral fragility diagnostics
 
 Together these layers provide deterministic measurement of:
 
@@ -152,44 +124,17 @@ incorrect fixed-point probability
 
 escape barrier heights
 
-pseudocodeword boundary structure
+decision boundary proximity
 
-decoder intervention effects
+Tanner graph structural fragility
 
-All diagnostics remain trace-only and opt-in, preserving deterministic
-decoding guarantees.
+All diagnostics remain trace-only and opt-in, preserving deterministic decoding guarantees.
 
 Baseline decoding outputs remain byte-identical when diagnostics are disabled.
 
-Free-Energy Barrier Estimation (v5.1)
-
-v5.1 introduced deterministic escape-barrier estimation for BP attractors.
-
-New module:
-
-src/qec/diagnostics/bp_barrier_analysis.py
-
-The diagnostic applies deterministic perturbations to the initial belief state
-and determines the minimum perturbation magnitude required to escape the
-current BP attractor basin.
-
-Perturbation schedule:
-
-eps = [1e-4, 5e-4, 1e-3, 2e-3, 5e-3]
-patterns = [+1, −1, +2, −2]
-
-Returned metrics:
-
-baseline_attractor
-barrier_eps
-escaped
-num_trials
-
-These measurements approximate free-energy barriers surrounding BP attractors.
-
 Benchmark Harness Integration
 
-The deterministic DPS evaluation harness supports the full diagnostics stack:
+The deterministic DPS harness supports the full diagnostics stack:
 
 --bp-dynamics
 --bp-transitions
@@ -199,12 +144,13 @@ The deterministic DPS evaluation harness supports the full diagnostics stack:
 --bp-basin-analysis
 --bp-landscape-map
 --bp-barrier-analysis
+--bp-boundary-analysis
+--tanner-spectral-analysis
 --compare-decoders
 --paired-seed
 --paired-errors
 
-Diagnostics results are appended to benchmark artifacts without modifying
-decoder behavior.
+Diagnostics results are appended to benchmark artifacts without modifying decoder behavior.
 
 All diagnostics remain fully optional.
 

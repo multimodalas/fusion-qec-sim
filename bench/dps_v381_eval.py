@@ -95,6 +95,10 @@ from src.qec.diagnostics.bp_boundary_analysis import (
     compute_bp_boundary_analysis,
 )
 
+from src.qec.diagnostics.spectral_boundary_alignment import (
+    compute_spectral_boundary_alignment,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -934,6 +938,7 @@ def run_evaluation(
     enable_bp_barrier_analysis: bool = False,
     enable_bp_boundary_analysis: bool = False,
     enable_tanner_spectral_analysis: bool = False,
+    enable_spectral_boundary_alignment: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -946,6 +951,12 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v5.5.0: spectral-boundary alignment implies dependencies.
+    if enable_spectral_boundary_alignment:
+        enable_tanner_spectral_analysis = True
+        enable_bp_boundary_analysis = True
+        enable_bp_barrier_analysis = True
+
     if distances is None:
         distances = list(DEFAULT_DISTANCES)
     if p_values is None:
@@ -979,6 +990,23 @@ def run_evaluation(
             tanner_spectral_results[distance] = compute_tanner_spectral_analysis(
                 codes[distance],
             )
+
+    # v5.5.0: Extract spectral eigenvectors for alignment analysis.
+    tanner_spectral_modes: dict[int, list[np.ndarray]] = {}
+    if enable_spectral_boundary_alignment:
+        for distance in distances:
+            H = codes[distance]
+            m, n = H.shape
+            top = np.concatenate([np.zeros((n, n), dtype=np.float64), H.T.astype(np.float64)], axis=1)
+            bottom = np.concatenate([H.astype(np.float64), np.zeros((m, m), dtype=np.float64)], axis=1)
+            A = np.concatenate([top, bottom], axis=0)
+            eigvals, eigvecs = np.linalg.eigh(A)
+            sort_idx = np.argsort(-eigvals)
+            eigvecs = eigvecs[:, sort_idx]
+            top_k = min(3, eigvecs.shape[1])
+            tanner_spectral_modes[distance] = [
+                eigvecs[:n, i].copy() for i in range(top_k)
+            ]
 
     # Deterministic loop order: modes → p_values → distances.
     for mode_name in MODE_ORDER:
@@ -1040,6 +1068,48 @@ def run_evaluation(
         out["tanner_spectral_analysis"] = {
             int(d): tanner_spectral_results[d] for d in sorted(tanner_spectral_results.keys())
         }
+
+    # v5.5.0: Spectral–boundary alignment analysis.
+    if enable_spectral_boundary_alignment:
+        alignment_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        for mode_name in MODE_ORDER:
+            alignment_results[mode_name] = {}
+            for p in p_values:
+                alignment_results[mode_name][p] = {}
+                for distance in distances:
+                    r = results[mode_name][p][distance]
+                    spectral_modes = tanner_spectral_modes.get(distance, [])
+                    # Extract boundary direction from boundary analysis.
+                    boundary_dir = None
+                    if "bp_boundary_analysis" in r:
+                        for ba in r["bp_boundary_analysis"]:
+                            if ba.get("boundary_direction") is not None:
+                                boundary_dir = np.asarray(
+                                    ba["boundary_direction"], dtype=np.float64
+                                )
+                                break
+                    if boundary_dir is not None and spectral_modes:
+                        sba = compute_spectral_boundary_alignment(
+                            spectral_modes, boundary_dir,
+                        )
+                        # Extract barrier_eps and boundary_eps from summaries.
+                        barrier_eps = None
+                        boundary_eps = None
+                        if "bp_barrier_summary" in r:
+                            barrier_eps = r["bp_barrier_summary"].get("mean_barrier_eps")
+                        if "bp_boundary_summary" in r:
+                            boundary_eps = r["bp_boundary_summary"].get("mean_boundary_eps")
+                        alignment_results[mode_name][p][distance] = {
+                            "alignment_max": sba["max_alignment"],
+                            "alignment_mean": sba["mean_alignment"],
+                            "dominant_alignment_mode": sba["dominant_alignment_mode"],
+                            "mode_count": sba["mode_count"],
+                            "p": p,
+                            "FER": r["fer"],
+                            "boundary_eps": boundary_eps,
+                            "barrier_eps": barrier_eps,
+                        }
+        out["spectral_boundary_alignment"] = alignment_results
 
     # v4.6.0: BP phase diagram aggregation.
     if enable_bp_phase_diagram:
@@ -1304,6 +1374,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP boundary analysis (attractor basin distance estimation)")
     parser.add_argument("--tanner-spectral-analysis", action="store_true",
                         help="Enable Tanner spectral fragility diagnostics (spectral gap, eigenmode localization)")
+    parser.add_argument("--spectral-boundary-alignment", action="store_true",
+                        help="Enable spectral-boundary alignment diagnostics (v5.5)")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1361,6 +1433,8 @@ def main() -> None:
         print("BP boundary analysis: ENABLED")
     if args.tanner_spectral_analysis:
         print("Tanner spectral fragility diagnostics: ENABLED")
+    if args.spectral_boundary_alignment:
+        print("Spectral-boundary alignment diagnostics: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1392,9 +1466,10 @@ def main() -> None:
         enable_bp_fixed_point_analysis=args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_basin_analysis=args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_landscape_map=args.bp_landscape_map or args.bp_barrier_analysis,
-        enable_bp_barrier_analysis=args.bp_barrier_analysis,
-        enable_bp_boundary_analysis=args.bp_boundary_analysis,
-        enable_tanner_spectral_analysis=args.tanner_spectral_analysis,
+        enable_bp_barrier_analysis=args.bp_barrier_analysis or args.spectral_boundary_alignment,
+        enable_bp_boundary_analysis=args.bp_boundary_analysis or args.spectral_boundary_alignment,
+        enable_tanner_spectral_analysis=args.tanner_spectral_analysis or args.spectral_boundary_alignment,
+        enable_spectral_boundary_alignment=args.spectral_boundary_alignment,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
