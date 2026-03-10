@@ -169,6 +169,10 @@ from src.qec.experiments.spectral_graph_design_rules import (
 from src.qec.experiments.spectral_graph_optimizer import (
     run_spectral_graph_optimization,
 )
+from src.qec.experiments.spectral_optimizer_sanity_experiment import (
+    run_spectral_optimizer_sanity_experiment,
+    print_sanity_report,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -2518,6 +2522,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral Tanner graph design analysis (v7.4, implies --spectral-failure-risk)")
     parser.add_argument("--spectral-graph-optimize", action="store_true",
                         help="Enable predictor-guided spectral graph optimization pipeline (v7.5, implies --spectral-failure-risk)")
+    parser.add_argument("--spectral-optimizer-sanity", action="store_true",
+                        help="Run spectral optimizer sanity experiment + predictor probe (v7.5)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2744,6 +2750,8 @@ def main() -> None:
         print("Spectral graph design analysis: ENABLED")
     if args.spectral_graph_optimize:
         print("Spectral graph optimize: ENABLED")
+    if args.spectral_optimizer_sanity:
+        print("Spectral optimizer sanity: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2819,6 +2827,24 @@ def main() -> None:
     # v5.9.0: Phase diagram generation.
     if args.phase_diagram:
         _run_phase_diagram(args, eval_result)
+
+    # v7.5.0: Spectral optimizer sanity experiment.
+    if args.spectral_optimizer_sanity:
+        _rng_sanity = np.random.default_rng(args.seed)
+        _code_sanity = create_code("rate_0.50", lifting_size=32, seed=args.seed)
+        _H_sanity = _code_sanity.hx
+        _instances_sanity = _pre_generate_instances(
+            _H_sanity, args.p_values[0], min(args.trials, 20), _rng_sanity,
+        )
+        sanity_report = run_spectral_optimizer_sanity_experiment(
+            _H_sanity,
+            _instances_sanity,
+            decode_fn=selected_decoder,
+            syndrome_fn=syndrome,
+            max_iters=args.max_iters,
+            bp_mode=args.bp_mode,
+        )
+        print_sanity_report(sanity_report)
 
     # Determinism check.
     det_result = run_determinism_check(
