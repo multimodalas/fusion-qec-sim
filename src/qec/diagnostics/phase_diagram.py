@@ -225,6 +225,9 @@ def _aggregate_cell(
             "mean_spectral_bp_alignment": None,
             "mean_candidate_node_overlap_fraction": None,
             "mean_candidate_cluster_overlap_fraction": None,
+            "mean_cluster_risk": None,
+            "max_cluster_risk": None,
+            "mean_num_high_risk_clusters": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -259,6 +262,11 @@ def _aggregate_cell(
     sbpa_alignment_values: list[float | None] = []
     sbpa_cand_overlap_values: list[float | None] = []
     sbpa_cluster_overlap_values: list[float | None] = []
+
+    # v6.4 spectral failure risk collectors (opt-in, additive).
+    sfr_mean_cluster_risk_values: list[float | None] = []
+    sfr_max_cluster_risk_values: list[float | None] = []
+    sfr_num_high_risk_values: list[float | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -302,6 +310,11 @@ def _aggregate_cell(
         sbpa_alignment_values.append(trial.get("spectral_bp_alignment_score"))
         sbpa_cand_overlap_values.append(trial.get("candidate_node_overlap_fraction"))
         sbpa_cluster_overlap_values.append(trial.get("max_cluster_alignment"))
+
+        # v6.4 spectral failure risk diagnostics (opt-in, additive).
+        sfr_mean_cluster_risk_values.append(trial.get("mean_cluster_risk"))
+        sfr_max_cluster_risk_values.append(trial.get("max_cluster_risk"))
+        sfr_num_high_risk_values.append(trial.get("num_high_risk_clusters"))
 
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
@@ -354,4 +367,7 @@ def _aggregate_cell(
         "mean_spectral_bp_alignment": _safe_mean(sbpa_alignment_values),
         "mean_candidate_node_overlap_fraction": _safe_mean(sbpa_cand_overlap_values),
         "mean_candidate_cluster_overlap_fraction": _safe_mean(sbpa_cluster_overlap_values),
+        "mean_cluster_risk": _safe_mean(sfr_mean_cluster_risk_values),
+        "max_cluster_risk": _safe_mean(sfr_max_cluster_risk_values),
+        "mean_num_high_risk_clusters": _safe_mean(sfr_num_high_risk_values),
     }

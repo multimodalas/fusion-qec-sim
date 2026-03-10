@@ -6,6 +6,79 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.4.0] — 2026-03-10
+Spectral Failure Risk Scoring
+
+Added
+
+Spectral Failure Risk Scoring (src/qec/diagnostics/spectral_failure_risk.py):
+
+compute_spectral_failure_risk(): computes a deterministic structural risk
+heuristic for candidate clusters by combining spectral localization strength,
+repeated participation in localized modes, and alignment with BP dynamical
+activity.  Identifies clusters most likely to influence decoder behavior based
+on spectral and dynamical signals accumulated in v6.1–v6.3.
+
+Risk score formula per cluster C:
+
+  cluster_risk = participation_weight * alignment_score * localization_weight
+
+Where:
+  participation_weight = mean(node_participation_counts for nodes in C)
+  alignment_score = per_cluster_alignment_score for C (from v6.3)
+  localization_weight = mean(IPR of localized modes) (from v6.1)
+
+Node-level risk: node_risk(v) = sum(cluster_risk for clusters containing v).
+
+Output fields: node_risk_scores, cluster_risk_scores, cluster_risk_ranking,
+max_cluster_risk, mean_cluster_risk, top_risk_clusters, num_high_risk_clusters.
+
+Phase Diagram Risk Overlays (src/qec/diagnostics/phase_diagram.py):
+
+Extended phase diagram cell aggregation with optional risk fields:
+mean_cluster_risk, max_cluster_risk, mean_num_high_risk_clusters.
+Fields are additive — appear only when risk diagnostics are enabled.
+All v6.3, v6.2, v6.1, v6.0, and v5.9 fields fully preserved.
+
+CLI Flag (bench/dps_v381_eval.py):
+
+--spectral-failure-risk: enable spectral failure risk scoring
+(implies --spectral-bp-alignment).
+
+Evaluation Harness Integration:
+
+Per-trial risk computation after alignment diagnostics.  Aggregates
+mean_cluster_risk, max_cluster_risk, and mean_num_high_risk_clusters
+across trials per (mode, p, distance) cell.
+
+Scientific Framing
+
+This is a deterministic structural risk heuristic combining spectral
+localization (IPR), trapping-set candidate detection, and BP dynamical
+alignment.  It does not claim perfect failure prediction.  It identifies
+candidate clusters with the highest combined spectral-dynamical risk
+signal for downstream structural analysis.
+
+Outputs (top_risk_clusters, node_risk_scores, cluster_risk_scores)
+are designed for reuse by future diagnostics (e.g. targeted damping,
+modified scheduling, localized perturbation experiments).
+
+Constraints
+
+Decoder untouched: no changes to BP message passing, scheduling,
+or convergence logic.
+
+Determinism preserved: no randomness, no global state, all outputs
+are deterministic pure functions of config.
+
+Schema unchanged: no schema version bump.
+
+Dependencies unchanged: stdlib + NumPy only.
+
+Additive only: all new fields are opt-in.
+
+---
+
 [6.3.0] — 2026-03-10
 Spectral–BP Attractor Alignment
 

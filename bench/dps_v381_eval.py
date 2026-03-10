@@ -142,6 +142,9 @@ from src.qec.diagnostics.phase_heatmap import (
 from src.qec.diagnostics.spectral_bp_alignment import (
     compute_spectral_bp_alignment,
 )
+from src.qec.diagnostics.spectral_failure_risk import (
+    compute_spectral_failure_risk,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -1088,6 +1091,7 @@ def run_evaluation(
     enable_ternary_transition_metrics: bool = False,
     enable_ternary_basin_probe: bool = False,
     enable_spectral_bp_alignment: bool = False,
+    enable_spectral_failure_risk: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1100,6 +1104,10 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v6.4.0: spectral failure risk implies spectral-BP alignment.
+    if enable_spectral_failure_risk:
+        enable_spectral_bp_alignment = True
+
     # v6.3.0: spectral-BP alignment implies iteration diagnostics.
     if enable_spectral_bp_alignment:
         enable_iteration_diagnostics = True
@@ -1387,6 +1395,51 @@ def run_evaluation(
                         }
         out["spectral_bp_alignment"] = sbpa_results
 
+    # v6.4.0: Spectral failure risk scoring.
+    if enable_spectral_failure_risk and nb_trapping_results and nb_localization_results:
+        sfr_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        sbpa_data = out.get("spectral_bp_alignment", {})
+        for mode_name in MODE_ORDER:
+            sfr_results[mode_name] = {}
+            sbpa_mode = sbpa_data.get(mode_name, {})
+            for p in p_values:
+                sfr_results[mode_name][p] = {}
+                sbpa_p = sbpa_mode.get(p, {})
+                for distance in distances:
+                    loc = nb_localization_results.get(distance)
+                    trapping = nb_trapping_results.get(distance)
+                    sbpa_cell = sbpa_p.get(distance)
+                    if loc is None or trapping is None or sbpa_cell is None:
+                        continue
+                    per_trial_alignments = sbpa_cell.get("per_trial", [])
+                    if not per_trial_alignments:
+                        continue
+                    # Per-trial risk scores, then aggregate.
+                    trial_risks: list[dict[str, Any]] = []
+                    for ta in per_trial_alignments:
+                        tr = compute_spectral_failure_risk(
+                            loc, trapping, ta,
+                        )
+                        trial_risks.append(tr)
+                    if trial_risks:
+                        mean_cluster_risk = sum(
+                            t["mean_cluster_risk"] for t in trial_risks
+                        ) / len(trial_risks)
+                        max_cluster_risk = max(
+                            t["max_cluster_risk"] for t in trial_risks
+                        )
+                        mean_high_risk = sum(
+                            t["num_high_risk_clusters"] for t in trial_risks
+                        ) / len(trial_risks)
+                        sfr_results[mode_name][p][distance] = {
+                            "mean_cluster_risk": round(mean_cluster_risk, 12),
+                            "max_cluster_risk": round(max_cluster_risk, 12),
+                            "mean_num_high_risk_clusters": round(mean_high_risk, 12),
+                            "num_trials": len(trial_risks),
+                            "per_trial": trial_risks,
+                        }
+        out["spectral_failure_risk"] = sfr_results
+
     return out
 
 
@@ -1663,6 +1716,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral trapping-set candidate detection (v6.2, implies --nb-localization)")
     parser.add_argument("--spectral-bp-alignment", action="store_true",
                         help="Enable spectral-BP attractor alignment diagnostics (v6.3, implies --nb-trapping-candidates --iteration-diagnostics)")
+    parser.add_argument("--spectral-failure-risk", action="store_true",
+                        help="Enable spectral failure risk scoring (v6.4, implies --spectral-bp-alignment)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -1863,6 +1918,8 @@ def main() -> None:
         print("Spectral trapping-set candidate detection: ENABLED")
     if args.spectral_bp_alignment:
         print("Spectral-BP attractor alignment diagnostics: ENABLED")
+    if args.spectral_failure_risk:
+        print("Spectral failure risk scoring: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1903,7 +1960,8 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk,
+        enable_spectral_failure_risk=args.spectral_failure_risk,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
