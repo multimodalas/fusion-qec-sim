@@ -6,6 +6,72 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.9.0] — 2026-03-10
+Decoder Phase Diagram Generator
+
+Added
+
+Decoder Phase Diagram Aggregation (src/qec/diagnostics/phase_diagram.py):
+
+build_decoder_phase_diagram(): deterministic 2D decoder phase-diagram
+aggregation over parameter grids.  Sweeps grid points, runs decoding
+experiments, and aggregates ternary topology classifications with
+continuous diagnostics into phase-diagram-ready JSON artifacts.
+
+make_phase_grid(): helper to construct deterministic 2D parameter grid
+specifications.
+
+Phase fractions (success/boundary/failure), dominant phase with
+deterministic tie-breaking, and Shannon phase entropy per grid cell.
+Continuous observables (boundary_eps, barrier_eps, metastability,
+oscillation, alignment, cluster_count) aggregated as cell means.
+
+Phase Boundary Analysis (src/qec/diagnostics/phase_boundary_analysis.py):
+
+analyze_phase_boundaries(): identifies boundary cells (adjacent-phase
+mismatch), mixed-region cells (high phase entropy), and critical cells
+(high boundary fraction, high metastability, near-zero boundary eps).
+All thresholds are explicit and deterministic.
+
+CLI Support (bench/dps_v381_eval.py):
+
+--phase-diagram: enable decoder phase diagram generation
+(implies --ternary-topology --ternary-transition-metrics).
+--phase-grid-x / --phase-grid-y: axis parameter names.
+--phase-grid-x-values / --phase-grid-y-values: axis values.
+--phase-diagram-output: JSON output path.
+
+Demo Script (scripts/run_v59_phase_diagram_demo.py):
+
+Standalone deterministic phase-diagram demo that runs a small 2D sweep,
+prints dominant-phase tables and summary counts, verifies determinism,
+and writes JSON output.
+
+Design Goals
+
+Move beyond threshold curves to dynamical regime maps.
+Use ternary topology classification as the primary phase label.
+Pair categorical phase labels with continuous diagnostics.
+Prepare the framework for future spectral stability upgrades.
+
+Tests
+
+Test suites: tests/test_phase_diagram.py, tests/test_phase_boundary_analysis.py,
+tests/test_v59_phase_diagram_demo.py.
+Covers fraction aggregation, dominant phase, phase entropy, tie-breaking,
+determinism, JSON roundtrip stability, adjacency-based boundary detection,
+mixed-region detection, critical-cell detection, and demo script validation.
+
+Unchanged
+
+Decoder core logic: untouched.
+Baseline decoding outputs remain byte-identical.
+Schema version: unchanged.
+All existing diagnostics: unchanged.
+v5.8.0 output fields: fully preserved (backward compatible).
+
+---
+
 [5.8.0] — 2026-03-10
 Ternary Basin Analysis & Transition Metrics
 
