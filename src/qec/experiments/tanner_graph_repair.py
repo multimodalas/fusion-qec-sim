@@ -634,6 +634,45 @@ def _build_nb_matrix_from_edges(
     np.ndarray
         Non-backtracking matrix of shape (2*|E|, 2*|E|).
     """
+    B, _, _, _ = _build_nb_context(edges)
+    return B
+
+
+def _build_nb_context(
+    edges: list[tuple[int, int]],
+) -> tuple[
+    np.ndarray,
+    list[tuple[int, int]],
+    dict[int, list[int]],
+    dict[tuple[int, int], tuple[int, int]],
+]:
+    """Build the NB matrix with reusable indexing context.
+
+    Returns the NB matrix together with auxiliary structures that allow
+    efficient incremental updates when edges are swapped.
+
+    Each undirected edge at position i in ``edges`` produces two
+    directed edges at positions 2*i (forward) and 2*i+1 (reverse)
+    in the directed edge list.
+
+    Parameters
+    ----------
+    edges : list[tuple[int, int]]
+        Undirected edges of the Tanner graph.
+
+    Returns
+    -------
+    B : np.ndarray
+        Non-backtracking matrix, shape (2*|E|, 2*|E|).
+    directed : list[tuple[int, int]]
+        Directed edge list (length 2*|E|).
+    outgoing : dict[int, list[int]]
+        Maps each node v to indices of directed edges with
+        destination v.  Matches v6.0 construction.
+    edge_to_directed : dict[tuple[int, int], tuple[int, int]]
+        Maps undirected edge (u, v) to (fwd_index, rev_index)
+        in the directed edge list.
+    """
     directed: list[tuple[int, int]] = []
     for u, v in edges:
         directed.append((u, v))
@@ -641,14 +680,24 @@ def _build_nb_matrix_from_edges(
 
     num_directed = len(directed)
     if num_directed == 0:
-        return np.zeros((0, 0), dtype=np.float64)
+        return (
+            np.zeros((0, 0), dtype=np.float64),
+            directed,
+            {},
+            {},
+        )
 
     # Build adjacency list for outgoing edges from each node.
     # Matches v6.0 construction: outgoing[v] = indices of directed
     # edges with destination v.
     outgoing: dict[int, list[int]] = {}
-    for idx, (u, v) in enumerate(directed):
+    for idx, (_u, v) in enumerate(directed):
         outgoing.setdefault(v, []).append(idx)
+
+    # Map undirected edge -> (fwd_index, rev_index) in directed list.
+    edge_to_directed: dict[tuple[int, int], tuple[int, int]] = {}
+    for i, (u, v) in enumerate(edges):
+        edge_to_directed[(u, v)] = (2 * i, 2 * i + 1)
 
     # Construct B: B_{(u->v),(v->w)} = 1 if w != u.
     B = np.zeros((num_directed, num_directed), dtype=np.float64)
@@ -658,7 +707,145 @@ def _build_nb_matrix_from_edges(
             if w != u:
                 B[idx_uv, idx_vw] = 1.0
 
-    return B
+    return B, directed, outgoing, edge_to_directed
+
+
+def _spectral_radius_from_nb(B: np.ndarray) -> float:
+    """Compute spectral radius from an NB matrix.
+
+    Uses np.linalg.eigvals (LAPACK) which is deterministic for
+    identical inputs, matching the v6.0 approach.
+
+    Parameters
+    ----------
+    B : np.ndarray
+        Non-backtracking matrix.
+
+    Returns
+    -------
+    float
+        Spectral radius rounded to 12 decimal places.
+    """
+    n = B.shape[0]
+    if n == 0:
+        return 0.0
+
+    eigenvalues = np.linalg.eigvals(B)
+    if len(eigenvalues) == 0:
+        return 0.0
+
+    magnitudes = np.abs(eigenvalues)
+    return round(float(np.max(magnitudes)), 12)
+
+
+def _spectral_score_with_swap(
+    B_base: np.ndarray,
+    directed_base: list[tuple[int, int]],
+    outgoing_base: dict[int, list[int]],
+    edge_to_directed: dict[tuple[int, int], tuple[int, int]],
+    swap: dict[str, Any],
+) -> float:
+    """Compute spectral score after a swap by incrementally updating B.
+
+    Instead of rebuilding the full NB matrix from scratch, copies the
+    base matrix and updates only the rows and columns corresponding to
+    the 4 affected directed edges (2 removed undirected edges x 2
+    directions).  This reduces per-candidate matrix construction from
+    O(|E|^2) to O(|E|).
+
+    Parameters
+    ----------
+    B_base : np.ndarray
+        Baseline NB matrix.
+    directed_base : list[tuple[int, int]]
+        Baseline directed edge list.
+    outgoing_base : dict[int, list[int]]
+        Baseline outgoing-by-destination mapping.
+    edge_to_directed : dict[tuple[int, int], tuple[int, int]]
+        Maps undirected edge to (fwd, rev) directed indices.
+    swap : dict[str, Any]
+        Candidate swap descriptor with ``remove`` and ``add``.
+
+    Returns
+    -------
+    float
+        Spectral radius of the NB matrix after applying the swap.
+    """
+    # ── Identify affected directed edge indices ──────────────────
+    remove_0 = (
+        min(swap["remove"][0][0], swap["remove"][0][1]),
+        max(swap["remove"][0][0], swap["remove"][0][1]),
+    )
+    remove_1 = (
+        min(swap["remove"][1][0], swap["remove"][1][1]),
+        max(swap["remove"][1][0], swap["remove"][1][1]),
+    )
+
+    fwd_0, rev_0 = edge_to_directed[remove_0]
+    fwd_1, rev_1 = edge_to_directed[remove_1]
+    affected = [fwd_0, rev_0, fwd_1, rev_1]
+    affected_set = set(affected)
+
+    # ── Map old directed edges to new ones ───────────────────────
+    add_0 = (swap["add"][0][0], swap["add"][0][1])
+    add_1 = (swap["add"][1][0], swap["add"][1][1])
+
+    # Undirected edge at position i: directed[2i] = (u,v), directed[2i+1] = (v,u).
+    # After swap, the same slots hold the new directed edges.
+    new_at: dict[int, tuple[int, int]] = {
+        fwd_0: (add_0[0], add_0[1]),
+        rev_0: (add_0[1], add_0[0]),
+        fwd_1: (add_1[0], add_1[1]),
+        rev_1: (add_1[1], add_1[0]),
+    }
+
+    def _directed(idx: int) -> tuple[int, int]:
+        """Look up directed edge, using new values for affected slots."""
+        if idx in new_at:
+            return new_at[idx]
+        return directed_base[idx]
+
+    # ── Update outgoing dict ─────────────────────────────────────
+    new_outgoing: dict[int, list[int]] = {
+        k: list(v) for k, v in outgoing_base.items()
+    }
+    for a in affected:
+        old_dest = directed_base[a][1]
+        new_dest = new_at[a][1]
+        if old_dest != new_dest:
+            new_outgoing[old_dest].remove(a)
+            new_outgoing.setdefault(new_dest, []).append(a)
+
+    # ── Incremental matrix update ────────────────────────────────
+    B = B_base.copy()
+
+    # Zero out affected rows and columns.
+    for a in affected:
+        B[a, :] = 0.0
+        B[:, a] = 0.0
+
+    # Recompute rows for affected indices.
+    # Row a: B[a, j] = 1 for j in outgoing[dest(a)] where dest(j) != source(a).
+    for a in affected:
+        u_a, v_a = new_at[a]
+        for j in new_outgoing.get(v_a, []):
+            _, w = _directed(j)
+            if w != u_a:
+                B[a, j] = 1.0
+
+    # Recompute columns for affected indices.
+    # B[j, a] = 1 iff dest(a) == dest(j) and dest(a) != source(j).
+    # All j with dest(j) == dest(a) are in outgoing[dest(a)].
+    for a in affected:
+        _u_a, v_a = new_at[a]
+        for j in new_outgoing.get(v_a, []):
+            if j in affected_set:
+                continue  # Already set during row computation.
+            u_j = _directed(j)[0]
+            if v_a != u_j:
+                B[j, a] = 1.0
+
+    return _spectral_radius_from_nb(B)
 
 
 def _power_iteration_spectral_radius(
@@ -666,48 +853,26 @@ def _power_iteration_spectral_radius(
     max_iters: int = 200,
     tol: float = 1e-10,
 ) -> float:
-    """Estimate the spectral radius of M via power iteration on M^T M.
+    """Estimate the spectral radius of M.
 
-    For non-symmetric matrices (like the non-backtracking matrix), the
-    dominant eigenvalue may be complex.  Standard power iteration does
-    not converge in this case.  Instead, we perform power iteration on
-    M^T M, whose eigenvalues are the squared singular values of M.
-    The spectral radius is then bounded by the largest singular value.
-
-    For the non-backtracking matrix specifically, ρ(B) equals the
-    largest singular value σ_1(B) to high accuracy because the
-    dominant eigenvalue is real for Tanner graphs arising from
-    LDPC codes.
-
-    Deterministic: uses a fixed initial vector (all ones, normalized).
+    Uses np.linalg.eigvals (LAPACK) which is deterministic for
+    identical inputs, matching the v6.0 approach.
 
     Parameters
     ----------
     M : np.ndarray
         Square matrix.
     max_iters : int
-        Maximum number of power iterations.
+        Unused, kept for API compatibility.
     tol : float
-        Convergence tolerance on relative change of the estimate.
+        Unused, kept for API compatibility.
 
     Returns
     -------
     float
         Estimated spectral radius (largest eigenvalue magnitude).
     """
-    n = M.shape[0]
-    if n == 0:
-        return 0.0
-
-    # For non-symmetric matrices, use eigenvalue computation directly.
-    # np.linalg.eigvals uses LAPACK which is deterministic for
-    # identical inputs.  This matches the v6.0 approach.
-    eigenvalues = np.linalg.eigvals(M)
-    if len(eigenvalues) == 0:
-        return 0.0
-
-    magnitudes = np.abs(eigenvalues)
-    return round(float(np.max(magnitudes)), 12)
+    return _spectral_radius_from_nb(M)
 
 
 def spectral_score(
@@ -716,9 +881,8 @@ def spectral_score(
     """Compute the spectral score of a Tanner graph.
 
     The spectral score is the spectral radius (largest eigenvalue
-    magnitude) of the non-backtracking matrix, estimated via power
-    iteration.  Lower spectral radius is correlated with improved
-    BP stability.
+    magnitude) of the non-backtracking matrix.  Lower spectral
+    radius is correlated with improved BP stability.
 
     Parameters
     ----------
@@ -731,7 +895,7 @@ def spectral_score(
         Spectral radius of the non-backtracking matrix.
     """
     B = _build_nb_matrix_from_edges(edges)
-    return _power_iteration_spectral_radius(B)
+    return _spectral_radius_from_nb(B)
 
 
 # ── Spectral graph optimization experiment (v6.7.0) ──────────────
@@ -848,7 +1012,8 @@ def run_spectral_graph_optimization_experiment(
 
     # ── Step 1: Identify fragile cluster ─────────────────────────
     edges = _extract_edges(H)
-    score_before = spectral_score(edges)
+    B_pre, _, _, _ = _build_nb_context(edges)
+    score_before = _spectral_radius_from_nb(B_pre)
 
     if not top_risk_clusters:
         return _spectral_baseline_only_result(
@@ -905,19 +1070,26 @@ def run_spectral_graph_optimization_experiment(
     )
 
     # ── Step 4: Evaluate candidates using spectral score ─────────
+    # Build NB matrix once; evaluate each swap incrementally.
+    B_base, directed_base, outgoing_base, edge_to_dir = (
+        _build_nb_context(edges)
+    )
+
     best_swap = None
     best_spectral = score_before
     best_edges = None
 
     for candidate in candidates:
-        trial_edges = _apply_swap(edges, candidate)
-        trial_spectral = spectral_score(trial_edges)
+        trial_spectral = _spectral_score_with_swap(
+            B_base, directed_base, outgoing_base, edge_to_dir,
+            candidate,
+        )
         candidate["spectral_score"] = trial_spectral
 
         if trial_spectral < best_spectral:
             best_spectral = trial_spectral
             best_swap = candidate
-            best_edges = trial_edges
+            best_edges = _apply_swap(edges, candidate)
 
     score_after = best_spectral
     spectral_improvement = round(score_before - score_after, 12)

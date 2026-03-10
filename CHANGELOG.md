@@ -87,6 +87,12 @@ Schema unchanged: no schema version bump.
 
 Dependencies unchanged: stdlib + NumPy only.
 
+Performance: reuse non-backtracking matrix structure during
+spectral candidate evaluation to reduce repeated allocations.
+The NB matrix is built once and incrementally updated per swap
+(4 rows/columns), avoiding O(|E|²) full reconstruction per
+candidate.
+
 Additive only: all new functions and CLI flags are opt-in.
 v6.6 repair experiment remains fully functional.
 

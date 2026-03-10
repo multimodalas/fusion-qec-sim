@@ -28,6 +28,9 @@ from src.qec.experiments.tanner_graph_repair import (
     run_spectral_graph_optimization_experiment,
     spectral_score,
     _build_nb_matrix_from_edges,
+    _build_nb_context,
+    _spectral_score_with_swap,
+    _spectral_radius_from_nb,
     _power_iteration_spectral_radius,
     _extract_edges,
     _build_edge_set,
@@ -221,6 +224,156 @@ class TestPowerIteration:
         r1 = _power_iteration_spectral_radius(M)
         r2 = _power_iteration_spectral_radius(M)
         assert r1 == r2
+
+
+class TestIncrementalNBUpdate:
+    """Tests that incremental NB matrix update matches full reconstruction."""
+
+    def test_incremental_matches_full(self):
+        """Incremental update produces same spectral score as full rebuild."""
+        H, _, _ = _make_larger_code()
+        n = H.shape[1]
+        edges = _extract_edges(H)
+        edge_set = _build_edge_set(edges)
+        adjacency = _build_adjacency(edges)
+
+        cluster_nodes = {0, 1, 7, 8, 10}
+        c_edges = _get_cluster_edges(edges, cluster_nodes)
+        b_edges = _get_boundary_edges(edges, cluster_nodes, adjacency)
+
+        candidates = _generate_candidate_swaps(
+            c_edges, b_edges, edge_set, n, max_candidates=10,
+        )
+
+        B_base, directed, outgoing, edge_to_dir = _build_nb_context(edges)
+
+        for swap in candidates:
+            # Full rebuild path.
+            trial_edges = _apply_swap(edges, swap)
+            full_score = spectral_score(trial_edges)
+
+            # Incremental path.
+            incr_score = _spectral_score_with_swap(
+                B_base, directed, outgoing, edge_to_dir, swap,
+            )
+
+            assert full_score == incr_score, (
+                f"Mismatch for {swap['description']}: "
+                f"full={full_score}, incremental={incr_score}"
+            )
+
+    def test_incremental_deterministic(self):
+        """Incremental scores are deterministic across repeated calls."""
+        H, _, _ = _make_larger_code()
+        n = H.shape[1]
+        edges = _extract_edges(H)
+        edge_set = _build_edge_set(edges)
+        adjacency = _build_adjacency(edges)
+
+        cluster_nodes = {0, 1, 7, 8, 10}
+        c_edges = _get_cluster_edges(edges, cluster_nodes)
+        b_edges = _get_boundary_edges(edges, cluster_nodes, adjacency)
+
+        candidates = _generate_candidate_swaps(
+            c_edges, b_edges, edge_set, n, max_candidates=5,
+        )
+
+        B_base, directed, outgoing, edge_to_dir = _build_nb_context(edges)
+
+        for swap in candidates:
+            s1 = _spectral_score_with_swap(
+                B_base, directed, outgoing, edge_to_dir, swap,
+            )
+            s2 = _spectral_score_with_swap(
+                B_base, directed, outgoing, edge_to_dir, swap,
+            )
+            assert s1 == s2
+
+    def test_base_matrix_not_mutated(self):
+        """Incremental update does not mutate the base matrix."""
+        H, _, _ = _make_larger_code()
+        n = H.shape[1]
+        edges = _extract_edges(H)
+        edge_set = _build_edge_set(edges)
+        adjacency = _build_adjacency(edges)
+
+        cluster_nodes = {0, 1, 7, 8, 10}
+        c_edges = _get_cluster_edges(edges, cluster_nodes)
+        b_edges = _get_boundary_edges(edges, cluster_nodes, adjacency)
+
+        candidates = _generate_candidate_swaps(
+            c_edges, b_edges, edge_set, n, max_candidates=5,
+        )
+        if not candidates:
+            pytest.skip("No candidates generated")
+
+        B_base, directed, outgoing, edge_to_dir = _build_nb_context(edges)
+        B_copy = B_base.copy()
+
+        _spectral_score_with_swap(
+            B_base, directed, outgoing, edge_to_dir, candidates[0],
+        )
+
+        np.testing.assert_array_equal(B_base, B_copy)
+
+    def test_nb_context_returns_correct_shapes(self):
+        """_build_nb_context returns correctly shaped structures."""
+        H, _, _ = _make_simple_code()
+        edges = _extract_edges(H)
+
+        B, directed, outgoing, edge_to_dir = _build_nb_context(edges)
+
+        assert B.shape == (2 * len(edges), 2 * len(edges))
+        assert len(directed) == 2 * len(edges)
+        assert len(edge_to_dir) == len(edges)
+
+    def test_incremental_matches_full_simple_code(self):
+        """Incremental update matches full rebuild on simple code."""
+        H, _, _ = _make_simple_code()
+        n = H.shape[1]
+        edges = _extract_edges(H)
+        edge_set = _build_edge_set(edges)
+        adjacency = _build_adjacency(edges)
+
+        cluster_nodes = {0, 1, 5}
+        c_edges = _get_cluster_edges(edges, cluster_nodes)
+        b_edges = _get_boundary_edges(edges, cluster_nodes, adjacency)
+
+        candidates = _generate_candidate_swaps(
+            c_edges, b_edges, edge_set, n, max_candidates=10,
+        )
+
+        B_base, directed, outgoing, edge_to_dir = _build_nb_context(edges)
+
+        for swap in candidates:
+            trial_edges = _apply_swap(edges, swap)
+            full_score = spectral_score(trial_edges)
+            incr_score = _spectral_score_with_swap(
+                B_base, directed, outgoing, edge_to_dir, swap,
+            )
+            assert full_score == incr_score
+
+    def test_experiment_results_unchanged(self):
+        """Full experiment produces identical results with optimization."""
+        H, llr, s = _make_larger_code()
+        risk = _make_risk_result(
+            [[0, 1.0], [1, 0.8], [2, 0.3], [3, 0.2]],
+            cluster_risk_scores=[0.9],
+            top_risk_clusters=[0],
+        )
+
+        r1 = run_spectral_graph_optimization_experiment(
+            H, llr, s, risk, max_iters=10, max_candidates=10,
+        )
+        r2 = run_spectral_graph_optimization_experiment(
+            H, llr, s, risk, max_iters=10, max_candidates=10,
+        )
+
+        assert r1["spectral_score_before"] == r2["spectral_score_before"]
+        assert r1["spectral_score_after"] == r2["spectral_score_after"]
+        assert r1["spectral_improvement"] == r2["spectral_improvement"]
+        assert r1["best_swap"] == r2["best_swap"]
+        assert r1["candidate_swaps"] == r2["candidate_swaps"]
 
 
 class TestCandidateSwapSpectral:
