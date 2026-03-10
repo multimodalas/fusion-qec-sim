@@ -9,7 +9,9 @@ analysis, attractor landscape mapping, free-energy barrier
 estimation, pseudocodeword boundary estimation,
 Tanner spectral fragility diagnostics,
 spectral–boundary alignment diagnostics,
-and spectral trapping-set diagnostics
+spectral trapping-set diagnostics,
+BP phase-space exploration,
+and ternary decoder topology classification
 for BP convergence traces.
 Does not modify decoder internals.
 """
@@ -26,3 +28,5 @@ from .bp_boundary_analysis import compute_bp_boundary_analysis
 from .tanner_spectral_analysis import compute_tanner_spectral_analysis
 from .spectral_boundary_alignment import compute_spectral_boundary_alignment
 from .spectral_trapping_sets import compute_spectral_trapping_sets
+from .bp_phase_space import compute_bp_phase_space
+from .ternary_decoder_topology import compute_ternary_decoder_topology

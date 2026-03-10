@@ -6,6 +6,77 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.7.0] — 2026-03-10
+BP Phase-Space Explorer & Ternary Topology Classification
+
+Added
+
+BP Phase-Space Explorer (src/qec/diagnostics/bp_phase_space.py):
+
+bp_phase_space.py: deterministic phase-space diagnostic module
+implementing compute_bp_phase_space().
+
+Treats BP decoding as a trajectory through an observable phase space.
+Records per-iteration observable decoder states and projects them
+into a reduced coordinate system for analysis.
+
+Output metrics:
+
+trajectory_length
+state_dimension
+residual_norms
+phase_coordinates
+final_phase_coordinate
+oscillation_score
+
+Ternary Topology Classifier (src/qec/diagnostics/ternary_decoder_topology.py):
+
+ternary_decoder_topology.py: deterministic ternary topology diagnostic
+module implementing compute_ternary_decoder_topology().
+
+Classifies decoding trajectories into:
+  +1 stable success basin
+   0 boundary / metastable region
+  -1 failure basin
+
+Outputs per-iteration ternary trace and final classification with
+evidence values and human-readable classification reason.
+
+Integrates with existing v5 diagnostics (v5.1 barrier, v5.3 boundary,
+v5.5 alignment) when available.
+
+Harness integration:
+
+--bp-phase-space CLI flag added to bench/dps_v381_eval.py.
+--ternary-topology CLI flag added (automatically enables --bp-phase-space).
+
+Per-trial logging includes:
+
+phase-space trajectory metrics
+ternary trace and final state
+ternary topology summary (success/boundary/failure basin fractions)
+
+Design Goals
+
+Treat BP decoding as a deterministic dynamical system.
+Map decoder behavior in observable phase space.
+Identify stable basins, boundaries, and failure basins without
+modifying decoder internals.
+
+Tests
+
+Test suite: tests/test_bp_phase_space.py, tests/test_ternary_decoder_topology.py
+Total tests: 61, all passing.
+
+Unchanged
+
+Decoder core logic: untouched.
+Baseline decoding outputs remain byte-identical.
+Schema version: unchanged.
+All existing diagnostics: unchanged.
+
+---
+
 [5.6.0] — 2026-03-10
 Spectral Trapping-Set Diagnostics
 

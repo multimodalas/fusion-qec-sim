@@ -102,6 +102,14 @@ from src.qec.diagnostics.spectral_trapping_sets import (
     compute_spectral_trapping_sets,
 )
 
+from src.qec.diagnostics.bp_phase_space import (
+    compute_bp_phase_space,
+)
+
+from src.qec.diagnostics.ternary_decoder_topology import (
+    compute_ternary_decoder_topology,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -305,6 +313,8 @@ def run_mode(
     enable_bp_landscape_map: bool = False,
     enable_bp_barrier_analysis: bool = False,
     enable_bp_boundary_analysis: bool = False,
+    enable_bp_phase_space: bool = False,
+    enable_ternary_topology: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -329,6 +339,10 @@ def run_mode(
     ``bp_barrier_analysis`` and ``bp_barrier_summary``.
     When *enable_bp_boundary_analysis* is True, also returns
     ``bp_boundary_analysis`` and ``bp_boundary_summary``.
+    When *enable_bp_phase_space* is True, also returns
+    ``bp_phase_space``.
+    When *enable_ternary_topology* is True, also returns
+    ``ternary_topology``.
     """
     if decoder_fn is None:
         decoder_fn = bp_decode
@@ -337,6 +351,12 @@ def run_mode(
     schedule = mode_cfg["schedule"]
     structural: StructuralConfig = mode_cfg["structural"]
 
+    # v5.7.0: ternary topology implies phase-space.
+    if enable_ternary_topology:
+        enable_bp_phase_space = True
+    # v5.7.0: phase-space implies LLR history.
+    if enable_bp_phase_space:
+        enable_iteration_diagnostics = True
     # Landscape mode implies energy trace.
     if enable_landscape:
         enable_energy_trace = True
@@ -387,6 +407,8 @@ def run_mode(
     all_bp_landscape_maps: list[dict[str, Any]] = []
     all_bp_barrier_analyses: list[dict[str, Any]] = []
     all_bp_boundary_analyses: list[dict[str, Any]] = []
+    all_bp_phase_space: list[dict[str, Any]] = []
+    all_ternary_topology: list[dict[str, Any]] = []
     comparison_results: list[dict[str, Any]] = []
 
     for trial_idx, inst in enumerate(instances):
@@ -656,6 +678,25 @@ def run_mode(
                 )
                 all_bp_boundary_analyses.append(boundary_result)
 
+        # v5.7.0: BP phase-space exploration.
+        if enable_bp_phase_space and llr_hist is not None and llr_hist.shape[0] > 0:
+            trajectory_states = [
+                llr_hist[i].copy() for i in range(llr_hist.shape[0])
+            ]
+            ps_result = compute_bp_phase_space(trajectory_states)
+            all_bp_phase_space.append(ps_result)
+
+            # v5.7.0: Ternary topology classification.
+            if enable_ternary_topology:
+                s_correction_tt = syndrome(H, correction)
+                final_sw_tt = int(np.sum(s_correction_tt != s))
+                syndrome_residuals_tt = [final_sw_tt] * len(trajectory_states)
+                tt_result = compute_ternary_decoder_topology(
+                    phase_space_result=ps_result,
+                    syndrome_residuals=syndrome_residuals_tt,
+                )
+                all_ternary_topology.append(tt_result)
+
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
         s_correction = syndrome(H, correction)
@@ -891,6 +932,30 @@ def run_mode(
             ),
             "num_directions": total_boundary_directions,
         }
+    if all_bp_phase_space:
+        out["bp_phase_space"] = all_bp_phase_space
+    if all_ternary_topology:
+        out["ternary_topology"] = all_ternary_topology
+        # Aggregate ternary state counts.
+        final_state_counts: dict[int, int] = {}
+        for tt in all_ternary_topology:
+            fs = tt["final_ternary_state"]
+            final_state_counts[fs] = final_state_counts.get(fs, 0) + 1
+        n_tt = len(all_ternary_topology)
+        out["ternary_topology_summary"] = {
+            "success_basin_count": final_state_counts.get(1, 0),
+            "boundary_count": final_state_counts.get(0, 0),
+            "failure_basin_count": final_state_counts.get(-1, 0),
+            "success_basin_fraction": (
+                float(final_state_counts.get(1, 0)) / float(n_tt)
+            ),
+            "boundary_fraction": (
+                float(final_state_counts.get(0, 0)) / float(n_tt)
+            ),
+            "failure_basin_fraction": (
+                float(final_state_counts.get(-1, 0)) / float(n_tt)
+            ),
+        }
     if comparison_results:
         out["decoder_comparison"] = comparison_results
     return out
@@ -943,6 +1008,8 @@ def run_evaluation(
     enable_tanner_spectral_analysis: bool = False,
     enable_spectral_boundary_alignment: bool = False,
     enable_spectral_trapping_sets: bool = False,
+    enable_bp_phase_space: bool = False,
+    enable_ternary_topology: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -955,6 +1022,10 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v5.7.0: ternary topology implies phase-space.
+    if enable_ternary_topology:
+        enable_bp_phase_space = True
+
     # v5.5.0: spectral-boundary alignment implies dependencies.
     if enable_spectral_boundary_alignment:
         enable_tanner_spectral_analysis = True
@@ -1048,6 +1119,8 @@ def run_evaluation(
                     enable_bp_landscape_map=enable_bp_landscape_map,
                     enable_bp_barrier_analysis=enable_bp_barrier_analysis,
                     enable_bp_boundary_analysis=enable_bp_boundary_analysis,
+                    enable_bp_phase_space=enable_bp_phase_space,
+                    enable_ternary_topology=enable_ternary_topology,
                     decoder_fn=decoder_fn,
                     compare_decoders=compare_decoders,
                     paired_seed=paired_seed,
@@ -1404,6 +1477,10 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral-boundary alignment diagnostics (v5.5)")
     parser.add_argument("--spectral-trapping-sets", action="store_true",
                         help="Enable spectral trapping-set diagnostics (v5.6)")
+    parser.add_argument("--bp-phase-space", action="store_true",
+                        help="Enable BP phase-space exploration (v5.7)")
+    parser.add_argument("--ternary-topology", action="store_true",
+                        help="Enable ternary decoder topology classification (v5.7, implies --bp-phase-space)")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1465,6 +1542,10 @@ def main() -> None:
         print("Spectral-boundary alignment diagnostics: ENABLED")
     if args.spectral_trapping_sets:
         print("Spectral trapping-set diagnostics: ENABLED")
+    if args.bp_phase_space:
+        print("BP phase-space exploration: ENABLED")
+    if args.ternary_topology:
+        print("Ternary decoder topology classification: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1501,6 +1582,8 @@ def main() -> None:
         enable_tanner_spectral_analysis=args.tanner_spectral_analysis or args.spectral_boundary_alignment or args.spectral_trapping_sets,
         enable_spectral_boundary_alignment=args.spectral_boundary_alignment,
         enable_spectral_trapping_sets=args.spectral_trapping_sets,
+        enable_bp_phase_space=args.bp_phase_space or args.ternary_topology,
+        enable_ternary_topology=args.ternary_topology,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
