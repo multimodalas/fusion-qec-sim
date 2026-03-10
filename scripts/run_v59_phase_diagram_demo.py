@@ -55,6 +55,9 @@ from src.qec.diagnostics.bp_stability_proxy import (
 from src.qec.diagnostics.bp_jacobian_estimator import (
     estimate_bp_jacobian_spectral_radius,
 )
+from src.qec.diagnostics.nb_localization import (
+    compute_nb_localization_metrics,
+)
 from src.qec.diagnostics.phase_heatmap import (
     print_phase_heatmap,
 )
@@ -102,6 +105,9 @@ def run_phase_diagram_demo() -> dict[str, Any]:
         nb_result = compute_non_backtracking_spectrum(H)
         bethe_result = compute_bethe_hessian(H)
         stability_result = estimate_bp_stability(nb_result, bethe_result)
+
+        # v6.1: Compute localization diagnostics per grid point (code-level).
+        localization_result = compute_nb_localization_metrics(H)
 
         # Deterministic RNG derived from base seed + grid point.
         seed = RNG_BASE_SEED + int(p * 100000) + d * 1000
@@ -154,6 +160,11 @@ def run_phase_diagram_demo() -> dict[str, Any]:
             # v6.0: Jacobian spectral radius from LLR history.
             jacobian_result = estimate_bp_jacobian_spectral_radius(llr_hist)
             tt_result["jacobian_spectral_radius_est"] = jacobian_result["jacobian_spectral_radius_est"]
+
+            # v6.1: Attach localization diagnostics to trial result.
+            tt_result["nb_max_ipr"] = localization_result["max_ipr"]
+            tt_result["nb_num_localized_modes"] = len(localization_result["localized_modes"])
+            tt_result["nb_top_localization_score"] = localization_result["top_localization_score"]
 
             trial_results.append(tt_result)
 

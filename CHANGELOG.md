@@ -6,6 +6,79 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.1.0] — 2026-03-10
+Non-Backtracking Localization
+
+Added
+
+Non-Backtracking Localization Diagnostics (src/qec/diagnostics/nb_localization.py):
+
+compute_nb_localization_metrics(): computes inverse participation ratio (IPR)
+for leading non-backtracking eigenmodes and projects localized edge support
+back onto Tanner graph variable and check nodes.  Quantifies whether leading
+spectral modes are diffuse or localized on the graph structure.
+
+Output fields: ipr_scores, max_ipr, localized_modes, mode_support_sizes,
+localized_edge_indices, localized_variable_nodes, localized_check_nodes,
+top_localization_score, per_mode_mass_on_variables, per_mode_mass_on_checks,
+num_directed_edges, num_leading_modes.
+
+IPR metric: IPR(v) = sum_i |v_i|^4 / (sum_i |v_i|^2)^2.
+Handles complex-valued eigenvectors via magnitude.  Scale-invariant.
+
+Mode selection: top-k leading modes by eigenvalue magnitude (default k=6).
+Localization rule: relative magnitude threshold on squared eigenvector
+components (default 0.1 × max).  IPR threshold defaults to 2/num_edges.
+
+Phase Diagram Localization Overlays (src/qec/diagnostics/phase_diagram.py):
+
+Extended phase diagram cell aggregation with optional localization fields:
+mean_nb_max_ipr, mean_nb_num_localized_modes, mean_nb_top_localization_score.
+Fields are additive — appear only when localization diagnostics are enabled.
+All v6.0 and v5.9 fields fully preserved.
+
+CLI Flag (bench/dps_v381_eval.py):
+
+--nb-localization: enable non-backtracking localization diagnostics.
+
+Demo Script (scripts/run_v59_phase_diagram_demo.py):
+
+Updated to include localization diagnostics: nb_max_ipr, nb_num_localized_modes,
+nb_top_localization_score attached per trial.
+
+Design Goals
+
+Bridge v6.0 spectral stability diagnostics toward structural fragility prediction.
+Identify localized non-backtracking eigenmodes that may correspond to fragile
+subgraph structures (trapping sets, absorbing sets).  This is a deterministic
+structural diagnostic — not a proven trapping-set detector or full fragility
+predictor.
+
+Tests
+
+Test suite: tests/test_nb_localization.py (20 tests).
+Covers IPR formula correctness on synthetic vectors (uniform, delta, two-entry,
+complex), scale invariance, zero vector, determinism, JSON serialization,
+roundtrip stability, input mutation safety, IPR range validation, mass fraction
+consistency, Tanner graph projection on toy graphs, edge index validity,
+variable/check node coverage.
+
+Phase diagram smoke tests: tests/test_v60_phase_diagram_smoke.py updated
+with 2 additional tests for v6.1 localization field presence and population.
+
+Documentation
+
+CHANGELOG.md updated for v6.1.0.
+
+Unchanged
+
+Decoder core logic: untouched.
+Baseline decoding outputs remain byte-identical.
+All v6.0 spectral diagnostics: unchanged.
+Schema version: unchanged.
+
+---
+
 [6.0.0] — 2026-03-10
 Spectral Stability Diagnostics
 

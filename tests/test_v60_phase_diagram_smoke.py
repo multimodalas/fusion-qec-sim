@@ -60,6 +60,26 @@ class TestV60PhaseDiagramSmoke:
             assert cell["mean_bp_stability_score"] is not None
             assert cell["mean_jacobian_spectral_radius_est"] is not None
 
+    def test_localization_fields_present(self):
+        """Phase diagram cells contain v6.1 localization diagnostic fields."""
+        result = run_phase_diagram_demo()
+        pd = result["phase_diagram"]
+
+        for cell in pd["cells"]:
+            assert "mean_nb_max_ipr" in cell
+            assert "mean_nb_num_localized_modes" in cell
+            assert "mean_nb_top_localization_score" in cell
+
+    def test_localization_fields_populated(self):
+        """Localization fields have non-None values for all cells."""
+        result = run_phase_diagram_demo()
+        pd = result["phase_diagram"]
+
+        for cell in pd["cells"]:
+            assert cell["mean_nb_max_ipr"] is not None
+            assert cell["mean_nb_num_localized_modes"] is not None
+            assert cell["mean_nb_top_localization_score"] is not None
+
     def test_ascii_heatmap_output(self, capsys):
         """ASCII heatmap prints valid output."""
         result = run_phase_diagram_demo()

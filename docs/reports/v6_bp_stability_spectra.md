@@ -205,24 +205,35 @@ Localized modes with high IPR may indicate:
 - Fragile subgraphs
 - Likely BP failure regions
 
-Future diagnostic (v6.1 / v6.2):
+**Implemented in v6.1.0** — see `src/qec/diagnostics/nb_localization.py`.
 
 ```python
-compute_nb_localization_metrics(nb_eigenvectors)
+compute_nb_localization_metrics(parity_check_matrix)
 ```
 
-Possible outputs:
+Output fields:
 
 ```json
 {
   "ipr_scores": [...],
   "max_ipr": float,
-  "num_localized_modes": int
+  "localized_modes": [...],
+  "mode_support_sizes": [...],
+  "localized_edge_indices": [[...]],
+  "localized_variable_nodes": [[...]],
+  "localized_check_nodes": [[...]],
+  "top_localization_score": float,
+  "per_mode_mass_on_variables": [...],
+  "per_mode_mass_on_checks": [...],
+  "num_directed_edges": int,
+  "num_leading_modes": int
 }
 ```
 
-**This feature is NOT implemented in v6.0.  It is documented here as
-a future research direction.**
+Mode selection: top-k leading eigenmodes by magnitude (default k=6).
+Localization rule: relative magnitude threshold (default 0.1 × max |v|²).
+IPR localization threshold: default 2/num_directed_edges (twice uniform).
+Projects localized edge support back to Tanner graph variable and check nodes.
 
 ---
 
