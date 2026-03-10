@@ -1095,6 +1095,7 @@ def run_evaluation(
     enable_risk_aware_damping_experiment: bool = False,
     enable_risk_guided_perturbation_experiment: bool = False,
     enable_tanner_graph_repair_experiment: bool = False,
+    enable_spectral_graph_optimization: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1107,6 +1108,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v6.7.0: Spectral graph optimization implies spectral failure risk.
+    if enable_spectral_graph_optimization:
+        enable_spectral_failure_risk = True
     # v6.6.0: Tanner graph repair implies spectral failure risk.
     if enable_tanner_graph_repair_experiment:
         enable_spectral_failure_risk = True
@@ -1624,6 +1628,68 @@ def run_evaluation(
                         }
         out["tanner_graph_repair_experiment"] = tgr_results
 
+    # v6.7.0: Spectral graph optimization experiment.
+    if enable_spectral_graph_optimization and "spectral_failure_risk" in out:
+        from src.qec.experiments.tanner_graph_repair import (
+            run_spectral_graph_optimization_experiment,
+        )
+        sgo_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        sfr_data_sgo = out["spectral_failure_risk"]
+        for mode_name in MODE_ORDER:
+            sgo_results[mode_name] = {}
+            sfr_mode = sfr_data_sgo.get(mode_name, {})
+            for p in p_values:
+                sgo_results[mode_name][p] = {}
+                sfr_p = sfr_mode.get(p, {})
+                for distance in distances:
+                    sfr_cell = sfr_p.get(distance)
+                    if sfr_cell is None:
+                        continue
+                    per_trial_risks = sfr_cell.get("per_trial", [])
+                    if not per_trial_risks:
+                        continue
+                    H = codes[distance]
+                    instances = all_instances[(distance, p)]
+                    trial_experiments: list[dict[str, Any]] = []
+                    for t_idx, (inst, risk_t) in enumerate(
+                        zip(instances, per_trial_risks),
+                    ):
+                        exp = run_spectral_graph_optimization_experiment(
+                            H,
+                            inst["llr"],
+                            inst["s"],
+                            risk_t,
+                            max_iters=max_iters,
+                        )
+                        trial_experiments.append(exp)
+                    if trial_experiments:
+                        n_exp = len(trial_experiments)
+                        mean_delta_iters = sum(
+                            t["delta_iterations"] for t in trial_experiments
+                        ) / n_exp
+                        mean_delta_success = sum(
+                            t["delta_success"] for t in trial_experiments
+                        ) / n_exp
+                        mean_spectral_improvement = sum(
+                            t["spectral_improvement"]
+                            for t in trial_experiments
+                        ) / n_exp
+                        n_optimized = sum(
+                            1 for t in trial_experiments
+                            if t["best_swap"] is not None
+                        )
+                        sgo_results[mode_name][p][distance] = {
+                            "mean_delta_iterations": round(mean_delta_iters, 12),
+                            "mean_delta_success": round(mean_delta_success, 12),
+                            "mean_spectral_improvement": round(
+                                mean_spectral_improvement, 12,
+                            ),
+                            "num_optimizations_applied": n_optimized,
+                            "num_trials": n_exp,
+                            "per_trial": trial_experiments,
+                        }
+        out["spectral_graph_optimization"] = sgo_results
+
     return out
 
 
@@ -1908,6 +1974,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable risk-guided perturbation experiment (v6.5, implies --spectral-failure-risk)")
     parser.add_argument("--tanner-graph-repair-experiment", action="store_true",
                         help="Enable Tanner graph fragility repair experiment (v6.6, implies --spectral-failure-risk)")
+    parser.add_argument("--spectral-graph-optimization", action="store_true",
+                        help="Spectral Tanner graph optimization via non-backtracking spectral radius minimization (v6.7, implies --spectral-failure-risk)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2154,11 +2222,12 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
+        enable_spectral_graph_optimization=args.spectral_graph_optimization,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,

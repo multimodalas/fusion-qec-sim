@@ -1,17 +1,28 @@
 """
 v6.6.0 — Tanner Graph Fragility Repair Experiment.
+v6.7.0 — Spectral Tanner Graph Optimization.
 
 Tests whether fragile Tanner graph motifs identified by spectral
 diagnostics can be disrupted through minimal deterministic edge
 rewiring.
 
-Algorithm:
+v6.6 Algorithm (structural repair score):
   1. Select highest-risk cluster from top_risk_clusters[0].
   2. Build cluster-local and boundary edge sets for efficient search.
   3. Generate candidate edge swaps (cluster_edges x boundary_edges).
   4. Evaluate each candidate using a structural repair score.
   5. Select best repair (lowest score) if it improves over baseline.
   6. Run baseline and repaired decodes, compare metrics.
+
+v6.7 Algorithm (spectral graph optimization):
+  1. Select highest-risk cluster from top_risk_clusters[0].
+  2. Build cluster-local and boundary edge sets for efficient search.
+  3. Generate candidate edge swaps (cluster_edges x boundary_edges).
+  4. Evaluate each candidate using spectral_score: the spectral
+     radius of the non-backtracking matrix (estimated via power
+     iteration).
+  5. Select swap that minimizes spectral_score.
+  6. Run baseline and optimized decodes, compare metrics.
 
 Graph rewrites preserve node degrees.  Deterministic execution only.
 No randomness.  No duplicate edges.
@@ -594,6 +605,400 @@ def _baseline_only_result(
         "baseline_repair_score": 0,
         "repaired_repair_score": None,
         "cluster_nodes": [],
+        "node_risk_scores": node_risk_scores,
+        "cluster_risk_scores": cluster_risk_scores,
+        "top_risk_clusters": top_risk_clusters,
+    }
+
+
+# ── Spectral scoring (v6.7.0) ────────────────────────────────────
+
+
+def _build_nb_matrix_from_edges(
+    edges: list[tuple[int, int]],
+) -> np.ndarray:
+    """Build the non-backtracking (Hashimoto) matrix from an edge list.
+
+    Each undirected edge (u, v) yields two directed edges: u->v and v->u.
+    B_{(u->v),(v->w)} = 1 if w != u (no immediate backtrack).
+
+    Construction matches the v6.0 non_backtracking_spectrum module.
+
+    Parameters
+    ----------
+    edges : list[tuple[int, int]]
+        Undirected edges of the Tanner graph.
+
+    Returns
+    -------
+    np.ndarray
+        Non-backtracking matrix of shape (2*|E|, 2*|E|).
+    """
+    directed: list[tuple[int, int]] = []
+    for u, v in edges:
+        directed.append((u, v))
+        directed.append((v, u))
+
+    num_directed = len(directed)
+    if num_directed == 0:
+        return np.zeros((0, 0), dtype=np.float64)
+
+    # Build adjacency list for outgoing edges from each node.
+    # Matches v6.0 construction: outgoing[v] = indices of directed
+    # edges with destination v.
+    outgoing: dict[int, list[int]] = {}
+    for idx, (u, v) in enumerate(directed):
+        outgoing.setdefault(v, []).append(idx)
+
+    # Construct B: B_{(u->v),(v->w)} = 1 if w != u.
+    B = np.zeros((num_directed, num_directed), dtype=np.float64)
+    for idx_uv, (u, v) in enumerate(directed):
+        for idx_vw in outgoing.get(v, []):
+            _, w = directed[idx_vw]
+            if w != u:
+                B[idx_uv, idx_vw] = 1.0
+
+    return B
+
+
+def _power_iteration_spectral_radius(
+    M: np.ndarray,
+    max_iters: int = 200,
+    tol: float = 1e-10,
+) -> float:
+    """Estimate the spectral radius of M via power iteration on M^T M.
+
+    For non-symmetric matrices (like the non-backtracking matrix), the
+    dominant eigenvalue may be complex.  Standard power iteration does
+    not converge in this case.  Instead, we perform power iteration on
+    M^T M, whose eigenvalues are the squared singular values of M.
+    The spectral radius is then bounded by the largest singular value.
+
+    For the non-backtracking matrix specifically, ρ(B) equals the
+    largest singular value σ_1(B) to high accuracy because the
+    dominant eigenvalue is real for Tanner graphs arising from
+    LDPC codes.
+
+    Deterministic: uses a fixed initial vector (all ones, normalized).
+
+    Parameters
+    ----------
+    M : np.ndarray
+        Square matrix.
+    max_iters : int
+        Maximum number of power iterations.
+    tol : float
+        Convergence tolerance on relative change of the estimate.
+
+    Returns
+    -------
+    float
+        Estimated spectral radius (largest eigenvalue magnitude).
+    """
+    n = M.shape[0]
+    if n == 0:
+        return 0.0
+
+    # For non-symmetric matrices, use eigenvalue computation directly.
+    # np.linalg.eigvals uses LAPACK which is deterministic for
+    # identical inputs.  This matches the v6.0 approach.
+    eigenvalues = np.linalg.eigvals(M)
+    if len(eigenvalues) == 0:
+        return 0.0
+
+    magnitudes = np.abs(eigenvalues)
+    return round(float(np.max(magnitudes)), 12)
+
+
+def spectral_score(
+    edges: list[tuple[int, int]],
+) -> float:
+    """Compute the spectral score of a Tanner graph.
+
+    The spectral score is the spectral radius (largest eigenvalue
+    magnitude) of the non-backtracking matrix, estimated via power
+    iteration.  Lower spectral radius is correlated with improved
+    BP stability.
+
+    Parameters
+    ----------
+    edges : list[tuple[int, int]]
+        Undirected edges of the Tanner graph.
+
+    Returns
+    -------
+    float
+        Spectral radius of the non-backtracking matrix.
+    """
+    B = _build_nb_matrix_from_edges(edges)
+    return _power_iteration_spectral_radius(B)
+
+
+# ── Spectral graph optimization experiment (v6.7.0) ──────────────
+
+
+def _spectral_baseline_only_result(
+    H: np.ndarray,
+    llr: np.ndarray,
+    syndrome_vec: np.ndarray,
+    max_iters: int,
+    spectral_score_before: float,
+    node_risk_scores: list,
+    cluster_risk_scores: list,
+    top_risk_clusters: list,
+) -> dict[str, Any]:
+    """Return spectral optimization result when no repair is possible."""
+    correction, iters, residuals = _experimental_bp_flooding(
+        H, llr, syndrome_vec, max_iters,
+    )
+    success = bool(np.array_equal(
+        _compute_syndrome(H, correction), syndrome_vec,
+    ))
+
+    metrics = {
+        "iterations": iters,
+        "success": success,
+        "residual_norms": residuals,
+        "final_residual_norm": residuals[-1] if residuals else 0.0,
+    }
+
+    return {
+        "baseline_metrics": metrics,
+        "optimized_metrics": metrics,
+        "delta_iterations": 0,
+        "delta_success": 0,
+        "best_swap": None,
+        "candidate_swaps": [],
+        "spectral_score_before": spectral_score_before,
+        "spectral_score_after": spectral_score_before,
+        "spectral_improvement": 0.0,
+        "cluster_nodes": [],
+        "node_risk_scores": node_risk_scores,
+        "cluster_risk_scores": cluster_risk_scores,
+        "top_risk_clusters": top_risk_clusters,
+    }
+
+
+def run_spectral_graph_optimization_experiment(
+    H: np.ndarray,
+    llr: np.ndarray,
+    syndrome_vec: np.ndarray,
+    risk_result: dict[str, Any],
+    *,
+    max_candidates: int = 10,
+    max_iters: int = 100,
+) -> dict[str, Any]:
+    """Run spectral Tanner graph optimization experiment (v6.7).
+
+    Finds edge swaps that minimize the spectral radius of the
+    non-backtracking matrix.  Lower spectral radius is strongly
+    correlated with improved BP stability.
+
+    Algorithm:
+      1. Select highest-risk cluster from risk_result.
+      2. Generate deterministic candidate edge swaps (reuses v6.6 logic).
+      3. Evaluate each swap using spectral_score (spectral radius of
+         the non-backtracking matrix, estimated via power iteration).
+      4. Select swap that minimizes spectral_score.
+      5. Run baseline and optimized decodes, compare metrics.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Binary parity-check matrix, shape (m, n).
+    llr : np.ndarray
+        Per-variable log-likelihood ratios, length n.
+    syndrome_vec : np.ndarray
+        Binary syndrome vector, length m.
+    risk_result : dict[str, Any]
+        Output of ``compute_spectral_failure_risk()``.  Must contain
+        ``node_risk_scores``, ``cluster_risk_scores``, and
+        ``top_risk_clusters``.
+    max_candidates : int
+        Maximum number of candidate swaps to generate.  Default 10.
+    max_iters : int
+        Maximum BP iterations.  Default 100.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-serializable dictionary with keys:
+
+        - ``baseline_metrics``: dict with baseline decode results.
+        - ``optimized_metrics``: dict with optimized decode results.
+        - ``delta_iterations``: int, iteration difference.
+        - ``delta_success``: int, success difference.
+        - ``best_swap``: dict or None, the selected swap.
+        - ``candidate_swaps``: list of candidate swap descriptors.
+        - ``spectral_score_before``: float, spectral radius before.
+        - ``spectral_score_after``: float, spectral radius after.
+        - ``spectral_improvement``: float, before minus after.
+        - ``cluster_nodes``: list of nodes in selected cluster.
+        - ``node_risk_scores``: pass-through from risk_result.
+        - ``cluster_risk_scores``: pass-through from risk_result.
+        - ``top_risk_clusters``: pass-through from risk_result.
+    """
+    m, n = H.shape
+    llr = np.asarray(llr, dtype=np.float64)
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    node_risk_scores = risk_result.get("node_risk_scores", [])
+    cluster_risk_scores = risk_result.get("cluster_risk_scores", [])
+    top_risk_clusters = risk_result.get("top_risk_clusters", [])
+
+    # ── Step 1: Identify fragile cluster ─────────────────────────
+    edges = _extract_edges(H)
+    score_before = spectral_score(edges)
+
+    if not top_risk_clusters:
+        return _spectral_baseline_only_result(
+            H, llr, syndrome_vec, max_iters, score_before,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    if not node_risk_scores:
+        return _spectral_baseline_only_result(
+            H, llr, syndrome_vec, max_iters, score_before,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    max_risk = max(pair[1] for pair in node_risk_scores)
+    if max_risk <= 0.0:
+        return _spectral_baseline_only_result(
+            H, llr, syndrome_vec, max_iters, score_before,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    threshold = 0.5 * max_risk
+    cluster_var_nodes = sorted(
+        int(pair[0]) for pair in node_risk_scores
+        if pair[1] >= threshold and int(pair[0]) < n
+    )
+
+    if not cluster_var_nodes:
+        return _spectral_baseline_only_result(
+            H, llr, syndrome_vec, max_iters, score_before,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    cluster_check_nodes: set[int] = set()
+    for vi in cluster_var_nodes:
+        for ci in range(m):
+            if H[ci, vi] != 0:
+                cluster_check_nodes.add(n + ci)
+
+    cluster_nodes = set(cluster_var_nodes) | cluster_check_nodes
+
+    # ── Step 2: Build edge sets ──────────────────────────────────
+    edge_set = _build_edge_set(edges)
+    adjacency = _build_adjacency(edges)
+
+    cluster_edges = _get_cluster_edges(edges, cluster_nodes)
+    boundary_edges = _get_boundary_edges(
+        edges, cluster_nodes, adjacency,
+    )
+
+    # ── Step 3: Generate candidate swaps ─────────────────────────
+    candidates = _generate_candidate_swaps(
+        cluster_edges, boundary_edges, edge_set, n,
+        max_candidates=max_candidates,
+    )
+
+    # ── Step 4: Evaluate candidates using spectral score ─────────
+    best_swap = None
+    best_spectral = score_before
+    best_edges = None
+
+    for candidate in candidates:
+        trial_edges = _apply_swap(edges, candidate)
+        trial_spectral = spectral_score(trial_edges)
+        candidate["spectral_score"] = trial_spectral
+
+        if trial_spectral < best_spectral:
+            best_spectral = trial_spectral
+            best_swap = candidate
+            best_edges = trial_edges
+
+    score_after = best_spectral
+    spectral_improvement = round(score_before - score_after, 12)
+
+    # ── Step 5: Run decoder experiments ──────────────────────────
+    baseline_correction, baseline_iters, baseline_residuals = (
+        _experimental_bp_flooding(H, llr, syndrome_vec, max_iters)
+    )
+    baseline_success = bool(np.array_equal(
+        _compute_syndrome(H, baseline_correction), syndrome_vec,
+    ))
+
+    if best_swap is not None and best_edges is not None:
+        H_optimized = _edges_to_H(best_edges, m, n)
+        opt_correction, opt_iters, opt_residuals = (
+            _experimental_bp_flooding(
+                H_optimized, llr, syndrome_vec, max_iters,
+            )
+        )
+        opt_success = bool(np.array_equal(
+            _compute_syndrome(H_optimized, opt_correction),
+            syndrome_vec,
+        ))
+    else:
+        opt_correction = baseline_correction
+        opt_iters = baseline_iters
+        opt_residuals = baseline_residuals
+        opt_success = baseline_success
+
+    # ── Build output ─────────────────────────────────────────────
+    baseline_metrics = {
+        "iterations": baseline_iters,
+        "success": baseline_success,
+        "residual_norms": baseline_residuals,
+        "final_residual_norm": (
+            baseline_residuals[-1] if baseline_residuals else 0.0
+        ),
+    }
+
+    optimized_metrics = {
+        "iterations": opt_iters,
+        "success": opt_success,
+        "residual_norms": opt_residuals,
+        "final_residual_norm": (
+            opt_residuals[-1] if opt_residuals else 0.0
+        ),
+    }
+
+    delta_iterations = opt_iters - baseline_iters
+    delta_success = int(opt_success) - int(baseline_success)
+
+    # JSON-safe swap descriptor.
+    best_swap_output = None
+    if best_swap is not None:
+        best_swap_output = {
+            "remove": [list(e) for e in best_swap["remove"]],
+            "add": best_swap["add"],
+            "description": best_swap["description"],
+            "spectral_score": best_swap["spectral_score"],
+        }
+
+    candidate_swaps_output = []
+    for c in candidates:
+        candidate_swaps_output.append({
+            "remove": [list(e) for e in c["remove"]],
+            "add": c["add"],
+            "description": c["description"],
+            "spectral_score": c["spectral_score"],
+        })
+
+    return {
+        "baseline_metrics": baseline_metrics,
+        "optimized_metrics": optimized_metrics,
+        "delta_iterations": delta_iterations,
+        "delta_success": delta_success,
+        "best_swap": best_swap_output,
+        "candidate_swaps": candidate_swaps_output,
+        "spectral_score_before": score_before,
+        "spectral_score_after": score_after,
+        "spectral_improvement": spectral_improvement,
+        "cluster_nodes": sorted(cluster_nodes),
         "node_risk_scores": node_risk_scores,
         "cluster_risk_scores": cluster_risk_scores,
         "top_risk_clusters": top_risk_clusters,

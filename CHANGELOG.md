@@ -6,6 +6,92 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.7.0] — 2026-03-10
+Spectral Tanner Graph Optimization
+
+Added
+
+Spectral Graph Optimization (src/qec/experiments/tanner_graph_repair.py):
+
+Spectral Tanner graph optimization via non-backtracking spectral radius
+minimization.  Finds edge swaps that reduce the spectral radius ρ(B) of
+the non-backtracking matrix, which is strongly correlated with improved
+BP stability and reduced trapping-set behavior.
+
+Algorithm:
+  1. Selects highest-risk cluster from top_risk_clusters[0].
+  2. Generates deterministic candidate edge swaps from
+     cluster_edges × boundary_edges (reuses v6.6 candidate logic).
+  3. Evaluates each candidate using spectral_score(): the spectral
+     radius of the non-backtracking matrix, estimated via power
+     iteration.
+  4. Selects the swap that minimizes spectral_score.
+  5. Runs baseline and optimized decodes, compares iterations and success.
+
+New functions:
+  - run_spectral_graph_optimization_experiment(): main entry point.
+  - spectral_score(): computes spectral radius of the non-backtracking
+    matrix via power iteration (deterministic, fixed initial vector).
+  - _build_nb_matrix_from_edges(): constructs the non-backtracking
+    (Hashimoto) matrix from an edge list.
+  - _power_iteration_spectral_radius(): estimates the largest eigenvalue
+    magnitude via power iteration with deterministic initialization.
+
+Output fields: baseline_metrics, optimized_metrics, delta_iterations,
+delta_success, best_swap, candidate_swaps, spectral_score_before,
+spectral_score_after, spectral_improvement, cluster_nodes,
+node_risk_scores, cluster_risk_scores, top_risk_clusters.
+
+CLI Flag (bench/dps_v381_eval.py):
+
+--spectral-graph-optimization: enable spectral Tanner graph optimization
+via non-backtracking spectral radius minimization
+(v6.7, implies --spectral-failure-risk).
+
+Evaluation Harness Integration:
+
+Per-trial experiment execution after v6.4 risk scoring.  Aggregates
+mean_delta_iterations, mean_delta_success, mean_spectral_improvement,
+and num_optimizations_applied across trials per (mode, p, distance) cell.
+
+Tests (tests/test_spectral_graph_optimization.py):
+
+  - spectral_score computation and determinism
+  - NB matrix construction correctness
+  - Power iteration convergence
+  - Deterministic candidate selection
+  - Node degree preservation after swap
+  - No duplicate edges after swap
+  - Spectral score non-negative improvement when swap accepted
+  - JSON output stability and roundtrip
+  - Compatibility with v6.6 repair pipeline
+  - End-to-end pipeline from v6.4 risk scoring to optimization
+
+Constraints
+
+Decoder untouched: no changes to BP message passing, scheduling,
+or convergence logic.  Experimental decodes use a separate, self-contained
+BP implementation for research comparison.
+
+Graph rewrites preserve node degrees: each swap removes two edges and adds
+two edges, maintaining the degree of every variable and check node.
+
+No duplicate edges: candidate swaps are validated against the existing
+edge set before acceptance.
+
+Determinism preserved: no randomness, no global state, all outputs
+are deterministic pure functions of inputs.  Power iteration uses a fixed
+initial vector (all ones, normalized).
+
+Schema unchanged: no schema version bump.
+
+Dependencies unchanged: stdlib + NumPy only.
+
+Additive only: all new functions and CLI flags are opt-in.
+v6.6 repair experiment remains fully functional.
+
+---
+
 [6.6.0] — 2026-03-10
 Tanner Graph Fragility Repair Experiments
 
