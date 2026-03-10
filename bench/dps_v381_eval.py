@@ -98,6 +98,9 @@ from src.qec.diagnostics.bp_boundary_analysis import (
 from src.qec.diagnostics.spectral_boundary_alignment import (
     compute_spectral_boundary_alignment,
 )
+from src.qec.diagnostics.spectral_trapping_sets import (
+    compute_spectral_trapping_sets,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -939,6 +942,7 @@ def run_evaluation(
     enable_bp_boundary_analysis: bool = False,
     enable_tanner_spectral_analysis: bool = False,
     enable_spectral_boundary_alignment: bool = False,
+    enable_spectral_trapping_sets: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -956,6 +960,10 @@ def run_evaluation(
         enable_tanner_spectral_analysis = True
         enable_bp_boundary_analysis = True
         enable_bp_barrier_analysis = True
+
+    # v5.6.0: spectral trapping sets implies tanner spectral analysis.
+    if enable_spectral_trapping_sets:
+        enable_tanner_spectral_analysis = True
 
     if distances is None:
         distances = list(DEFAULT_DISTANCES)
@@ -991,9 +999,10 @@ def run_evaluation(
                 codes[distance],
             )
 
-    # v5.5.0: Extract spectral eigenvectors for alignment analysis.
+    # v5.5.0 / v5.6.0: Extract spectral eigenvectors (shared, once per code).
+    tanner_eigenvectors: dict[int, np.ndarray] = {}
     tanner_spectral_modes: dict[int, list[np.ndarray]] = {}
-    if enable_spectral_boundary_alignment:
+    if enable_spectral_boundary_alignment or enable_spectral_trapping_sets:
         for distance in distances:
             H = codes[distance]
             m, n = H.shape
@@ -1003,6 +1012,7 @@ def run_evaluation(
             eigvals, eigvecs = np.linalg.eigh(A)
             sort_idx = np.argsort(-eigvals)
             eigvecs = eigvecs[:, sort_idx]
+            tanner_eigenvectors[distance] = eigvecs
             top_k = min(3, eigvecs.shape[1])
             tanner_spectral_modes[distance] = [
                 eigvecs[:n, i].copy() for i in range(top_k)
@@ -1067,6 +1077,22 @@ def run_evaluation(
     if tanner_spectral_results:
         out["tanner_spectral_analysis"] = {
             int(d): tanner_spectral_results[d] for d in sorted(tanner_spectral_results.keys())
+        }
+
+    # v5.6.0: Spectral trapping-set analysis (once per code instance).
+    if enable_spectral_trapping_sets and tanner_eigenvectors:
+        trapping_set_results: dict[int, dict[str, Any]] = {}
+        for distance in sorted(tanner_eigenvectors.keys()):
+            H = codes[distance]
+            n = H.shape[1]
+            eigvecs = tanner_eigenvectors[distance]
+            top_k = min(3, eigvecs.shape[1])
+            modes_for_trapping = [eigvecs[:, i].copy() for i in range(top_k)]
+            ts = compute_spectral_trapping_sets(modes_for_trapping, n)
+            trapping_set_results[distance] = ts
+        out["spectral_trapping_sets"] = {
+            int(d): trapping_set_results[d]
+            for d in sorted(trapping_set_results.keys())
         }
 
     # v5.5.0: Spectral–boundary alignment analysis.
@@ -1376,6 +1402,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable Tanner spectral fragility diagnostics (spectral gap, eigenmode localization)")
     parser.add_argument("--spectral-boundary-alignment", action="store_true",
                         help="Enable spectral-boundary alignment diagnostics (v5.5)")
+    parser.add_argument("--spectral-trapping-sets", action="store_true",
+                        help="Enable spectral trapping-set diagnostics (v5.6)")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1435,6 +1463,8 @@ def main() -> None:
         print("Tanner spectral fragility diagnostics: ENABLED")
     if args.spectral_boundary_alignment:
         print("Spectral-boundary alignment diagnostics: ENABLED")
+    if args.spectral_trapping_sets:
+        print("Spectral trapping-set diagnostics: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1468,8 +1498,9 @@ def main() -> None:
         enable_bp_landscape_map=args.bp_landscape_map or args.bp_barrier_analysis,
         enable_bp_barrier_analysis=args.bp_barrier_analysis or args.spectral_boundary_alignment,
         enable_bp_boundary_analysis=args.bp_boundary_analysis or args.spectral_boundary_alignment,
-        enable_tanner_spectral_analysis=args.tanner_spectral_analysis or args.spectral_boundary_alignment,
+        enable_tanner_spectral_analysis=args.tanner_spectral_analysis or args.spectral_boundary_alignment or args.spectral_trapping_sets,
         enable_spectral_boundary_alignment=args.spectral_boundary_alignment,
+        enable_spectral_trapping_sets=args.spectral_trapping_sets,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,

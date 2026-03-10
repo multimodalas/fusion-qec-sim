@@ -6,6 +6,50 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.6.0] — 2026-03-10
+Spectral Trapping-Set Diagnostics
+
+Added
+
+Spectral Trapping-Set Diagnostic (src/qec/diagnostics/):
+
+spectral_trapping_sets.py: deterministic spectral trapping-set
+diagnostic module implementing compute_spectral_trapping_sets().
+
+Identifies localized spectral clusters in Tanner graph eigenvectors
+that may correspond to potential trapping sets or pseudocodeword-prone
+regions.  Localized eigenvectors that concentrate mass on small subsets
+of variable nodes indicate structural weaknesses in the Tanner graph.
+
+Fully deterministic observational diagnostic that integrates with
+the existing v5 diagnostic stack.
+
+Output metrics:
+
+cluster_count
+largest_cluster_size
+mean_cluster_size
+clusters (per-mode: mode_index, cluster_size, nodes, max_importance, mean_importance)
+
+Harness integration:
+
+--spectral-trapping-sets CLI flag added to bench/dps_v381_eval.py.
+Automatically enables --tanner-spectral-analysis as a dependency.
+
+Per-code-instance logging includes:
+
+cluster_count
+largest_cluster_size
+mean_cluster_size
+
+Design Goals
+
+Identify localized spectral structures that may correspond to trapping sets.
+Enable correlation studies between spectral localization and BP decoding failures.
+Provide a purely graph-theoretic diagnostic for structural vulnerability analysis.
+
+---
+
 [5.5.0] — 2026-03-10
 Spectral–Boundary Alignment Diagnostics
 
