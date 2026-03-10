@@ -21,6 +21,7 @@ BP Jacobian spectral radius estimation,
 spectral trapping-set candidate detection,
 spectral–BP attractor alignment diagnostics,
 spectral failure risk scoring,
+BP stability prediction,
 and ASCII phase heatmap output
 for BP convergence traces.
 Does not modify decoder internals.
@@ -52,3 +53,4 @@ from .nb_trapping_candidates import compute_nb_trapping_candidates
 from .spectral_bp_alignment import compute_spectral_bp_alignment
 from .spectral_failure_risk import compute_spectral_failure_risk
 from .phase_heatmap import print_phase_heatmap
+from .bp_stability_predictor import compute_bp_stability_prediction

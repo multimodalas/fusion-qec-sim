@@ -228,6 +228,10 @@ def _aggregate_cell(
             "mean_cluster_risk": None,
             "max_cluster_risk": None,
             "mean_num_high_risk_clusters": None,
+            "mean_bp_stability_prediction": None,
+            "mean_bp_failure_risk": None,
+            "instability_fraction": None,
+            "mean_spectral_instability_ratio": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -267,6 +271,12 @@ def _aggregate_cell(
     sfr_mean_cluster_risk_values: list[float | None] = []
     sfr_max_cluster_risk_values: list[float | None] = []
     sfr_num_high_risk_values: list[float | None] = []
+
+    # v6.8 BP stability predictor collectors (opt-in, additive).
+    bsp_stability_prediction_values: list[float | None] = []
+    bsp_failure_risk_values: list[float | None] = []
+    bsp_instability_values: list[float | None] = []
+    bsp_spectral_ratio_values: list[float | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -315,6 +325,20 @@ def _aggregate_cell(
         sfr_mean_cluster_risk_values.append(trial.get("mean_cluster_risk"))
         sfr_max_cluster_risk_values.append(trial.get("max_cluster_risk"))
         sfr_num_high_risk_values.append(trial.get("num_high_risk_clusters"))
+
+        # v6.8 BP stability predictor diagnostics (opt-in, additive).
+        bsp_stability_prediction_values.append(
+            trial.get("bp_stability_score"),
+        )
+        bsp_failure_risk_values.append(trial.get("bp_failure_risk"))
+        bsp_instability_flag = trial.get("predicted_instability")
+        bsp_instability_values.append(
+            1.0 if bsp_instability_flag is True
+            else (0.0 if bsp_instability_flag is False else None)
+        )
+        bsp_spectral_ratio_values.append(
+            trial.get("spectral_instability_ratio"),
+        )
 
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
@@ -370,4 +394,12 @@ def _aggregate_cell(
         "mean_cluster_risk": _safe_mean(sfr_mean_cluster_risk_values),
         "max_cluster_risk": _safe_mean(sfr_max_cluster_risk_values),
         "mean_num_high_risk_clusters": _safe_mean(sfr_num_high_risk_values),
+        "mean_bp_stability_prediction": _safe_mean(
+            bsp_stability_prediction_values,
+        ),
+        "mean_bp_failure_risk": _safe_mean(bsp_failure_risk_values),
+        "instability_fraction": _safe_mean(bsp_instability_values),
+        "mean_spectral_instability_ratio": _safe_mean(
+            bsp_spectral_ratio_values,
+        ),
     }
