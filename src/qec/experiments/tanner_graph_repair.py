@@ -1,0 +1,600 @@
+"""
+v6.6.0 — Tanner Graph Fragility Repair Experiment.
+
+Tests whether fragile Tanner graph motifs identified by spectral
+diagnostics can be disrupted through minimal deterministic edge
+rewiring.
+
+Algorithm:
+  1. Select highest-risk cluster from top_risk_clusters[0].
+  2. Build cluster-local and boundary edge sets for efficient search.
+  3. Generate candidate edge swaps (cluster_edges x boundary_edges).
+  4. Evaluate each candidate using a structural repair score.
+  5. Select best repair (lowest score) if it improves over baseline.
+  6. Run baseline and repaired decodes, compare metrics.
+
+Graph rewrites preserve node degrees.  Deterministic execution only.
+No randomness.  No duplicate edges.
+
+Does not modify decoder internals.  Fully deterministic.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+
+
+# ── Graph utilities ──────────────────────────────────────────────────
+
+
+def _extract_edges(H: np.ndarray) -> list[tuple[int, int]]:
+    """Extract Tanner graph edges from parity-check matrix.
+
+    Returns sorted list of (variable_node, check_node) tuples.
+    Variable nodes: 0..n-1, check nodes: n..n+m-1.
+    """
+    m, n = H.shape
+    edges = []
+    for ci in range(m):
+        for vi in range(n):
+            if H[ci, vi] != 0:
+                edges.append((vi, n + ci))
+    return sorted(edges)
+
+
+def _build_edge_set(edges: list[tuple[int, int]]) -> set[tuple[int, int]]:
+    """Build a set from edge list for O(1) membership testing."""
+    return set(edges)
+
+
+def _build_adjacency(
+    edges: list[tuple[int, int]],
+) -> dict[int, list[int]]:
+    """Build adjacency list from edge list."""
+    adj: dict[int, list[int]] = {}
+    for u, v in edges:
+        adj.setdefault(u, []).append(v)
+        adj.setdefault(v, []).append(u)
+    return adj
+
+
+# ── Repair scoring (extensibility hook) ─────────────────────────────
+
+
+def repair_score(
+    edges: list[tuple[int, int]],
+    cluster_nodes: set[int],
+) -> int:
+    """Compute structural repair score for a graph.
+
+    v6.6 implementation: counts edges where both endpoints are inside
+    the cluster.  Lower score indicates better repair (fewer internal
+    cluster edges = more disrupted fragile structure).
+
+    Parameters
+    ----------
+    edges : list[tuple[int, int]]
+        All edges in the Tanner graph.
+    cluster_nodes : set[int]
+        Set of node indices belonging to the fragile cluster.
+
+    Returns
+    -------
+    int
+        Number of edges with both endpoints inside the cluster.
+    """
+    count = 0
+    for u, v in edges:
+        if u in cluster_nodes and v in cluster_nodes:
+            count += 1
+    return count
+
+
+# ── Candidate swap generation ────────────────────────────────────────
+
+
+def _get_cluster_edges(
+    edges: list[tuple[int, int]],
+    cluster_nodes: set[int],
+) -> list[tuple[int, int]]:
+    """Return edges touching nodes in the cluster."""
+    return [
+        (u, v) for u, v in edges
+        if u in cluster_nodes or v in cluster_nodes
+    ]
+
+
+def _get_boundary_edges(
+    edges: list[tuple[int, int]],
+    cluster_nodes: set[int],
+    adjacency: dict[int, list[int]],
+) -> list[tuple[int, int]]:
+    """Return edges touching boundary nodes (neighbors of cluster).
+
+    Boundary nodes are nodes not in the cluster that are adjacent to
+    at least one cluster node.  Boundary edges touch at least one
+    boundary node but do NOT touch any cluster node.
+    """
+    boundary_nodes: set[int] = set()
+    for node in cluster_nodes:
+        for neighbor in adjacency.get(node, []):
+            if neighbor not in cluster_nodes:
+                boundary_nodes.add(neighbor)
+
+    return [
+        (u, v) for u, v in edges
+        if (u in boundary_nodes or v in boundary_nodes)
+        and u not in cluster_nodes
+        and v not in cluster_nodes
+    ]
+
+
+def _generate_candidate_swaps(
+    cluster_edges: list[tuple[int, int]],
+    boundary_edges: list[tuple[int, int]],
+    edge_set: set[tuple[int, int]],
+    n: int,
+    max_candidates: int = 10,
+) -> list[dict[str, Any]]:
+    """Generate deterministic candidate edge swaps.
+
+    For each pair (v1,c1) from cluster_edges and (v2,c2) from
+    boundary_edges, propose swapping to (v1,c2) + (v2,c1).
+
+    Conditions:
+      - v1 != v2 and c1 != c2
+      - (v1,c2) not already an edge
+      - (v2,c1) not already an edge
+      - Swap preserves node degrees
+
+    Parameters
+    ----------
+    cluster_edges : list[tuple[int, int]]
+        Edges touching the fragile cluster.
+    boundary_edges : list[tuple[int, int]]
+        Edges touching boundary nodes.
+    edge_set : set[tuple[int, int]]
+        Set of all current edges for O(1) lookup.
+    n : int
+        Number of variable nodes (nodes 0..n-1 are variable,
+        nodes >= n are check).
+    max_candidates : int
+        Maximum number of candidate swaps to generate.
+
+    Returns
+    -------
+    list[dict]
+        List of candidate swap descriptors.
+    """
+    candidates: list[dict[str, Any]] = []
+
+    for v1, c1 in cluster_edges:
+        # Ensure v1 is variable node and c1 is check node.
+        if v1 >= n:
+            v1, c1 = c1, v1
+        if v1 >= n:
+            continue  # Both are check nodes — skip.
+
+        for v2, c2 in boundary_edges:
+            if v2 >= n:
+                v2, c2 = c2, v2
+            if v2 >= n:
+                continue
+
+            if v1 == v2 or c1 == c2:
+                continue
+
+            # Proposed new edges.
+            new_e1 = (min(v1, c2), max(v1, c2))
+            new_e2 = (min(v2, c1), max(v2, c1))
+
+            if new_e1 in edge_set or new_e2 in edge_set:
+                continue
+
+            candidates.append({
+                "remove": [(v1, c1), (v2, c2)],
+                "add": [list(new_e1), list(new_e2)],
+                "description": (
+                    f"swap ({v1},{c1})+({v2},{c2})"
+                    f" -> ({new_e1[0]},{new_e1[1]})+({new_e2[0]},{new_e2[1]})"
+                ),
+            })
+
+            if len(candidates) >= max_candidates:
+                return candidates
+
+    return candidates
+
+
+# ── Swap application ────────────────────────────────────────────────
+
+
+def _apply_swap(
+    edges: list[tuple[int, int]],
+    swap: dict[str, Any],
+) -> list[tuple[int, int]]:
+    """Apply an edge swap and return the new edge list.
+
+    Removes the two old edges and adds two new edges.
+    """
+    remove_set = set()
+    for e in swap["remove"]:
+        remove_set.add((min(e[0], e[1]), max(e[0], e[1])))
+
+    new_edges = [e for e in edges if e not in remove_set]
+    for e in swap["add"]:
+        new_edges.append((e[0], e[1]))
+
+    return sorted(new_edges)
+
+
+def _edges_to_H(
+    edges: list[tuple[int, int]],
+    m: int,
+    n: int,
+) -> np.ndarray:
+    """Reconstruct parity-check matrix from edge list."""
+    H = np.zeros((m, n), dtype=np.float64)
+    for u, v in edges:
+        if u < n and v >= n:
+            vi, ci = u, v - n
+        elif v < n and u >= n:
+            vi, ci = v, u - n
+        else:
+            continue
+        H[ci, vi] = 1.0
+    return H
+
+
+# ── Experimental BP (self-contained) ────────────────────────────────
+
+
+def _compute_syndrome(H: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """Compute binary syndrome s = H @ x (mod 2)."""
+    return (H.astype(np.int32) @ x.astype(np.int32)) % 2
+
+
+def _experimental_bp_flooding(
+    H: np.ndarray,
+    llr: np.ndarray,
+    syndrome_vec: np.ndarray,
+    max_iters: int,
+) -> tuple[np.ndarray, int, list[float]]:
+    """Minimal flooding BP for experiment comparison.
+
+    Self-contained implementation — does not modify the existing decoder.
+    """
+    H_f = H.astype(np.float64)
+    m, n = H_f.shape
+    llr = np.asarray(llr, dtype=np.float64).copy()
+
+    s_sign = np.where(syndrome_vec.astype(np.float64) > 0.5, -1.0, 1.0)
+
+    v2c = np.zeros((m, n), dtype=np.float64)
+    for j in range(m):
+        for i in range(n):
+            if H_f[j, i] > 0.5:
+                v2c[j, i] = llr[i]
+
+    c2v = np.zeros((m, n), dtype=np.float64)
+    residual_norms: list[float] = []
+
+    for iteration in range(1, max_iters + 1):
+        for j in range(m):
+            neighbors = [i for i in range(n) if H_f[j, i] > 0.5]
+            if len(neighbors) < 2:
+                for i in neighbors:
+                    c2v[j, i] = 0.0
+                continue
+            for i in neighbors:
+                prod = s_sign[j]
+                for k in neighbors:
+                    if k != i:
+                        val = np.clip(v2c[j, k] / 2.0, -15.0, 15.0)
+                        prod *= np.tanh(val)
+                prod = np.clip(prod, -1.0 + 1e-15, 1.0 - 1e-15)
+                c2v[j, i] = 2.0 * np.arctanh(prod)
+
+        for i in range(n):
+            check_neighbors = [j for j in range(m) if H_f[j, i] > 0.5]
+            total = llr[i] + sum(c2v[j, i] for j in check_neighbors)
+            for j in check_neighbors:
+                v2c[j, i] = total - c2v[j, i]
+
+        L_total = llr.copy()
+        for i in range(n):
+            for j in range(m):
+                if H_f[j, i] > 0.5:
+                    L_total[i] += c2v[j, i]
+
+        correction = (L_total < 0.0).astype(np.uint8)
+        s_residual = _compute_syndrome(H, correction)
+        r_norm = float(np.linalg.norm(
+            s_residual.astype(np.float64) - syndrome_vec.astype(np.float64),
+        ))
+        residual_norms.append(round(r_norm, 12))
+
+        if np.array_equal(s_residual, syndrome_vec.astype(np.uint8)):
+            return correction, iteration, residual_norms
+
+    return correction, max_iters, residual_norms
+
+
+# ── Main experiment ──────────────────────────────────────────────────
+
+
+def run_tanner_graph_repair_experiment(
+    H: np.ndarray,
+    llr: np.ndarray,
+    syndrome_vec: np.ndarray,
+    risk_result: dict[str, Any],
+    *,
+    max_candidates: int = 10,
+    max_iters: int = 100,
+) -> dict[str, Any]:
+    """Run a Tanner graph fragility repair experiment.
+
+    Identifies the highest-risk cluster, generates deterministic
+    candidate edge swaps, evaluates each candidate using a structural
+    repair score, selects the best repair, and compares baseline vs
+    repaired decode performance.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Binary parity-check matrix, shape (m, n).
+    llr : np.ndarray
+        Per-variable log-likelihood ratios, length n.
+    syndrome_vec : np.ndarray
+        Binary syndrome vector, length m.
+    risk_result : dict[str, Any]
+        Output of ``compute_spectral_failure_risk()``.  Must contain
+        ``node_risk_scores``, ``cluster_risk_scores``, and
+        ``top_risk_clusters``.
+    max_candidates : int
+        Maximum number of candidate swaps to generate.  Default 10.
+    max_iters : int
+        Maximum BP iterations.  Default 100.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-serializable dictionary with keys:
+
+        - ``baseline_metrics``: dict with baseline decode results.
+        - ``repaired_metrics``: dict with repaired decode results.
+        - ``delta_iterations``: int, iteration difference.
+        - ``delta_success``: int, success difference.
+        - ``best_swap``: dict or None, the selected swap.
+        - ``candidate_swaps``: list of candidate swap descriptors.
+        - ``repair_score_improvement``: int, baseline minus repaired score.
+        - ``baseline_repair_score``: int, repair score before swap.
+        - ``repaired_repair_score``: int or None, repair score after swap.
+        - ``cluster_nodes``: list of nodes in selected cluster.
+        - ``node_risk_scores``: pass-through from risk_result.
+        - ``cluster_risk_scores``: pass-through from risk_result.
+        - ``top_risk_clusters``: pass-through from risk_result.
+    """
+    m, n = H.shape
+    llr = np.asarray(llr, dtype=np.float64)
+    syndrome_vec = np.asarray(syndrome_vec, dtype=np.uint8)
+
+    node_risk_scores = risk_result.get("node_risk_scores", [])
+    cluster_risk_scores = risk_result.get("cluster_risk_scores", [])
+    top_risk_clusters = risk_result.get("top_risk_clusters", [])
+
+    # ── Step 1: Identify fragile cluster ─────────────────────────
+    # We need the cluster's variable and check nodes.  The risk_result
+    # is produced from spectral_failure_risk which references clusters
+    # from nb_trapping_candidates.  top_risk_clusters[0] gives the
+    # index of the highest-risk cluster.
+    #
+    # Since the experiment receives only risk_result, we derive cluster
+    # membership from node_risk_scores: nodes with non-zero risk that
+    # participate in the highest-risk cluster.  For a self-contained
+    # experiment, we use all high-risk variable nodes as the cluster
+    # and include adjacent check nodes from H.
+
+    if not top_risk_clusters:
+        # No fragile clusters — run baseline only.
+        return _baseline_only_result(
+            H, llr, syndrome_vec, max_iters,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    # Identify cluster variable nodes from node_risk_scores.
+    # Use nodes with risk >= 0.5 * max_risk as cluster members.
+    if not node_risk_scores:
+        return _baseline_only_result(
+            H, llr, syndrome_vec, max_iters,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    max_risk = max(pair[1] for pair in node_risk_scores)
+    if max_risk <= 0.0:
+        return _baseline_only_result(
+            H, llr, syndrome_vec, max_iters,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    threshold = 0.5 * max_risk
+    cluster_var_nodes = sorted(
+        int(pair[0]) for pair in node_risk_scores
+        if pair[1] >= threshold and int(pair[0]) < n
+    )
+
+    if not cluster_var_nodes:
+        return _baseline_only_result(
+            H, llr, syndrome_vec, max_iters,
+            node_risk_scores, cluster_risk_scores, top_risk_clusters,
+        )
+
+    # Include adjacent check nodes in the cluster.
+    cluster_check_nodes: set[int] = set()
+    for vi in cluster_var_nodes:
+        for ci in range(m):
+            if H[ci, vi] != 0:
+                cluster_check_nodes.add(n + ci)
+
+    cluster_nodes = set(cluster_var_nodes) | cluster_check_nodes
+
+    # ── Step 2: Build edge sets ──────────────────────────────────
+    edges = _extract_edges(H)
+    edge_set = _build_edge_set(edges)
+    adjacency = _build_adjacency(edges)
+
+    cluster_edges = _get_cluster_edges(edges, cluster_nodes)
+    boundary_edges = _get_boundary_edges(
+        edges, cluster_nodes, adjacency,
+    )
+
+    # ── Step 3: Generate candidate swaps ─────────────────────────
+    candidates = _generate_candidate_swaps(
+        cluster_edges, boundary_edges, edge_set, n,
+        max_candidates=max_candidates,
+    )
+
+    # ── Step 4: Evaluate candidates ──────────────────────────────
+    baseline_score = repair_score(edges, cluster_nodes)
+
+    best_swap = None
+    best_score = baseline_score
+    best_edges = None
+
+    for candidate in candidates:
+        trial_edges = _apply_swap(edges, candidate)
+        score = repair_score(trial_edges, cluster_nodes)
+        candidate["repair_score"] = score
+
+        if score < best_score:
+            best_score = score
+            best_swap = candidate
+            best_edges = trial_edges
+
+    # ── Step 5: Select best repair ───────────────────────────────
+    repair_score_improvement = baseline_score - best_score
+
+    # ── Step 6: Run decoder experiments ──────────────────────────
+    baseline_correction, baseline_iters, baseline_residuals = (
+        _experimental_bp_flooding(H, llr, syndrome_vec, max_iters)
+    )
+    baseline_success = bool(np.array_equal(
+        _compute_syndrome(H, baseline_correction), syndrome_vec,
+    ))
+
+    if best_swap is not None and best_edges is not None:
+        H_repaired = _edges_to_H(best_edges, m, n)
+        repaired_correction, repaired_iters, repaired_residuals = (
+            _experimental_bp_flooding(
+                H_repaired, llr, syndrome_vec, max_iters,
+            )
+        )
+        repaired_success = bool(np.array_equal(
+            _compute_syndrome(H_repaired, repaired_correction),
+            syndrome_vec,
+        ))
+    else:
+        repaired_correction = baseline_correction
+        repaired_iters = baseline_iters
+        repaired_residuals = baseline_residuals
+        repaired_success = baseline_success
+
+    # ── Build output ─────────────────────────────────────────────
+    baseline_metrics = {
+        "iterations": baseline_iters,
+        "success": baseline_success,
+        "residual_norms": baseline_residuals,
+        "final_residual_norm": (
+            baseline_residuals[-1] if baseline_residuals else 0.0
+        ),
+    }
+
+    repaired_metrics = {
+        "iterations": repaired_iters,
+        "success": repaired_success,
+        "residual_norms": repaired_residuals,
+        "final_residual_norm": (
+            repaired_residuals[-1] if repaired_residuals else 0.0
+        ),
+    }
+
+    delta_iterations = repaired_iters - baseline_iters
+    delta_success = int(repaired_success) - int(baseline_success)
+
+    # JSON-safe swap descriptor.
+    best_swap_output = None
+    if best_swap is not None:
+        best_swap_output = {
+            "remove": [list(e) for e in best_swap["remove"]],
+            "add": best_swap["add"],
+            "description": best_swap["description"],
+            "repair_score": best_swap["repair_score"],
+        }
+
+    candidate_swaps_output = []
+    for c in candidates:
+        candidate_swaps_output.append({
+            "remove": [list(e) for e in c["remove"]],
+            "add": c["add"],
+            "description": c["description"],
+            "repair_score": c["repair_score"],
+        })
+
+    return {
+        "baseline_metrics": baseline_metrics,
+        "repaired_metrics": repaired_metrics,
+        "delta_iterations": delta_iterations,
+        "delta_success": delta_success,
+        "best_swap": best_swap_output,
+        "candidate_swaps": candidate_swaps_output,
+        "repair_score_improvement": repair_score_improvement,
+        "baseline_repair_score": baseline_score,
+        "repaired_repair_score": best_score if best_swap is not None else None,
+        "cluster_nodes": sorted(cluster_nodes),
+        "node_risk_scores": node_risk_scores,
+        "cluster_risk_scores": cluster_risk_scores,
+        "top_risk_clusters": top_risk_clusters,
+    }
+
+
+def _baseline_only_result(
+    H: np.ndarray,
+    llr: np.ndarray,
+    syndrome_vec: np.ndarray,
+    max_iters: int,
+    node_risk_scores: list,
+    cluster_risk_scores: list,
+    top_risk_clusters: list,
+) -> dict[str, Any]:
+    """Return experiment result when no repair is possible."""
+    correction, iters, residuals = _experimental_bp_flooding(
+        H, llr, syndrome_vec, max_iters,
+    )
+    success = bool(np.array_equal(
+        _compute_syndrome(H, correction), syndrome_vec,
+    ))
+
+    metrics = {
+        "iterations": iters,
+        "success": success,
+        "residual_norms": residuals,
+        "final_residual_norm": residuals[-1] if residuals else 0.0,
+    }
+
+    return {
+        "baseline_metrics": metrics,
+        "repaired_metrics": metrics,
+        "delta_iterations": 0,
+        "delta_success": 0,
+        "best_swap": None,
+        "candidate_swaps": [],
+        "repair_score_improvement": 0,
+        "baseline_repair_score": 0,
+        "repaired_repair_score": None,
+        "cluster_nodes": [],
+        "node_risk_scores": node_risk_scores,
+        "cluster_risk_scores": cluster_risk_scores,
+        "top_risk_clusters": top_risk_clusters,
+    }

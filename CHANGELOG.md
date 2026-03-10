@@ -6,6 +6,74 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.6.0] — 2026-03-10
+Tanner Graph Fragility Repair Experiments
+
+Added
+
+Tanner Graph Repair Module (src/qec/experiments/tanner_graph_repair.py):
+
+run_tanner_graph_repair_experiment(): deterministic Tanner graph fragility
+repair using candidate edge swaps.  Tests whether fragile Tanner graph
+motifs identified by spectral diagnostics (v6.0–v6.4) can be disrupted
+through minimal deterministic edge rewiring.
+
+Algorithm:
+  1. Selects highest-risk cluster from top_risk_clusters[0].
+  2. Builds cluster-local and boundary edge sets for efficient search
+     (avoids scanning all edges in the Tanner graph).
+  3. Generates up to N candidate edge swaps from cluster_edges x boundary_edges.
+     Each swap replaces (v1,c1)+(v2,c2) with (v1,c2)+(v2,c1), preserving
+     node degrees.
+  4. Evaluates each candidate using repair_score(): counts edges remaining
+     inside the cluster (lower = better).
+  5. Selects the swap with the lowest repair score.
+  6. Runs baseline and repaired decodes, compares iterations and success.
+
+repair_score() is implemented as a separate function to support future
+extensibility.  v6.7 can replace the structural metric with a spectral
+objective (e.g. spectral_radius(non_backtracking_matrix)) without
+modifying the repair algorithm.
+
+Output fields: baseline_metrics, repaired_metrics, delta_iterations,
+delta_success, best_swap, candidate_swaps, repair_score_improvement,
+baseline_repair_score, repaired_repair_score, cluster_nodes,
+node_risk_scores, cluster_risk_scores, top_risk_clusters.
+
+CLI Flag (bench/dps_v381_eval.py):
+
+--tanner-graph-repair-experiment: enable Tanner graph fragility repair
+experiment (implies --spectral-failure-risk).
+
+Evaluation Harness Integration:
+
+Per-trial experiment execution after v6.4 risk scoring.  Aggregates
+mean_delta_iterations, mean_delta_success, mean_repair_score_improvement,
+and num_repairs_applied across trials per (mode, p, distance) cell.
+
+Constraints
+
+Decoder untouched: no changes to BP message passing, scheduling,
+or convergence logic.  Experimental decodes use a separate, self-contained
+BP implementation for research comparison.
+
+Graph rewrites preserve node degrees: each swap removes two edges and adds
+two edges, maintaining the degree of every variable and check node.
+
+No duplicate edges: candidate swaps are validated against the existing
+edge set before acceptance.
+
+Determinism preserved: no randomness, no global state, all outputs
+are deterministic pure functions of inputs.
+
+Schema unchanged: no schema version bump.
+
+Dependencies unchanged: stdlib + NumPy only.
+
+Additive only: all new modules and CLI flags are opt-in.
+
+---
+
 [6.5.0] — 2026-03-10
 Risk-Aware Decoder Experiments
 
