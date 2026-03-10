@@ -13,7 +13,12 @@ spectral trapping-set diagnostics,
 BP phase-space exploration,
 ternary decoder topology classification,
 decoder phase diagram aggregation,
-and phase boundary analysis
+phase boundary analysis,
+non-backtracking spectrum diagnostics,
+Bethe Hessian spectral analysis,
+BP stability proxy metrics,
+BP Jacobian spectral radius estimation,
+and ASCII phase heatmap output
 for BP convergence traces.
 Does not modify decoder internals.
 """
@@ -35,3 +40,8 @@ from .ternary_decoder_topology import compute_ternary_decoder_topology
 from .basin_probe import probe_local_ternary_basin
 from .phase_diagram import build_decoder_phase_diagram, make_phase_grid
 from .phase_boundary_analysis import analyze_phase_boundaries
+from .non_backtracking_spectrum import compute_non_backtracking_spectrum
+from .bethe_hessian import compute_bethe_hessian
+from .bp_stability_proxy import estimate_bp_stability
+from .bp_jacobian_estimator import estimate_bp_jacobian_spectral_radius
+from .phase_heatmap import print_phase_heatmap

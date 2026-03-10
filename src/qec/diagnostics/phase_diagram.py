@@ -1,5 +1,5 @@
 """
-v5.9.0 — Decoder Phase Diagram Aggregation.
+v5.9.0 / v6.0.0 — Decoder Phase Diagram Aggregation.
 
 Builds empirical decoder phase diagrams by sweeping a deterministic 2D
 parameter grid, running decoding experiments at each grid point, and
@@ -212,6 +212,10 @@ def _aggregate_cell(
             "mean_oscillation_score": None,
             "mean_alignment_max": None,
             "mean_cluster_count": None,
+            "mean_spectral_radius": None,
+            "mean_bethe_min_eigenvalue": None,
+            "mean_bp_stability_score": None,
+            "mean_jacobian_spectral_radius_est": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -225,6 +229,12 @@ def _aggregate_cell(
     oscillation_values: list[float | None] = []
     alignment_values: list[float | None] = []
     cluster_values: list[float | None] = []
+
+    # v6.0 spectral stability collectors (opt-in, additive).
+    spectral_radius_values: list[float | None] = []
+    bethe_min_values: list[float | None] = []
+    bp_stability_values: list[float | None] = []
+    jacobian_est_values: list[float | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -247,6 +257,12 @@ def _aggregate_cell(
 
         # Cluster count from trapping-set diagnostics if available.
         cluster_values.append(trial.get("cluster_count"))
+
+        # v6.0 spectral stability diagnostics (opt-in, additive).
+        spectral_radius_values.append(trial.get("spectral_radius"))
+        bethe_min_values.append(trial.get("bethe_min_eigenvalue"))
+        bp_stability_values.append(trial.get("bp_stability_score"))
+        jacobian_est_values.append(trial.get("jacobian_spectral_radius_est"))
 
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
@@ -286,4 +302,8 @@ def _aggregate_cell(
         "mean_oscillation_score": _safe_mean(oscillation_values),
         "mean_alignment_max": _safe_mean(alignment_values),
         "mean_cluster_count": _safe_mean(cluster_values),
+        "mean_spectral_radius": _safe_mean(spectral_radius_values),
+        "mean_bethe_min_eigenvalue": _safe_mean(bethe_min_values),
+        "mean_bp_stability_score": _safe_mean(bp_stability_values),
+        "mean_jacobian_spectral_radius_est": _safe_mean(jacobian_est_values),
     }

@@ -124,6 +124,22 @@ from src.qec.diagnostics.phase_boundary_analysis import (
     analyze_phase_boundaries,
 )
 
+from src.qec.diagnostics.non_backtracking_spectrum import (
+    compute_non_backtracking_spectrum,
+)
+from src.qec.diagnostics.bethe_hessian import (
+    compute_bethe_hessian,
+)
+from src.qec.diagnostics.bp_stability_proxy import (
+    estimate_bp_stability,
+)
+from src.qec.diagnostics.bp_jacobian_estimator import (
+    estimate_bp_jacobian_spectral_radius,
+)
+from src.qec.diagnostics.phase_heatmap import (
+    print_phase_heatmap,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -1553,6 +1569,14 @@ def _parse_args() -> argparse.Namespace:
                         help="Perform deterministic local basin probe around final LLR state (v5.8, implies --ternary-topology)")
     parser.add_argument("--phase-diagram", action="store_true",
                         help="Enable decoder phase diagram generation (v5.9, implies --ternary-topology --ternary-transition-metrics)")
+    parser.add_argument("--nb-spectrum", action="store_true",
+                        help="Enable non-backtracking spectrum diagnostics (v6.0)")
+    parser.add_argument("--bethe-hessian", action="store_true",
+                        help="Enable Bethe Hessian spectral diagnostics (v6.0)")
+    parser.add_argument("--bp-stability", action="store_true",
+                        help="Enable BP stability proxy diagnostics (v6.0, implies --nb-spectrum --bethe-hessian)")
+    parser.add_argument("--bp-jacobian-estimator", action="store_true",
+                        help="Enable BP Jacobian spectral radius estimator (v6.0)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -1668,6 +1692,9 @@ def _run_phase_diagram(args: argparse.Namespace, eval_result: dict[str, Any]) ->
     print(f"Boundary analysis: {bs['num_boundary_cells']} boundary, "
           f"{bs['num_mixed_cells']} mixed, {bs['num_critical_cells']} critical")
 
+    # v6.0: ASCII phase heatmap.
+    print_phase_heatmap(phase_diagram)
+
     # Write JSON output if requested.
     if args.phase_diagram_output:
         output = {
@@ -1736,6 +1763,14 @@ def main() -> None:
         print("Ternary decoder topology classification: ENABLED")
     if args.phase_diagram:
         print("Decoder phase diagram generation: ENABLED")
+    if args.nb_spectrum:
+        print("Non-backtracking spectrum diagnostics: ENABLED")
+    if args.bethe_hessian:
+        print("Bethe Hessian spectral diagnostics: ENABLED")
+    if args.bp_stability:
+        print("BP stability proxy diagnostics: ENABLED")
+    if args.bp_jacobian_estimator:
+        print("BP Jacobian spectral radius estimator: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")

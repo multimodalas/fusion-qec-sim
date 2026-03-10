@@ -6,6 +6,95 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.0.0] — 2026-03-10
+Spectral Stability Diagnostics
+
+Added
+
+Non-Backtracking Spectrum Diagnostics (src/qec/diagnostics/non_backtracking_spectrum.py):
+
+compute_non_backtracking_spectrum(): computes eigenvalues of the
+non-backtracking (Hashimoto) matrix derived from the Tanner graph.
+Returns spectral radius, eigenvalue list, and count.  Deterministic
+ordering by magnitude with stable tie-breaking.
+
+Bethe Hessian Spectral Analysis (src/qec/diagnostics/bethe_hessian.py):
+
+compute_bethe_hessian(): computes the Bethe Hessian spectrum
+H_B = (r²−1)I − rA + D for the Tanner graph adjacency matrix.
+Returns eigenvalues (sorted ascending), minimum eigenvalue, count
+of negative eigenvalues, and the regularization parameter used.
+Automatic r derivation from adjacency spectrum when not specified.
+
+BP Stability Proxy Metrics (src/qec/diagnostics/bp_stability_proxy.py):
+
+estimate_bp_stability(): combines non-backtracking spectral radius
+and Bethe Hessian minimum eigenvalue into a single deterministic
+stability score: bp_stability_score = (1/spectral_radius) * min_eigenvalue.
+Positive score suggests stable BP regime; negative suggests instability.
+
+BP Jacobian Spectral Radius Estimator (src/qec/diagnostics/bp_jacobian_estimator.py):
+
+estimate_bp_jacobian_spectral_radius(): estimates the dominant eigenvalue
+of the BP Jacobian without explicit construction using power-iteration
+ratios on consecutive LLR differences.  Averages over tail iterations
+for robustness.
+
+Phase Diagram Spectral Overlays (src/qec/diagnostics/phase_diagram.py):
+
+Extended phase diagram cell aggregation with optional spectral fields:
+mean_spectral_radius, mean_bethe_min_eigenvalue, mean_bp_stability_score,
+mean_jacobian_spectral_radius_est.  Fields are additive — appear only
+when spectral diagnostics are enabled.  v5.9 fields fully preserved.
+
+ASCII Phase Heatmap (src/qec/diagnostics/phase_heatmap.py):
+
+print_phase_heatmap(): prints a compact ASCII heatmap of the decoder
+phase diagram with +1/0/-1 symbols for CLI inspection.
+
+CLI Flags (bench/dps_v381_eval.py):
+
+--nb-spectrum: enable non-backtracking spectrum diagnostics.
+--bethe-hessian: enable Bethe Hessian spectral diagnostics.
+--bp-stability: enable BP stability proxy (implies --nb-spectrum --bethe-hessian).
+--bp-jacobian-estimator: enable BP Jacobian spectral radius estimator.
+
+Demo Script (scripts/run_v59_phase_diagram_demo.py):
+
+Updated to include spectral stability diagnostics and ASCII heatmap output.
+
+Design Goals
+
+Connect empirical decoder phase diagrams to theoretical BP stability conditions.
+Provide deterministic spectral predictors of decoding instability.
+Preserve observational architecture — diagnostics do not modify decoder behavior.
+
+Tests
+
+Test suites: tests/test_non_backtracking_spectrum.py (8 tests),
+tests/test_bethe_hessian.py (9 tests), tests/test_bp_stability_proxy.py (7 tests),
+tests/test_bp_jacobian_estimator.py (9 tests), tests/test_v60_phase_diagram_smoke.py (8 tests).
+Covers spectral determinism, eigenvalue ordering, JSON serialization, input mutation safety,
+formula correctness, backward compatibility, and end-to-end phase diagram integration.
+
+Documentation
+
+docs/reports/v6_bp_stability_spectra.md: motivation, theory, integration,
+deterministic design constraints, experimental protocol, limitations.
+Includes research hooks for v6.1 NB eigenvector localization and
+QLDPC-specific research notes.
+
+Unchanged
+
+Decoder core logic: untouched.
+Baseline decoding outputs remain byte-identical.
+Schema version: unchanged.
+All existing diagnostics: unchanged.
+v5.9.0 phase diagram fields: fully preserved (backward compatible).
+v5.9.0 tests: all passing without modification.
+
+---
+
 [5.9.0] — 2026-03-10
 Decoder Phase Diagram Generator
 
