@@ -1,5 +1,5 @@
 """
-v5.7.0 — Ternary Decoder Topology Classifier.
+v5.8.0 — Ternary Decoder Topology Classifier.
 
 Classifies BP decoding trajectories into a ternary topological state
 in observable decoder space:
@@ -11,6 +11,12 @@ in observable decoder space:
 Operates on phase-space diagnostics from ``compute_bp_phase_space``
 and optionally integrates evidence from existing v5 diagnostics
 (alignment, boundary, barrier).
+
+v5.8.0 additions:
+    - boundary_crossings: transitions involving state 0
+    - regime_switch_count: state changes between +1/0/-1
+    - first_success_iteration: first index where state == +1
+    - first_failure_iteration: first index where state == -1
 
 Does not modify decoder internals.  Treats the decoder as a pure
 function.  All outputs are JSON-serializable.
@@ -141,11 +147,35 @@ def compute_ternary_decoder_topology(
                 transition_iteration = t
                 break
 
+    # ── v5.8.0: Transition metrics ─────────────────────────────────
+    boundary_crossings = 0
+    regime_switch_count = 0
+    first_success_iteration: int | None = None
+    first_failure_iteration: int | None = None
+
+    for i, s in enumerate(ternary_trace):
+        if s == 1 and first_success_iteration is None:
+            first_success_iteration = i
+        if s == -1 and first_failure_iteration is None:
+            first_failure_iteration = i
+
+    for i in range(len(ternary_trace) - 1):
+        prev = ternary_trace[i]
+        curr = ternary_trace[i + 1]
+        if prev != curr:
+            regime_switch_count += 1
+            if prev == 0 or curr == 0:
+                boundary_crossings += 1
+
     return {
         "ternary_trace": ternary_trace,
         "final_ternary_state": final_state,
         "state_durations": state_durations,
         "transition_iteration": transition_iteration,
+        "boundary_crossings": boundary_crossings,
+        "regime_switch_count": regime_switch_count,
+        "first_success_iteration": first_success_iteration,
+        "first_failure_iteration": first_failure_iteration,
         "classification_reason": reason,
         "evidence": {
             "residual_norm_final": residual_norm_final,
