@@ -148,6 +148,9 @@ from src.qec.diagnostics.spectral_failure_risk import (
 from src.qec.diagnostics.bp_stability_predictor import (
     compute_bp_stability_prediction,
 )
+from src.qec.experiments.bp_prediction_validation import (
+    run_bp_prediction_validation,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -356,6 +359,7 @@ def run_mode(
     enable_ternary_topology: bool = False,
     enable_ternary_transition_metrics: bool = False,
     enable_ternary_basin_probe: bool = False,
+    enable_bp_prediction_validation: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -461,6 +465,7 @@ def run_mode(
     all_bp_phase_space: list[dict[str, Any]] = []
     all_ternary_topology: list[dict[str, Any]] = []
     all_ternary_basin_probes: list[dict[str, Any]] = []
+    all_decoder_success: list[bool] = []
     comparison_results: list[dict[str, Any]] = []
 
     for trial_idx, inst in enumerate(instances):
@@ -783,6 +788,14 @@ def run_mode(
         if is_frame_error:
             frame_errors += 1
 
+        # v6.9.0: Per-trial decoder success for prediction validation.
+        if enable_bp_prediction_validation:
+            decoder_success_flag = not is_frame_error
+            all_decoder_success.append(decoder_success_flag)
+            # Inject into ternary topology result if available.
+            if enable_ternary_topology and all_ternary_topology:
+                all_ternary_topology[-1]["decoder_success"] = decoder_success_flag
+
         # Residual check (diagnostic only).
         residual = np.asarray(e) ^ np.asarray(correction)
         if np.any(residual):
@@ -1037,6 +1050,8 @@ def run_mode(
         }
     if all_ternary_basin_probes:
         out["ternary_basin_probe"] = all_ternary_basin_probes
+    if all_decoder_success:
+        out["per_trial_decoder_success"] = all_decoder_success
     if comparison_results:
         out["decoder_comparison"] = comparison_results
     return out
@@ -1100,6 +1115,7 @@ def run_evaluation(
     enable_tanner_graph_repair_experiment: bool = False,
     enable_spectral_graph_optimization: bool = False,
     enable_bp_stability_predictor: bool = False,
+    enable_bp_prediction_validation: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1112,6 +1128,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v6.9.0: BP prediction validation implies BP stability predictor.
+    if enable_bp_prediction_validation:
+        enable_bp_stability_predictor = True
     # v6.8.0: BP stability predictor implies spectral failure risk.
     if enable_bp_stability_predictor:
         enable_spectral_failure_risk = True
@@ -1259,6 +1278,7 @@ def run_evaluation(
                     enable_ternary_topology=enable_ternary_topology,
                     enable_ternary_transition_metrics=enable_ternary_transition_metrics,
                     enable_ternary_basin_probe=enable_ternary_basin_probe,
+                    enable_bp_prediction_validation=enable_bp_prediction_validation,
                     decoder_fn=decoder_fn,
                     compare_decoders=compare_decoders,
                     paired_seed=paired_seed,
@@ -1544,6 +1564,38 @@ def run_evaluation(
                             "per_trial": trial_predictions,
                         }
         out["bp_stability_predictor"] = bsp_results
+
+    # v6.9.0: BP prediction validation.
+    if enable_bp_prediction_validation and "bp_stability_predictor" in out:
+        bpv_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        bsp_data_bpv = out["bp_stability_predictor"]
+        for mode_name in MODE_ORDER:
+            bpv_results[mode_name] = {}
+            bsp_mode_bpv = bsp_data_bpv.get(mode_name, {})
+            for p in p_values:
+                bpv_results[mode_name][p] = {}
+                bsp_p_bpv = bsp_mode_bpv.get(p, {})
+                for distance in distances:
+                    bsp_cell_bpv = bsp_p_bpv.get(distance)
+                    if bsp_cell_bpv is None:
+                        continue
+                    mode_result = results[mode_name][p][distance]
+                    per_trial_success = mode_result.get(
+                        "per_trial_decoder_success", [],
+                    )
+                    per_trial_preds = bsp_cell_bpv.get("per_trial", [])
+                    if not per_trial_success or not per_trial_preds:
+                        continue
+                    n_pair = min(len(per_trial_preds), len(per_trial_success))
+                    trial_pairs: list[dict[str, Any]] = []
+                    for i_pair in range(n_pair):
+                        trial_pairs.append({
+                            "bp_stability_prediction": per_trial_preds[i_pair],
+                            "decoder_success": per_trial_success[i_pair],
+                        })
+                    validation = run_bp_prediction_validation(trial_pairs)
+                    bpv_results[mode_name][p][distance] = validation
+        out["bp_prediction_validation"] = bpv_results
 
     # v6.5.0: Risk-aware damping experiment.
     if enable_risk_aware_damping_experiment and "spectral_failure_risk" in out:
@@ -2067,6 +2119,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Spectral Tanner graph optimization via non-backtracking spectral radius minimization (v6.7, implies --spectral-failure-risk)")
     parser.add_argument("--bp-stability-predictor", action="store_true",
                         help="Enable BP stability predictor (v6.8, implies --spectral-failure-risk)")
+    parser.add_argument("--bp-prediction-validation", action="store_true",
+                        help="Enable BP prediction validation (v6.9, implies --bp-stability-predictor)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2277,6 +2331,8 @@ def main() -> None:
         print("Spectral graph optimization: ENABLED")
     if args.bp_stability_predictor:
         print("BP stability predictor: ENABLED")
+    if args.bp_prediction_validation:
+        print("BP prediction validation: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2317,13 +2373,14 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
         enable_spectral_graph_optimization=args.spectral_graph_optimization,
-        enable_bp_stability_predictor=args.bp_stability_predictor,
+        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation,
+        enable_bp_prediction_validation=args.bp_prediction_validation,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
