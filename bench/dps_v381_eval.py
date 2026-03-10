@@ -1094,6 +1094,7 @@ def run_evaluation(
     enable_spectral_failure_risk: bool = False,
     enable_risk_aware_damping_experiment: bool = False,
     enable_risk_guided_perturbation_experiment: bool = False,
+    enable_tanner_graph_repair_experiment: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1106,6 +1107,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v6.6.0: Tanner graph repair implies spectral failure risk.
+    if enable_tanner_graph_repair_experiment:
+        enable_spectral_failure_risk = True
     # v6.5.0: experiments imply spectral failure risk.
     if enable_risk_aware_damping_experiment:
         enable_spectral_failure_risk = True
@@ -1558,6 +1562,68 @@ def run_evaluation(
                         }
         out["risk_guided_perturbation_experiment"] = rgp_results
 
+    # v6.6.0: Tanner graph repair experiment.
+    if enable_tanner_graph_repair_experiment and "spectral_failure_risk" in out:
+        from src.qec.experiments.tanner_graph_repair import (
+            run_tanner_graph_repair_experiment,
+        )
+        tgr_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        sfr_data = out["spectral_failure_risk"]
+        for mode_name in MODE_ORDER:
+            tgr_results[mode_name] = {}
+            sfr_mode = sfr_data.get(mode_name, {})
+            for p in p_values:
+                tgr_results[mode_name][p] = {}
+                sfr_p = sfr_mode.get(p, {})
+                for distance in distances:
+                    sfr_cell = sfr_p.get(distance)
+                    if sfr_cell is None:
+                        continue
+                    per_trial_risks = sfr_cell.get("per_trial", [])
+                    if not per_trial_risks:
+                        continue
+                    H = codes[distance]
+                    instances = all_instances[(distance, p)]
+                    trial_experiments: list[dict[str, Any]] = []
+                    for t_idx, (inst, risk_t) in enumerate(
+                        zip(instances, per_trial_risks),
+                    ):
+                        exp = run_tanner_graph_repair_experiment(
+                            H,
+                            inst["llr"],
+                            inst["s"],
+                            risk_t,
+                            max_iters=max_iters,
+                        )
+                        trial_experiments.append(exp)
+                    if trial_experiments:
+                        n_exp = len(trial_experiments)
+                        mean_delta_iters = sum(
+                            t["delta_iterations"] for t in trial_experiments
+                        ) / n_exp
+                        mean_delta_success = sum(
+                            t["delta_success"] for t in trial_experiments
+                        ) / n_exp
+                        mean_repair_improvement = sum(
+                            t["repair_score_improvement"]
+                            for t in trial_experiments
+                        ) / n_exp
+                        n_repaired = sum(
+                            1 for t in trial_experiments
+                            if t["best_swap"] is not None
+                        )
+                        tgr_results[mode_name][p][distance] = {
+                            "mean_delta_iterations": round(mean_delta_iters, 12),
+                            "mean_delta_success": round(mean_delta_success, 12),
+                            "mean_repair_score_improvement": round(
+                                mean_repair_improvement, 12,
+                            ),
+                            "num_repairs_applied": n_repaired,
+                            "num_trials": n_exp,
+                            "per_trial": trial_experiments,
+                        }
+        out["tanner_graph_repair_experiment"] = tgr_results
+
     return out
 
 
@@ -1840,6 +1906,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable risk-aware damping experiment (v6.5, implies --spectral-failure-risk)")
     parser.add_argument("--risk-guided-perturbation-experiment", action="store_true",
                         help="Enable risk-guided perturbation experiment (v6.5, implies --spectral-failure-risk)")
+    parser.add_argument("--tanner-graph-repair-experiment", action="store_true",
+                        help="Enable Tanner graph fragility repair experiment (v6.6, implies --spectral-failure-risk)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2086,10 +2154,11 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
+        enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
