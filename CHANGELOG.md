@@ -6,6 +6,63 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.3.0] — 2026-03-10
+Spectral–BP Attractor Alignment
+
+Added
+
+Spectral–BP Attractor Alignment Diagnostics (src/qec/diagnostics/spectral_bp_alignment.py):
+
+compute_spectral_bp_alignment(): measures whether spectral trapping-set
+candidates (v6.2) align with actual BP dynamical activity during decoding.
+First explicit bridge between structural spectral diagnostics and observed
+BP decoding trajectories.
+
+Uses belief oscillation index (BOI) from iteration-trace diagnostics as the
+per-node BP activity signal.  Thresholds BP-active nodes via a configurable
+fraction of maximum activity score (default 10%).
+
+Output fields: spectral_bp_alignment_score (Jaccard index),
+candidate_node_overlap_fraction, bp_node_overlap_fraction, active_bp_nodes,
+aligned_candidate_nodes, num_aligned_candidate_nodes,
+bp_node_activity_scores, per_cluster_alignment_scores,
+top_aligned_clusters, max_cluster_alignment, activity_threshold_fraction.
+
+Phase Diagram Alignment Overlays (src/qec/diagnostics/phase_diagram.py):
+
+Extended phase diagram cell aggregation with optional alignment fields:
+mean_spectral_bp_alignment, mean_candidate_node_overlap_fraction,
+mean_candidate_cluster_overlap_fraction.
+Fields are additive — appear only when alignment diagnostics are enabled.
+All v6.2, v6.1, v6.0, and v5.9 fields fully preserved.
+
+CLI Flag (bench/dps_v381_eval.py):
+
+--spectral-bp-alignment: enable spectral–BP attractor alignment diagnostics
+(implies --nb-trapping-candidates --iteration-diagnostics).
+
+Evaluation Harness Integration:
+
+Per-trial alignment computed from BOI vectors and per-code trapping
+candidates.  Aggregated per (mode, p, distance) with mean/max summary
+fields: mean_spectral_bp_alignment, mean_candidate_node_overlap_fraction,
+mean_candidate_cluster_overlap_fraction, max_spectral_bp_alignment.
+
+Scientific Framing:
+
+This diagnostic tests whether localized non-backtracking structures and
+candidate fragile subgraphs correspond to actual BP activity concentrations.
+High alignment supports the hypothesis that spectrally localized modes
+identify decoder attractor / failure structures.  This is an alignment
+diagnostic — not a proof of causality.
+
+Constraints:
+
+Decoder untouched.  Deterministic.  JSON-serializable.  Schema 3.0.1
+unchanged.  No new dependencies.  Additive diagnostics only.
+
+---
+
 [6.2.0] — 2026-03-10
 Spectral Trapping-Set Candidate Detection
 
