@@ -43,6 +43,21 @@ from src.qec.diagnostics.phase_diagram import (
 from src.qec.diagnostics.phase_boundary_analysis import (
     analyze_phase_boundaries,
 )
+from src.qec.diagnostics.non_backtracking_spectrum import (
+    compute_non_backtracking_spectrum,
+)
+from src.qec.diagnostics.bethe_hessian import (
+    compute_bethe_hessian,
+)
+from src.qec.diagnostics.bp_stability_proxy import (
+    estimate_bp_stability,
+)
+from src.qec.diagnostics.bp_jacobian_estimator import (
+    estimate_bp_jacobian_spectral_radius,
+)
+from src.qec.diagnostics.phase_heatmap import (
+    print_phase_heatmap,
+)
 
 # ── Configuration ─────────────────────────────────────────────────────
 
@@ -82,6 +97,11 @@ def run_phase_diagram_demo() -> dict[str, Any]:
         d = int(distance)
         H = codes[d]
         n = H.shape[1]
+
+        # v6.0: Compute spectral diagnostics per grid point (code-level).
+        nb_result = compute_non_backtracking_spectrum(H)
+        bethe_result = compute_bethe_hessian(H)
+        stability_result = estimate_bp_stability(nb_result, bethe_result)
 
         # Deterministic RNG derived from base seed + grid point.
         seed = RNG_BASE_SEED + int(p * 100000) + d * 1000
@@ -126,6 +146,15 @@ def run_phase_diagram_demo() -> dict[str, Any]:
             ms = compute_metastability_score(ps_result["residual_norms"])
             tt_result["metastability_score"] = ms
 
+            # v6.0: Attach spectral diagnostics to trial result.
+            tt_result["spectral_radius"] = stability_result["spectral_radius"]
+            tt_result["bethe_min_eigenvalue"] = stability_result["bethe_min_eigenvalue"]
+            tt_result["bp_stability_score"] = stability_result["bp_stability_score"]
+
+            # v6.0: Jacobian spectral radius from LLR history.
+            jacobian_result = estimate_bp_jacobian_spectral_radius(llr_hist)
+            tt_result["jacobian_spectral_radius_est"] = jacobian_result["jacobian_spectral_radius_est"]
+
             trial_results.append(tt_result)
 
         return trial_results
@@ -152,7 +181,7 @@ def print_summary(result: dict[str, Any]) -> None:
     y_values = axes["y_values"]
 
     print("=" * 60)
-    print("v5.9.0 — Decoder Phase Diagram Demo")
+    print("v6.0.0 — Decoder Phase Diagram Demo")
     print("=" * 60)
     print(f"Code: {CODE_NAME}, lifting_size per distance")
     print(f"BP: mode={BP_MODE}, schedule={SCHEDULE}, max_iters={MAX_ITERS}")
@@ -240,6 +269,9 @@ def print_summary(result: dict[str, Any]) -> None:
     bs = ba["boundary_summary"]
     print(f"Boundary analysis: {bs['num_boundary_cells']} boundary, "
           f"{bs['num_mixed_cells']} mixed, {bs['num_critical_cells']} critical")
+
+    # v6.0: ASCII phase heatmap.
+    print_phase_heatmap(pd)
 
     # JSON check.
     json_str = json.dumps(result, indent=2)
