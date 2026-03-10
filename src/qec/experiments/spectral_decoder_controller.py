@@ -1,5 +1,5 @@
 """
-v7.0.0 — Spectral-Guided Decoder Control Framework.
+v7.1.0 — Spectral-Guided Decoder Control Framework.
 
 Integrates spectral diagnostics and BP stability predictor outputs to
 steer decoder behavior through an experimental control layer.
@@ -16,6 +16,8 @@ Control features:
      normalized node risk scores.
   3. Decoder mode selection hook — control_mode selection based on
      bp_failure_risk threshold.
+  4. Cluster-aware scheduling (v7.1) — prioritizes variable-node
+     updates for nodes inside the highest-risk spectral cluster.
 
 Does not modify decoder internals.  Fully deterministic: no randomness,
 no global state, no input mutation.
@@ -33,6 +35,7 @@ import numpy as np
 CONTROL_MODE_STANDARD = "standard"
 CONTROL_MODE_RISK_GUIDED_DAMPING = "risk_guided_damping"
 CONTROL_MODE_RISK_GUIDED_SCHEDULE = "risk_guided_schedule"
+CONTROL_MODE_RISK_CLUSTER_SCHEDULE = "risk_cluster_schedule"
 
 # ── Default parameters ────────────────────────────────────────────────
 
@@ -266,6 +269,167 @@ def _experimental_bp_flooding(
     return correction, max_iters, residual_norms
 
 
+def _extract_cluster_nodes(
+    risk_result: dict[str, Any],
+    n: int,
+) -> list[int]:
+    """Extract variable-node indices for the highest-risk spectral cluster.
+
+    Uses ``top_risk_clusters`` (cluster indices) and
+    ``candidate_clusters`` (cluster definitions with variable_nodes)
+    from the risk result.
+
+    Parameters
+    ----------
+    risk_result : dict[str, Any]
+        Must contain ``top_risk_clusters`` and ``candidate_clusters``.
+    n : int
+        Number of variable nodes (for bounds checking).
+
+    Returns
+    -------
+    list[int]
+        Sorted list of variable-node indices in the top cluster,
+        or empty list if no clusters are available.
+    """
+    top_clusters = risk_result.get("top_risk_clusters", [])
+    candidate_clusters = risk_result.get("candidate_clusters", [])
+
+    if not top_clusters or not candidate_clusters:
+        return []
+
+    top_idx = top_clusters[0]
+    if top_idx >= len(candidate_clusters):
+        return []
+
+    cluster = candidate_clusters[top_idx]
+    var_nodes = cluster.get("variable_nodes", [])
+
+    return sorted(int(v) for v in var_nodes if int(v) < n)
+
+
+def _experimental_bp_cluster_scheduled(
+    H: np.ndarray,
+    llr: np.ndarray,
+    syndrome_vec: np.ndarray,
+    max_iters: int,
+    per_node_damping: np.ndarray,
+    cluster_nodes: list[int],
+) -> tuple[np.ndarray, int, list[float]]:
+    """Flooding BP with cluster-priority node ordering.
+
+    Identical to ``_experimental_bp_flooding`` except that
+    variable-to-check updates are split into two phases per
+    iteration:
+
+      1. Update cluster nodes first.
+      2. Update remaining nodes (using messages that already
+         incorporate cluster-node updates from phase 1).
+
+    This gives cluster nodes scheduling priority without
+    modifying the decoder core.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Binary parity-check matrix, shape (m, n).
+    llr : np.ndarray
+        Per-variable log-likelihood ratios, length n.
+    syndrome_vec : np.ndarray
+        Binary syndrome vector, length m.
+    max_iters : int
+        Maximum BP iterations.
+    per_node_damping : np.ndarray
+        Per-variable damping factors, length n.
+    cluster_nodes : list[int]
+        Sorted variable-node indices to update first.
+
+    Returns
+    -------
+    correction : np.ndarray
+        Hard-decision binary vector, length n.
+    iterations : int
+        Number of iterations executed.
+    residual_norms : list[float]
+        Per-iteration residual norms.
+    """
+    H_f = H.astype(np.float64)
+    m, n = H_f.shape
+    llr = np.asarray(llr, dtype=np.float64).copy()
+
+    s_sign = np.where(syndrome_vec.astype(np.float64) > 0.5, -1.0, 1.0)
+
+    v2c = np.zeros((m, n), dtype=np.float64)
+    for j in range(m):
+        for i in range(n):
+            if H_f[j, i] > 0.5:
+                v2c[j, i] = llr[i]
+
+    c2v = np.zeros((m, n), dtype=np.float64)
+    residual_norms: list[float] = []
+
+    # Build deterministic node ordering: cluster nodes first.
+    cluster_set = set(cluster_nodes)
+    remaining_nodes = sorted(i for i in range(n) if i not in cluster_set)
+    node_order = list(cluster_nodes) + remaining_nodes
+
+    for iteration in range(1, max_iters + 1):
+        # Check-to-variable: tanh rule (flooding, same as standard).
+        for j in range(m):
+            neighbors = [i for i in range(n) if H_f[j, i] > 0.5]
+            if len(neighbors) < 2:
+                for i in neighbors:
+                    c2v[j, i] = 0.0
+                continue
+            for i in neighbors:
+                prod = s_sign[j]
+                for k in neighbors:
+                    if k != i:
+                        val = np.clip(v2c[j, k] / 2.0, -15.0, 15.0)
+                        prod *= np.tanh(val)
+                prod = np.clip(prod, -1.0 + 1e-15, 1.0 - 1e-15)
+                c2v[j, i] = 2.0 * np.arctanh(prod)
+
+        # Variable-to-check with cluster-priority ordering.
+        # Phase 1: cluster nodes (use prev_v2c snapshot).
+        # Phase 2: remaining nodes (see cluster-node updates).
+        prev_v2c = v2c.copy()
+        for i in cluster_nodes:
+            check_neighbors = [j for j in range(m) if H_f[j, i] > 0.5]
+            total = llr[i] + sum(c2v[j, i] for j in check_neighbors)
+            for j in check_neighbors:
+                new_msg = total - c2v[j, i]
+                d = per_node_damping[i]
+                v2c[j, i] = d * prev_v2c[j, i] + (1.0 - d) * new_msg
+
+        for i in remaining_nodes:
+            check_neighbors = [j for j in range(m) if H_f[j, i] > 0.5]
+            total = llr[i] + sum(c2v[j, i] for j in check_neighbors)
+            for j in check_neighbors:
+                new_msg = total - c2v[j, i]
+                d = per_node_damping[i]
+                v2c[j, i] = d * prev_v2c[j, i] + (1.0 - d) * new_msg
+
+        # Total LLR and hard decision.
+        L_total = llr.copy()
+        for i in range(n):
+            for j in range(m):
+                if H_f[j, i] > 0.5:
+                    L_total[i] += c2v[j, i]
+
+        correction = (L_total < 0.0).astype(np.uint8)
+        s_residual = _compute_syndrome(H, correction)
+        r_norm = float(np.linalg.norm(
+            s_residual.astype(np.float64) - syndrome_vec.astype(np.float64),
+        ))
+        residual_norms.append(round(r_norm, 12))
+
+        if np.array_equal(s_residual, syndrome_vec.astype(np.uint8)):
+            return correction, iteration, residual_norms
+
+    return correction, max_iters, residual_norms
+
+
 # ── Main experiment function ──────────────────────────────────────────
 
 def run_spectral_decoder_control_experiment(
@@ -282,6 +446,7 @@ def run_spectral_decoder_control_experiment(
     risk_threshold: float = _DEFAULT_RISK_THRESHOLD,
     schedule_threshold_fraction: float = _DEFAULT_SCHEDULE_THRESHOLD_FRACTION,
     max_iters: int = _DEFAULT_MAX_ITERS,
+    enable_cluster_control: bool = False,
 ) -> dict[str, Any]:
     """Run a spectral-guided decoder control experiment.
 
@@ -306,7 +471,10 @@ def run_spectral_decoder_control_experiment(
     risk_result : dict[str, Any]
         Output of ``compute_spectral_failure_risk()`` (v6.4).
         Must contain ``node_risk_scores``, ``cluster_risk_scores``,
-        and ``top_risk_clusters``.
+        and ``top_risk_clusters``.  When ``enable_cluster_control``
+        is True, should also contain ``candidate_clusters`` (from
+        v6.2 trapping-candidate output) so that cluster variable
+        nodes can be resolved.
     prediction : dict[str, Any]
         Output of ``compute_bp_stability_prediction()`` (v6.8).
         Must contain ``bp_failure_risk``, ``predicted_instability``,
@@ -326,6 +494,11 @@ def run_spectral_decoder_control_experiment(
         in scheduling.  Default 0.5.
     max_iters : int
         Maximum BP iterations.  Default 100.
+    enable_cluster_control : bool
+        When True, activates cluster-aware scheduling mode
+        (``risk_cluster_schedule``) if predicted instability is
+        detected and cluster information is available.  Default
+        False.
 
     Returns
     -------
@@ -348,6 +521,15 @@ def run_spectral_decoder_control_experiment(
         - ``node_risk_scores``: pass-through from risk_result.
         - ``cluster_risk_scores``: pass-through from risk_result.
         - ``top_risk_clusters``: pass-through from risk_result.
+        - ``cluster_control_enabled``: bool — whether cluster
+          scheduling was activated.
+        - ``cluster_nodes``: list[int] — cluster nodes used
+          (empty if cluster control not active).
+        - ``cluster_size``: int — number of cluster nodes.
+        - ``cluster_risk_score``: float — risk score for the
+          selected cluster.
+        - ``cluster_priority_fraction``: float — fraction of
+          variable nodes in the cluster.
     """
     n = H.shape[1]
     llr = np.asarray(llr, dtype=np.float64)
@@ -358,6 +540,29 @@ def run_spectral_decoder_control_experiment(
     # ── 1. Select control mode ────────────────────────────────────
     control_mode = _select_control_mode(
         prediction, risk_threshold=risk_threshold,
+    )
+
+    # ── 1b. Cluster control override ──────────────────────────────
+    cluster_nodes: list[int] = []
+    cluster_risk_score = 0.0
+    cluster_control_active = False
+
+    if enable_cluster_control and control_mode != CONTROL_MODE_STANDARD:
+        cluster_nodes = _extract_cluster_nodes(risk_result, n)
+        if cluster_nodes:
+            control_mode = CONTROL_MODE_RISK_CLUSTER_SCHEDULE
+            cluster_control_active = True
+            # Extract risk score for the selected cluster.
+            top_clusters = risk_result.get("top_risk_clusters", [])
+            cluster_scores = risk_result.get("cluster_risk_scores", [])
+            if top_clusters and len(cluster_scores) > top_clusters[0]:
+                cluster_risk_score = round(
+                    float(cluster_scores[top_clusters[0]]), 12,
+                )
+
+    cluster_size = len(cluster_nodes)
+    cluster_priority_fraction = round(
+        cluster_size / n if n > 0 else 0.0, 12,
     )
 
     # ── 2. Determine high-risk nodes ──────────────────────────────
@@ -394,11 +599,19 @@ def run_spectral_decoder_control_experiment(
     ))
 
     # ── 5. Controlled decode ──────────────────────────────────────
-    controlled_correction, controlled_iters, controlled_residuals = (
-        _experimental_bp_flooding(
-            H, llr, syndrome_vec, max_iters, controlled_damping,
+    if cluster_control_active:
+        controlled_correction, controlled_iters, controlled_residuals = (
+            _experimental_bp_cluster_scheduled(
+                H, llr, syndrome_vec, max_iters,
+                controlled_damping, cluster_nodes,
+            )
         )
-    )
+    else:
+        controlled_correction, controlled_iters, controlled_residuals = (
+            _experimental_bp_flooding(
+                H, llr, syndrome_vec, max_iters, controlled_damping,
+            )
+        )
     controlled_success = bool(np.array_equal(
         _compute_syndrome(H, controlled_correction),
         syndrome_vec,
@@ -462,4 +675,9 @@ def run_spectral_decoder_control_experiment(
         "node_risk_scores": node_risk_scores,
         "cluster_risk_scores": risk_result.get("cluster_risk_scores", []),
         "top_risk_clusters": risk_result.get("top_risk_clusters", []),
+        "cluster_control_enabled": cluster_control_active,
+        "cluster_nodes": cluster_nodes,
+        "cluster_size": cluster_size,
+        "cluster_risk_score": cluster_risk_score,
+        "cluster_priority_fraction": cluster_priority_fraction,
     }

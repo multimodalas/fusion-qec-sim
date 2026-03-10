@@ -1120,6 +1120,7 @@ def run_evaluation(
     enable_bp_stability_predictor: bool = False,
     enable_bp_prediction_validation: bool = False,
     enable_spectral_decoder_controller: bool = False,
+    enable_spectral_cluster_control: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1132,6 +1133,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v7.1.0: Spectral cluster control implies spectral decoder controller.
+    if enable_spectral_cluster_control:
+        enable_spectral_decoder_controller = True
     # v7.0.0: Spectral decoder controller implies BP stability predictor.
     if enable_spectral_decoder_controller:
         enable_bp_stability_predictor = True
@@ -1604,7 +1608,7 @@ def run_evaluation(
                     bpv_results[mode_name][p][distance] = validation
         out["bp_prediction_validation"] = bpv_results
 
-    # v7.0.0: Spectral decoder controller experiment.
+    # v7.0.0 / v7.1.0: Spectral decoder controller experiment.
     if enable_spectral_decoder_controller and "bp_stability_predictor" in out and "spectral_failure_risk" in out:
         sdc_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
         bsp_data_sdc = out["bp_stability_predictor"]
@@ -1628,6 +1632,11 @@ def run_evaluation(
                         continue
                     H = codes[distance]
                     instances = all_instances[(distance, p)]
+                    # v7.1.0: Inject candidate_clusters for cluster control.
+                    trapping_data_sdc = nb_trapping_results.get(distance, {})
+                    cand_clusters_sdc = trapping_data_sdc.get(
+                        "candidate_clusters", [],
+                    )
                     trial_controller: list[dict[str, Any]] = []
                     n_ctrl = min(
                         len(instances),
@@ -1636,13 +1645,19 @@ def run_evaluation(
                     )
                     for t_idx in range(n_ctrl):
                         inst = instances[t_idx]
+                        # Enrich risk result with candidate_clusters.
+                        trial_risk = per_trial_risks_sdc[t_idx]
+                        if enable_spectral_cluster_control and cand_clusters_sdc:
+                            trial_risk = dict(trial_risk)
+                            trial_risk["candidate_clusters"] = cand_clusters_sdc
                         exp = run_spectral_decoder_control_experiment(
                             H,
                             inst["llr"],
                             inst["s"],
-                            per_trial_risks_sdc[t_idx],
+                            trial_risk,
                             per_trial_preds_sdc[t_idx],
                             max_iters=max_iters,
+                            enable_cluster_control=enable_spectral_cluster_control,
                         )
                         trial_controller.append(exp)
                     if trial_controller:
@@ -1668,6 +1683,27 @@ def run_evaluation(
                             1 for t in trial_controller
                             if t["baseline_metrics"]["success"]
                         )
+                        # v7.1.0: Cluster scheduling metrics.
+                        cluster_sizes = [
+                            t["cluster_size"] for t in trial_controller
+                        ]
+                        cluster_fractions = [
+                            t["cluster_priority_fraction"]
+                            for t in trial_controller
+                        ]
+                        cluster_active_count = sum(
+                            1 for t in trial_controller
+                            if t["cluster_control_enabled"]
+                        )
+                        mean_cluster_size = round(
+                            sum(cluster_sizes) / n_tc, 12,
+                        )
+                        mean_cluster_priority_fraction = round(
+                            sum(cluster_fractions) / n_tc, 12,
+                        )
+                        cluster_schedule_activation_rate = round(
+                            cluster_active_count / n_tc, 12,
+                        )
                         sdc_results[mode_name][p][distance] = {
                             "mean_controller_bp_failure_risk": round(
                                 mean_bp_failure_risk, 12,
@@ -1689,6 +1725,13 @@ def run_evaluation(
                             ),
                             "mean_baseline_accuracy": round(
                                 baseline_success_count / n_tc, 12,
+                            ),
+                            "mean_cluster_size": mean_cluster_size,
+                            "mean_cluster_priority_fraction": (
+                                mean_cluster_priority_fraction
+                            ),
+                            "cluster_schedule_activation_rate": (
+                                cluster_schedule_activation_rate
                             ),
                             "num_trials": n_tc,
                             "per_trial": trial_controller,
@@ -2221,6 +2264,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP prediction validation (v6.9, implies --bp-stability-predictor)")
     parser.add_argument("--spectral-decoder-controller", action="store_true",
                         help="Enable spectral decoder controller experiment (v7.0, implies --bp-stability-predictor)")
+    parser.add_argument("--spectral-cluster-control", action="store_true",
+                        help="Enable cluster-aware decoder scheduling (v7.1, implies --spectral-decoder-controller --bp-stability-predictor)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2435,6 +2480,8 @@ def main() -> None:
         print("BP prediction validation: ENABLED")
     if args.spectral_decoder_controller:
         print("Spectral decoder controller: ENABLED")
+    if args.spectral_cluster_control:
+        print("Spectral cluster control: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2456,9 +2503,9 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis or args.spectral_bp_alignment,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis or args.spectral_bp_alignment or args.spectral_cluster_control,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis or args.spectral_bp_alignment,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis or args.spectral_bp_alignment or args.spectral_cluster_control,
         enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
@@ -2475,15 +2522,16 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
         enable_spectral_graph_optimization=args.spectral_graph_optimization,
-        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller,
+        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control,
         enable_bp_prediction_validation=args.bp_prediction_validation,
-        enable_spectral_decoder_controller=args.spectral_decoder_controller,
+        enable_spectral_decoder_controller=args.spectral_decoder_controller or args.spectral_cluster_control,
+        enable_spectral_cluster_control=args.spectral_cluster_control,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,

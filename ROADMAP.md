@@ -64,129 +64,266 @@ No dependency expansion without architectural justification
 
 No hard dependency on third-party benchmarking tools
 
-2. Architectural Layers
+2. Architectural Layers (Updated)
 
-QEC evolves in controlled layers.
+QEC evolves in controlled architectural layers.
 Each layer may expand — but must not destabilize lower layers.
 
 Layer 1 — Decoder Core (Invariant Backbone)
 
 Scope:
 
-Additive invariant QLDPC CSS construction
+deterministic BP decoding variants
 
-Deterministic BP variants
+deterministic scheduling strategies
 
-Controlled scheduling mechanisms
+OSD family postprocessing (OSD-0 / OSD-1 / OSD-CS)
 
-Ensemble decoding
+deterministic guided decimation
 
-OSD family (0 / 1 / CS)
-
-Deterministic guided decimation (v3.4.0)
+invariant-safe QLDPC CSS construction
 
 Constraints:
 
-Must remain stable across the entire v3.x line
+decoder semantics must remain stable
 
-No benchmarking feature may modify decoding semantics
+no hidden adaptive behavior
 
-No hidden adaptive behavior
+no stochastic operations
 
-No implicit randomness
+structural interventions must be opt-in
 
-Structural interventions must be opt-in
+message passing logic must remain deterministic
 
-v3.4.0 establishes the first bounded structural intervention under syndrome-only decoding while preserving baseline semantics.
+This layer represents the experimental object of the framework.
 
-This layer is the invariant backbone of QEC.
+All research instrumentation must remain external to the decoder core.
 
 Layer 2 — Deterministic Benchmark & Interop Infrastructure
 
-Formalized in v3.0.x → v3.1.2 and extended in v3.2.x.
-
 Scope:
 
-Schema-validated benchmark configs
+deterministic DPS evaluation harness
 
-Canonical JSON artifacts
+schema-validated benchmark configurations
 
-Stable sweep hashing
+canonical JSON artifact generation
 
-Deterministic artifact hashing
+deterministic artifact hashing
 
-Structured interop record validation
+stable parameter sweep ordering
 
-Optional reference baselines (Stim / PyMatching)
-
-Deterministic report generation
-
-Inversion Index (II) formalization
+optional reference baseline integrations
 
 Constraints:
 
-Must not alter Layer 1 semantics
+must not alter Layer 1 semantics
 
-Must preserve byte-identical behavior under deterministic mode
+must preserve byte-identical behavior in deterministic mode
 
-Must isolate third-party tooling
+third-party tools must remain optional
 
-Must enforce schema invariants structurally
-
-v3.1.2 establishes deterministic interop baseline.
-v3.2.x formalizes structural diagnostics (II).
+This layer provides the reproducible experimental environment for decoding studies.
 
 Layer 3 — Channel & Noise Modeling
 
-Established in v3.1.3 and hardened in v3.1.4.
-
 Scope:
 
-Pluggable channel abstraction
+deterministic channel abstraction
 
-oracle
+pluggable channel models
 
-bsc_syndrome
+syndrome-only inference models
 
-Deterministic channel parameterization
+oracle channels
 
-Stim-compatible synthetic channel interfaces
+deterministic channel parameterization
 
-Future: AWGN, erasure
+Future expansion:
+
+AWGN channel
+
+erasure channel
+
+Stim-compatible noise models
 
 Constraints:
 
-Channel layer must not mutate decoder logic
+channel models must not mutate decoder logic
 
-Channel behavior must be deterministic under fixed seed
+channel behavior must be deterministic under fixed seeds
 
-Channel metadata must be schema-validated
+channel metadata must be schema-validated
 
-No silent behavior changes to oracle mode
+Layer 4 — Diagnostics & Structural Analysis
 
-Goal:
-
-Enable realistic FER curves without destabilizing the decoder core.
-
-Layer 4 — Deterministic Diagnostics & Regime Analysis
-
-Formalized in v3.2.x and significantly expanded in the v4.x series.
+Formalized across the v4–v6 development series.
 
 Scope:
 
-Inversion Index (II)
+BP trajectory diagnostics
 
-DPS regime diagnostics
+attractor basin analysis
 
-Belief propagation energy tracing
+free-energy landscape metrics
 
-Basin-switch detection
+Tanner graph spectral analysis
 
-Energy-landscape attractor metrics
+eigenmode localization diagnostics
 
-Iteration-trace dynamics analysis
+trapping-set candidate detection
 
-These diagnostics characterize decoder behavior across three complementary layers:
+These diagnostics characterize decoder behavior across three complementary structures:
+
+BP trajectory dynamics
+BP energy landscape geometry
+Tanner graph spectral structure
+
+Constraints:
+
+diagnostics must not modify decoder state
+
+diagnostics must operate on deterministic outputs
+
+all analysis must remain observational
+
+This layer transforms the toolkit into a deterministic decoding observatory.
+
+Layer 5 — Predictive Modeling
+
+Introduced in the v6.8–v6.9 development cycle.
+
+Scope:
+
+structural BP instability prediction
+
+spectral failure risk scoring
+
+instability ratio estimation
+
+predictor validation experiments
+
+The predictor layer attempts to estimate decoding instability before decoding runs.
+
+Inputs include:
+
+non-backtracking spectral radius
+
+eigenvector localization (IPR)
+
+Tanner graph structural signals
+
+spectral trapping-set candidates
+
+Outputs include:
+
+bp_failure_risk
+predicted_instability
+spectral_instability_ratio
+
+Constraints:
+
+predictors must be deterministic
+
+predictors must operate purely on diagnostics outputs
+
+predictors must not modify decoding algorithms
+
+Layer 6 — Decoder Control & Experimental Policies
+
+Introduced in v7.0.
+
+Scope:
+
+spectral-guided decoder control
+
+predictor-guided scheduling
+
+adaptive damping policies
+
+experimental decoding strategies
+
+The controller layer transforms diagnostics and predictor signals into deterministic control policies.
+
+Example policies:
+
+risk-guided message damping
+
+node-priority scheduling
+
+instability-aware decoding experiments
+
+Constraints:
+
+controller must not modify decoder implementation
+
+controller must remain fully deterministic
+
+baseline decoding behavior must remain unchanged when disabled
+
+This layer establishes the **closed-loop decoding experiment framework**.
+
+---
+
+Layer 3 — Channel & Noise Modeling
+
+Scope:
+
+Pluggable deterministic channel abstractions enabling controlled decoding
+experiments under reproducible noise conditions.
+
+Supported channel types include:
+
+• oracle  
+• bsc_syndrome  
+
+Channel models generate deterministic LLR vectors and provide a consistent
+interface between noise processes and the decoder core.
+
+Future channel extensions may include:
+
+• AWGN channels  
+• erasure channels  
+• synthetic Stim-compatible noise models  
+
+Constraints:
+
+Channel models must not modify decoder logic.
+
+Channel behavior must be deterministic under fixed seed conditions.
+
+Channel metadata must be schema-validated.
+
+Oracle mode must remain stable and must not experience silent behavioral
+changes.
+
+Goal:
+
+Enable realistic FER measurements while preserving the stability and
+determinism of the decoder core.
+
+---
+
+Layer 4 — Diagnostics & Regime Analysis
+
+Scope:
+
+Deterministic diagnostics that characterize the behavior of belief
+propagation decoding without modifying decoder semantics.
+
+Diagnostics include:
+
+• DPS regime diagnostics  
+• belief propagation energy tracing  
+• basin-switch detection  
+• attractor landscape metrics  
+• iteration-trace dynamics analysis  
+• spectral Tanner graph diagnostics  
+• eigenvector localization (IPR) analysis  
+• spectral trapping-set candidate detection  
+
+These diagnostics characterize decoder behavior across three complementary
+structures:
 
 • attractor basin geometry  
 • free-energy landscape structure  
@@ -194,280 +331,259 @@ These diagnostics characterize decoder behavior across three complementary layer
 
 Constraints:
 
-Diagnostics must not alter decoder semantics
+Diagnostics must remain strictly observational.
 
-Metrics must be computed from deterministic decoder outputs
+Metrics must be computed from deterministic decoder outputs.
 
-No stochastic diagnostic sources
+No stochastic diagnostic sources may be introduced.
 
-No mutation of decoder state
+Diagnostics must not mutate decoder state or alter decoding behavior.
 
-All diagnostics must remain strictly observational.
+This layer establishes QEC as a **deterministic observatory for studying
+belief propagation dynamics on QLDPC Tanner graphs**.
 
-The v4.x series establishes QEC as a deterministic experimental platform for
-studying belief propagation dynamics on QLDPC energy landscapes.
+---
 
 Layer 5 — Analytical & Dimensional Expansion (Opt-In Only)
 
-Future scope:
+Scope:
 
-Qudit scaffolding
+Optional analytical expansion beyond the binary qubit decoding baseline.
 
-GF(q) exploration
+Potential areas include:
 
-Analytical gate-cost modeling
-
-Resource estimation tooling
-
-Nonbinary decoding research
+• GF(q) exploration  
+• qudit decoding research  
+• analytical gate-cost modeling  
+• resource estimation tooling  
+• nonbinary decoding strategies  
 
 Constraints:
 
-Must be opt-in
+These features must remain opt-in.
 
-Must preserve qubit defaults
+Binary qubit decoding must remain the default system configuration.
 
-Must not mutate binary decoder semantics
+Nonbinary experimentation must not alter the semantics of binary decoding.
 
-Must preserve reproducibility guarantees
+All analytical expansions must preserve the reproducibility guarantees of
+the framework.
 
-Dimensional expansion must not destabilize binary baseline behavior.
+Dimensional expansion must never destabilize the binary baseline.
 
-3. Current State — v4.3.0
+---
 
-The v4.x series transitions QEC from a decoder engineering toolkit into a
-deterministic experimental platform for studying belief propagation dynamics
-on QLDPC codes.
+Layer 6 — Predictive Modeling
 
-The decoder core remains unchanged from the v3.x architecture.
+Scope:
 
-All v4.x capabilities are implemented strictly in the diagnostics and
-benchmarking layers.
+Deterministic prediction of decoding instability using structural signals
+derived from Tanner graph analysis.
 
-Major Additions
+Predictive models estimate the probability of BP decoding failure **before
+decoding runs**.
 
-Basin Switch Detection (v4.1.0)
+Inputs include:
 
-Introduces deterministic perturbation diagnostics capable of distinguishing:
+• non-backtracking spectral radius  
+• eigenvector localization metrics (IPR)  
+• spectral trapping-set candidates  
+• structural Tanner graph signals  
 
-• metastable oscillation  
-• shallow perturbation sensitivity  
-• true basin switching  
+Outputs include:
 
-This allows systematic identification of attractor basin transitions in the
-BP energy landscape.
+• `bp_failure_risk`  
+• `predicted_instability`  
+• `spectral_instability_ratio`  
 
-Energy-Landscape Metrics (v4.2.x)
+Constraints:
 
-The diagnostics framework now quantifies the geometry of decoding attractors
-using three deterministic metrics:
+Predictors must operate purely on diagnostic outputs.
 
-Basin Stability Index (BSI)
+Predictors must be deterministic and reproducible.
 
-Measures the probability that small deterministic perturbations return the
-decoder to the same attractor basin.
+Predictors must not modify decoder algorithms or message-passing behavior.
 
-Attractor Distance (AD)
+This layer transforms structural diagnostics into **predictive signals about
+decoder stability**.
 
-Measures the Hamming distance between baseline and perturbed correction
-vectors.
+---
 
-Escape Energy (EE)
+Layer 7 — Decoder Control & Experimental Policies
 
-Estimates the minimum perturbation magnitude required to escape the current
-basin.
+Scope:
 
-These metrics allow quantitative characterization of basin stability and
-barrier structure in the BP landscape.
+Deterministic control policies that use predictor signals to guide decoding
+experiments.
 
-Iteration-Trace Diagnostics (v4.3.0)
+Controller capabilities include:
 
-v4.3 introduces analysis of the internal dynamics of belief propagation
-trajectories.
+• predictor-guided scheduling  
+• adaptive damping policies  
+• spectral-aware decoding experiments  
 
-Metrics include:
+The controller layer transforms diagnostic and predictive signals into
+deterministic experimental decoding policies.
 
-Belief Oscillation Index (BOI)
+Example strategies include:
 
-Energy Plateau Index (EPI)
+• risk-guided message damping  
+• node-priority update ordering  
+• instability-aware decoding experiments  
 
-Trapping Set Persistence (TSP)
+Constraints:
 
-Correction Vector Fluctuation (CVF)
+Controllers must not modify decoder implementation.
 
-Composite Iteration Stability Score
+Controllers must remain deterministic.
 
-These metrics characterize oscillatory regimes, plateau behavior, trapping
-sets, and correction cycling during decoding.
+Baseline decoding behavior must remain unchanged when controllers are
+disabled.
 
-Architectural Guarantees
+This layer completes the **closed-loop decoding experiment architecture**.
 
-Across the entire v4.x series:
+---
 
-decoder core remains unchanged
+## Current State — v7 Series
 
-message passing semantics remain unchanged
+The v7 development series establishes QEC as a **spectral-aware decoding
+research platform**.
 
-scheduling behavior unchanged
+The framework now supports the following experimental pipeline:
 
-schema unchanged
 
-baseline decoding outputs remain byte-identical
+Tanner graph structure
+↓
+spectral diagnostics
+↓
+BP instability prediction
+↓
+decoder control policies
+↓
+controlled decoding experiments
 
-All diagnostics operate strictly outside the decoder core.
 
-4. Near-Term Direction (v3.9.x)
+The decoder core itself remains unchanged.
 
-Focus: decoder regime exploration under syndrome-only inference
+All research instrumentation operates outside the decoder implementation.
 
-v3.9.x continues the structural experimentation framework introduced in v3.8.x and v3.9.0.
+This architecture allows systematic investigation of the relationship
+between:
 
-Candidate investigations include:
+• Tanner graph structure  
+• spectral modes  
+• belief propagation attractor geometry  
+• decoding stability and performance  
 
-DPS Sign-Flip Interventions
+---
 
-Goal:
+## Near-Term Research Direction (v7.x)
 
-Attempt to induce negative DPS scaling under controlled structural perturbations.
-
-Potential strategies:
-
-inference-geometry reweighting
-
-stabilizer clustering
-
-local field smoothing
-
-deterministic parity-density transforms
-
-BP initialization heuristics
-
-All experiments must:
-
-remain opt-in
-
-preserve deterministic behavior
-
-leave baseline decoder unchanged
-
-Geometry-Aware Scheduling
-
-Possible schedule extensions:
-
-geometry-weighted BP updates
-
-deterministic field annealing
-
-convergence-aware update ordering
-
-All scheduling changes must:
-
-be opt-in
-
-preserve flooding baseline behavior
-
-maintain deterministic iteration ordering
-
-Regime Mapping
-
-Use the expanded DPS harness and energy diagnostics to classify decoding regimes.
-
-Potential outputs:
-
-energy descent profiles
-
-convergence topology
-
-scaling regime transitions
-
-failure surface characterization
-
-5. Near-Term Direction (v4.4+)
-
-With the core diagnostics stack established in v4.1–v4.3, the next research
-phase focuses on deeper analysis of BP landscape structure.
+The next research phase focuses on **spectral-aware decoding strategies**.
 
 Candidate directions include:
 
-Spin-glass–inspired BP diagnostics
+Cluster-Aware Scheduling
 
-Energy barrier topology estimation
+Use spectral trapping-set clusters to prioritize message updates during
+decoding.
 
-Basin transition graph construction
+Spectral Damping Profiles
 
-Deterministic perturbation annealing experiments
+Derive adaptive damping policies from eigenvector localization signals.
 
-Attractor stability scaling across code families
+Instability-Aware Decoding Policies
 
-Trajectory phase classification
+Use predictor outputs to guide experimental decoding strategies such as:
 
-These investigations aim to understand the statistical-physics structure of
-belief propagation on QLDPC Tanner graphs.
+• BP → BPGD  
+• BP → OSD  
+• hybrid decoding experiments  
 
-All future diagnostics must remain:
+Spectral Tanner Graph Optimization
 
-deterministic
+Explore structural graph transformations that reduce decoding instability,
+including spectral radius minimization and trapping-set disruption.
 
-observational
+All experiments must remain deterministic and opt-in.
 
-opt-in
+---
 
-decoder-safe
+## Medium-Term Direction (v8)
 
-6. What Will Not Happen
+Future research may explore deeper connections between Tanner graph
+structure and decoding algorithms.
+
+Potential investigations include:
+
+• spectral graph design for BP stability  
+• topology-aware decoding schedules  
+• statistical-physics models of BP phase transitions  
+• automated Tanner graph repair algorithms  
+
+These investigations aim to understand the causal relationship between:
+
+
+graph topology
+↓
+spectral structure
+↓
+BP attractor geometry
+↓
+decoding performance
+
+
+---
+
+## What Will Not Happen
 
 Explicitly out of scope:
 
-Hidden randomness in decoding
+• hidden randomness in decoding  
+• silent behavioral drift  
+• schema changes without versioning  
+• experimental code merged into decoder core paths  
+• dependency bloat  
+• benchmarking tools mutating decoder semantics  
+• third-party code imported into core modules  
 
-Silent behavior changes
+---
 
-Schema drift without versioning
+## Evolution Philosophy
 
-Experimental code merged into core paths
+QEC evolves by strengthening invariants first and expanding capability
+second.
 
-Dependency bloat
+Every release must preserve:
 
-Benchmark tooling mutating decoder semantics
+• determinism  
+• architectural separation  
+• decoder stability  
+• reproducibility guarantees  
 
-Third-party code imported into core modules
-
-7. Evolution Philosophy
-
-QEC evolves by strengthening invariants first, expanding capability second.
-
-Each release must satisfy:
-
-Determinism preserved
-
-Backward compatibility respected
-
-Core decoding semantics unchanged (unless major bump)
-
-Clear separation between production logic and research tooling
-
-Reproducibility demonstrated, not assumed
-
-Capability grows.
+Capability grows.  
 Stability does not regress.
 
-8. Governance Model
+---
+
+## Governance Model
 
 This roadmap governs architectural direction.
 
 It evolves only when:
 
-A new invariant is introduced
+• a new invariant is introduced  
+• a new architectural layer is formalized  
+• a major version transition is planned  
 
-A new architectural layer is formalized
+Release notes belong in **CHANGELOG.md**.
 
-A major version transition is planned
-
-Release notes belong in CHANGELOG.md.
 Strategic direction belongs here.
 
-Small is beautiful.
-Determinism is holy.
+---
+
+Small is beautiful.  
+Determinism is holy.  
 Stability is engineered.
 
-If it cannot be reproduced byte-for-byte, it is not a baseline.
+If a result cannot be reproduced byte-for-byte, it is not a baseline.

@@ -1,902 +1,304 @@
-# QSOLKCB / QEC — Quantum Error Correction (QLDPC CSS Toolkit)
+# QSOLKCB / QEC  
+### Deterministic Quantum Error Correction Research Framework
 
-[![Release v5.4.0](https://img.shields.io/badge/release-v5.4.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v5.4.0)
+[![Release v5.4.0](https://img.shields.io/badge/release-v7.0.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v7.0.0)
+[![Research Framework](https://img.shields.io/badge/type-research%20framework-blue)]
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 
-Deterministic QLDPC CSS framework for studying belief propagation attractor geometry and decoding dynamics.
+QEC is a **deterministic research framework for studying belief propagation decoding dynamics in QLDPC CSS quantum error correction codes**.
 
-QEC is a **deterministic QLDPC CSS quantum error correction framework** for studying belief propagation decoding dynamics under controlled experimental conditions.
+The system provides a controlled environment for investigating decoder behavior, attractor geometry, spectral structure of Tanner graphs, and decoding stability under reproducible experimental conditions.
 
-The toolkit provides invariant-safe algebraic code construction, multi-mode belief propagation decoding, deterministic postprocessing, pluggable channel models, and reproducible FER / distance performance scaling (DPS) benchmarking.
-
-The framework is designed for **controlled decoder experimentation under strict determinism guarantees**.
+Unlike typical simulation toolkits, QEC is designed as an **experimental platform for decoding research**, emphasizing deterministic execution, transparent algorithms, and reproducible benchmarks.
 
 ---
 
-## Core Goals
+# Overview
 
-The system is engineered for:
+Belief propagation decoding on sparse parity-check graphs exhibits complex dynamical behavior including:
 
-- **Reproducibility** — byte-identical results across runs  
-- **Interpretability** — explicit algorithmic behavior  
-- **Structural experimentation** — controlled topology and inference geometry changes  
-- **Deterministic benchmarking** — stable FER and distance-scaling measurements  
+- trapping sets
+- oscillatory convergence
+- metastable states
+- incorrect fixed points
+- spectral fragility
 
-> If a result cannot be reproduced byte-for-byte, it is not considered a baseline.
+Understanding these phenomena requires controlled experiments where decoder behavior can be observed without stochastic noise or hidden heuristics.
 
----
+The QEC framework provides a deterministic infrastructure for performing these studies.
 
-## Documentation
+Core capabilities include:
 
-Key project documentation:
+- invariant-safe QLDPC CSS code construction
+- deterministic belief propagation decoding
+- structured decoder experimentation
+- spectral Tanner graph diagnostics
+- stability prediction and decoder control
+- reproducible FER / DPS benchmarking
 
-- `PROJECT_STATE.md` — current system architecture snapshot  
-- `ROADMAP.md` — research direction and upcoming work  
-- `CHANGELOG.md` — full release history  
-
----
-
-Current Release
-
-Current Release
-v5.4.0 — Tanner Spectral Fragility Diagnostics
-
-The current release introduces deterministic spectral diagnostics for Tanner graphs, enabling structural analysis of QLDPC parity-check matrices through global spectral metrics and localized eigenmode analysis.
-
-Unlike earlier diagnostics that analyze belief-propagation dynamics, this diagnostic operates purely on graph structure and does not run BP decoding.
-
-Release:
-https://github.com/QSOLKCB/QEC/releases/tag/v5.4.0
-
-Tanner Spectral Fragility Diagnostics (v5.4)
-
-New module:
-
-src/qec/diagnostics/tanner_spectral_analysis.py
-
-Main API:
-
-compute_tanner_spectral_analysis(...)
-
-The diagnostic constructs the bipartite Tanner adjacency matrix from the parity-check matrix and computes deterministic spectral metrics including:
-
-largest_eigenvalue
-adjacency_spectral_gap
-laplacian_second_eigenvalue
-spectral_ratio
-
-These measurements characterize global Tanner graph connectivity and expansion quality.
-
-Eigenmode Localization Analysis
-
-The diagnostic also measures localization of spectral modes using the Inverse Participation Ratio (IPR):
-
-IPR(v) = Σ v_i^4
-
-Low values indicate delocalized modes, while higher values indicate localized eigenmodes concentrated on a small subset of nodes.
-
-Localization metrics include:
-
-mode_iprs
-variable_mode_iprs
-
-allowing detection of spectral modes concentrated specifically on variable nodes.
-
-Localized Node Mapping
-
-For the most localized spectral mode, the diagnostic identifies the variable nodes contributing the largest spectral mass.
-
-Outputs include:
-
-localized_variable_nodes
-localized_variable_weights
-localized_variable_fraction
-
-localized_variable_fraction indicates how much spectral mass is concentrated in the top localized nodes, providing a simple structural fragility indicator.
-
-BP Attractor Geometry Diagnostics
-
-The toolkit includes a layered deterministic diagnostics framework for analyzing BP convergence behavior and Tanner graph structure.
-
-Version	Capability
-v4.1	Basin-switch detection
-v4.2	Energy landscape diagnostics
-v4.3	Iteration trajectory diagnostics
-v4.4	BP regime classification
-v4.5	Regime transition tracing
-v4.6	Phase diagram aggregation
-v4.7	Freeze detection diagnostics
-v4.8	Fixed-point trap analysis
-v4.9	Basin-of-attraction estimation
-v5.0	Attractor landscape mapping
-v5.1	Free-energy barrier estimation
-v5.2	Decoder experiment framework
-v5.3	Decision boundary estimation
-v5.4	Tanner spectral fragility diagnostics
-
-Together these layers provide deterministic measurement of:
-
-BP convergence regimes
-
-attractor basin geometry
-
-incorrect fixed-point probability
-
-escape barrier heights
-
-decision boundary proximity
-
-Tanner graph structural fragility
-
-All diagnostics remain trace-only and opt-in, preserving deterministic decoding guarantees.
-
-Baseline decoding outputs remain byte-identical when diagnostics are disabled.
-
-Benchmark Harness Integration
-
-The deterministic DPS harness supports the full diagnostics stack:
-
---bp-dynamics
---bp-transitions
---bp-phase-diagram
---bp-freeze-detection
---bp-fixed-point-analysis
---bp-basin-analysis
---bp-landscape-map
---bp-barrier-analysis
---bp-boundary-analysis
---tanner-spectral-analysis
---compare-decoders
---paired-seed
---paired-errors
-
-Diagnostics results are appended to benchmark artifacts without modifying decoder behavior.
-
-All diagnostics remain fully optional.
-
-Determinism Guarantees
-
-The QEC framework maintains strict deterministic execution:
-
-no randomness introduced
-
-no Python hash() usage
-
-deterministic perturbation schedules
-
-JSON-serializable artifacts
-
-byte-identical results across repeated runs
-
-Decoder outputs remain identical when diagnostics are disabled.
+All components are engineered to maintain **byte-identical results across repeated runs**.
 
 ---
 
-## Research Context
+# Key Principles
 
-These diagnostics enable systematic investigation of **Distance Performance Scaling (DPS)** behavior under syndrome-only inference.
+The framework follows several strict design principles.
 
-Experiments performed using the diagnostics stack show that BP decoding failures arise from **incorrect attractor selection** rather than metastable oscillation.
+### Determinism
 
-The toolkit therefore functions as a deterministic experimental platform for studying:
+All algorithms are deterministic.
 
-- BP attractor geometry
-- basin stability
-- pseudocodeword structure
-- decoding landscape topology
+No stochastic elements are introduced unless explicitly controlled.  
+Repeated runs with identical inputs produce **identical outputs**.
 
-in QLDPC Tanner graphs.
+### Experimental Transparency
 
-v4.4.0 — Deterministic BP Dynamics Regime Analysis
+Decoder behavior is explicitly observable and measurable.
 
-The v4.4.0 release introduces deterministic diagnostics for analyzing the global dynamical behavior of belief propagation (BP) on QLDPC Tanner graphs.
+Diagnostics operate outside the decoder core and never modify message passing.
 
-This release completes the first full BP observability stack in the QEC toolkit, enabling systematic analysis of decoder dynamics such as oscillatory convergence, metastability, trapping-set behavior, and chaotic inference regimes.
+### Architectural Separation
 
-All diagnostics remain trace-only and opt-in, preserving the deterministic decoding guarantees of the framework.
+The system is organized into clearly separated layers:
 
-Baseline decoding outputs remain byte-identical when diagnostics are disabled.
 
-Release:
-https://github.com/QSOLKCB/QEC/releases/tag/v4.4.0
+Diagnostics → Predictors → Controllers → Decoder → Benchmark Harness
 
-New in v4.4.0
-BP Dynamics Metric Suite
 
-The new diagnostics module computes deterministic metrics derived from BP iteration traces:
+Each layer observes or steers the layer below it without violating its invariants.
 
-Metric	Description
-MSI	Metastability Index — detects plateau behavior with residual oscillations
-CPI	Cycle Periodicity Index — deterministic detection of repeating BP states
-TSL	Trapping Set Likelihood — persistent sign disagreement indicator
-LEC	Local Energy Curvature — second-difference structure of the energy trace
-CVNE	Correction-Vector Norm Entropy (optional)
-GOS	Global Oscillation Score — aggregate oscillation signal
-EDS	Energy Descent Smoothness — monotonicity of BP descent
-BTI	Basin Transition Indicator — barrier crossings and state transitions
+### Reproducible Benchmarking
 
-These metrics provide a deterministic view of the energy landscape and dynamical structure of BP decoding.
+All experiments are designed to support reproducible research results.
 
-Deterministic Regime Classification
+If a result cannot be reproduced deterministically, it is not considered a baseline.
 
-BP trajectories are classified into six deterministic regimes:
+---
 
-stable_convergence
+# Core Capabilities
 
-oscillatory_convergence
+## Deterministic QLDPC CSS Construction
 
-metastable_state
+The framework provides tools for constructing quantum LDPC CSS codes with invariant-safe parity-check matrices.
 
-trapping_set_regime
+Features include:
 
-correction_cycling
+- protograph-based constructions
+- deterministic lifting
+- parity-check validation
+- CSS commutation verification
+- reproducible structural transformations
 
-chaotic_behavior
+These tools allow controlled experimentation with Tanner graph topology.
 
-Each classification includes explicit metric evidence and threshold comparisons for reproducibility and interpretability.
+---
 
-Bench Harness Integration
+## Belief Propagation Decoding
 
-The DPS benchmark harness now supports:
+Multiple deterministic BP variants are available:
 
---bp-dynamics
+- sum-product
+- min-sum
+- normalized min-sum
+- offset min-sum
 
-When enabled:
+Supported scheduling modes include:
 
-BP traces are analyzed using the new metric suite
+- flooding
+- layered
+- residual
+- hybrid residual
+- adaptive scheduling
 
-Results are appended to benchmark artifacts under
+All schedules are implemented without stochastic elements.
 
-bp_dynamics
+---
 
-This feature is fully optional and does not alter baseline decoding behavior.
+## Deterministic Postprocessing
 
-Determinism Guarantees
+Postprocessing algorithms refine BP corrections without altering message passing.
 
-The v4.4 diagnostics layer preserves the core determinism guarantees of the QEC framework:
+Available strategies include:
 
-No randomness introduced
+- Ordered statistics decoding (OSD)
+- combination-sweep OSD
+- posterior-guided OSD
+- BP-guided deterministic decimation
 
-No Python hash() usage
+These methods remain deterministic and fully reproducible.
 
-Deterministic CRC32 state signatures
+---
 
-JSON-serializable outputs
+## Spectral Tanner Graph Diagnostics
 
-Byte-identical artifacts across repeated runs
+The framework provides deterministic spectral diagnostics for Tanner graphs.
 
-Determinism validation confirmed identical SHA-256 outputs across multiple benchmark executions.
+These diagnostics analyze structural properties of the parity-check matrix including:
 
-Diagnostics Stack
+- spectral radius
+- spectral gaps
+- eigenmode localization
+- inverse participation ratio (IPR)
 
-The QEC toolkit now includes a layered diagnostics framework for studying BP dynamics:
+Localization analysis identifies nodes associated with fragile spectral modes.
 
-Version	Capability
-v4.1	Basin-switch detection
-v4.2	Energy landscape diagnostics
-v4.3	Iteration trajectory diagnostics
-v4.4	BP regime classification
+These structural signals often correlate with decoding instability.
 
-These tools enable systematic investigation of Distance Performance Scaling (DPS) inversion under syndrome-only inference.
+---
 
-v4.3.0 — Deterministic Iteration-Trace Diagnostics
+## BP Dynamics Diagnostics
 
-v4.3.0 extends the deterministic diagnostics framework with a new layer of
-**iteration-trace analysis for belief propagation decoding**.
+The toolkit includes a layered diagnostics stack for analyzing belief propagation behavior.
 
-Where the v4.2 series characterizes the *energy landscape of decoder attractors*,
-v4.3.0 introduces metrics that analyze **the internal dynamics of BP during
-the decoding trajectory itself**.
+Diagnostics measure properties such as:
 
-These diagnostics operate entirely outside the decoder core and preserve the
-architectural guarantee that decoder outputs remain byte-identical when
-diagnostics are disabled.
+- belief oscillation
+- energy plateau dynamics
+- trapping-set persistence
+- basin switching
+- convergence regimes
 
-Iteration-Trace Diagnostics (v4.3.0)
+These measurements allow systematic investigation of the BP energy landscape.
 
-The new diagnostics module analyzes per-iteration belief trajectories and
-energy evolution produced during BP decoding.
+---
 
-Five deterministic metrics characterize decoder dynamics:
+## Spectral-Guided Decoder Control (v7)
 
-Belief Oscillation Index (BOI)
+The latest system introduces a **spectral-guided decoder control layer**.
 
-Measures the rate at which variable beliefs change sign between iterations.
+This experimental controller uses structural and dynamical diagnostics to steer decoder behavior.
 
-High BOI indicates oscillatory BP regimes or unstable message passing.
+Control strategies include:
 
-Zero values are treated as non-negative to avoid artificial flip counts.
+- predictor-guided scheduling
+- adaptive per-node damping
+- risk-aware decoding policies
 
-Energy Plateau Index (EPI)
+The controller operates entirely outside the decoder core, preserving algorithmic invariants.
 
-Measures the length of low-gradient segments in the energy trajectory.
+---
 
-High EPI indicates plateau behavior where the decoder stalls in shallow
-regions of the free-energy landscape.
+# Benchmarking Framework
 
-Trapping Set Persistence (TSP)
+The repository includes a deterministic benchmarking harness for measuring decoder performance.
 
-Measures how long the decoder remains in a constraint-consistent but
-incorrect configuration.
+Experiments evaluate:
 
-High persistence indicates classical trapping-set behavior.
+- Frame Error Rate (FER)
+- Distance Performance Scaling (DPS)
+- decoding iteration counts
+- stability metrics
+- spectral control effectiveness
 
-Correction Vector Fluctuation (CVF)
+All benchmark runs reuse identical deterministic error instances.
 
-Measures cycling behavior in correction vectors across iterations.
+This ensures fair comparisons between decoding strategies.
 
-This metric is computed only when correction vectors are available and is
-reported as `None` otherwise to preserve semantic correctness.
+---
 
-Composite Iteration Stability Score
+# Architecture
 
-Combines the above metrics into a deterministic stability descriptor that
-characterizes the overall dynamical regime of the decoder trajectory.
+The framework follows a layered experimental architecture.
 
-Architectural Safety
 
-All iteration diagnostics are strictly observational and never modify
-decoder behavior.
-
-The following invariants remain enforced:
-
-decoder core unchanged  
-message-passing semantics unchanged  
-no randomness introduced  
-schema unchanged  
-baseline decoder outputs remain byte-identical
-
-Version Lineage
-
-v4.1.0 — Improved Basin Switch Detection  
-v4.2.0 — Deterministic Landscape Metrics  
-v4.2.1 — Diagnostics Refactor and Test Hardening  
-v4.3.0 — Iteration-Trace Diagnostics
-
-v4.2.1 — Diagnostics Refactor and Test Hardening
-
-The v4.2 series extends the deterministic perturbation diagnostics introduced in v4.1.0 with quantitative energy-landscape metrics for BP decoding experiments.
-
-These diagnostics characterize the stability and geometry of decoding attractors under small deterministic perturbations while preserving the architectural guarantee that decoder outputs remain bit-identical when diagnostics are disabled.
-
-v4.2.1 further refines the diagnostics layer with internal optimizations and expanded test coverage.
-
-Landscape Metrics (v4.2.0)
-
-The diagnostics framework now computes three deterministic metrics describing the local decoding landscape.
-
-Basin Stability Index (BSI)
-Measures how often small perturbations return the decoder to the same attractor basin.
-
-BSI = (# perturbations yielding baseline correction) / (# perturbations)
-
-Values range from 0.0 (unstable) to 1.0 (fully stable).
-
-Attractor Distance (AD)
-Measures the Hamming distance between baseline and perturbed decoding corrections.
-
-Reported values:
-
-attractor_distance_max
-attractor_distance_mean
-
-These quantify how far nearby attractors lie in correction space.
-
-Escape Energy (EE)
-Estimates the minimum perturbation magnitude required to leave the current basin.
-
-The deterministic epsilon sweep is:
-
-[1e-3, 2e-3, 5e-3, 1e-2]
-
-Directional escape barriers are reported:
-
-escape_energy_plus
-escape_energy_minus
-escape_energy
-
-The final escape energy is the minimum directional barrier.
-
-v4.2.1 Improvements
-
-v4.2.1 introduces several internal improvements to the diagnostics system:
-
-shared perturbation decode helper to eliminate redundant BP decodes
-
-configurable epsilon sweep (eps_values) for escape-energy diagnostics
-
-strengthened integration tests to guarantee landscape metrics are exercised
-
-additional test coverage for configurable epsilon schedules
-
-These changes do not modify decoder behavior and preserve full determinism.
-
-Decoder Safety
-
-All diagnostics operate outside the decoder core.
-
-The following invariants remain enforced:
-
-decoder message passing unchanged
-
-scheduling semantics unchanged
-
-schema unchanged
-
-deterministic execution preserved
-
-baseline decoding outputs remain byte-identical
-
-Version Lineage
-v4.1.0 — Improved Basin Switch Detection
-v4.2.0 — Deterministic Landscape Metrics
-v4.2.1 — Diagnostics Refactor and Test Hardening
-Free-Energy Landscape Diagnostics
-
-Landscape diagnostics enable systematic experimentation with BP convergence regimes, including:
-
-metastable oscillation
-
-shallow perturbation sensitivity
-
-true basin switching
-
-attractor geometry and basin stability
-
-perturbation-induced barrier crossings
-
-v4.1.0 — Improved Basin Switch Detection
-
-v4.1.0 strengthens deterministic perturbation diagnostics by distinguishing metastable oscillation, shallow sensitivity, and true basin switching.
-
-This extends the structural experimentation framework introduced in v3.8–v3.9 and enables systematic study of BP convergence regimes, including plateau behavior, barrier crossings, and geometry-induced basin switching.
-
-Decoder behavior remains bit-identical when diagnostics are disabled.
-
-Channel Geometry Interventions
-
-Two deterministic inference-geometry interventions are available.
-
-Centered Field Projection
-
-Removes the uniform syndrome bias before projection:
-
-b = 1 − 2s
-b_centered = b − mean(b)
-
-LLR = Hᵀ b_centered
-
-Purpose:
-
-remove global field collapse
-
-restore directional likelihood structure
-
-preserve deterministic decoding
-
-Pseudo-Prior Injection
-
-Adds a weak deterministic prior derived from parity structure:
-
-parity_bias = Hᵀ(1 − 2s)
-
-LLR ← LLR + κ · parity_bias
-
-Default:
-
-κ = 0.25
-
-Properties:
-
-deterministic
-
-no oracle leakage
-
-opt-in only
-
-Free-Energy Landscape Diagnostics
-
-v4.0.0 introduces a diagnostics module for analyzing belief propagation energy dynamics.
-
-src/qec/diagnostics/energy_landscape.py
-
-The module provides deterministic analysis of BP energy traces:
-
-compute_energy_gradient
-
-compute_energy_curvature
-
-detect_plateau
-
-detect_local_minima
-
-detect_barrier_crossings
-
-classify_energy_landscape
-
-detect_basin_switch
-
-Energy is measured per BP iteration:
-
-E = − Σ (LLR_i · belief_i)
-
-These diagnostics allow the framework to study decoder convergence regimes, including:
-
-plateau dynamics
-
-metastable behavior
-
-barrier crossings
-
-geometry-induced basin switching
-
-All diagnostics are strictly observational and do not alter decoding behavior.
-
-Basin Switching Diagnostics
-
-A deterministic perturbation experiment detects when BP converges to different free-energy basins.
-
-A small perturbation is applied to the LLR vector:
-
-llr_perturbed = llr + ε · sign(llr)
-ε = 1e-3
-
-If the perturbed decode converges to a different correction or final energy, the trial is classified as a basin switch.
-
-The perturbation is deterministic and handles sign(0) safely to ensure stable results.
-
-DPS Harness Expansion
-
-The deterministic evaluation harness supports geometry-intervention modes and optional energy diagnostics.
-
-Mode	Centered	Prior	geom_v1	RPC
-baseline	F	F	F	F
-centered	T	F	F	F
-prior	F	T	F	F
-centered_prior	T	T	F	F
-geom_centered	T	F	T	F
-geom_centered_prior	T	T	T	F
-rpc_centered	T	F	F	T
-rpc_centered_prior	T	T	F	T
-
-All modes reuse identical deterministic error instances.
-
-Example Diagnostics Run
-PYTHONPATH=. python bench/dps_v381_eval.py \
-  --landscape \
-  --trials 200 \
-  --distances 5 7 \
-  --p-values 0.03
-
-Example observations:
-
-basin switching observed in RPC + centered field modes
-
-stable plateau dynamics in non-RPC geometry modes
-
-deterministic behavior preserved across runs
-
-Stability Guarantees
-
-v4.0.0 maintains strict determinism:
-
-decoder core unchanged
-
-no stochastic components introduced
-
-diagnostics operate only on decoder outputs
-
-identical results when diagnostics are disabled
-
-Full test suite:
-
-945 passed
-7 skipped
-
-Previous Releases
-v3.9.0 — Channel Geometry Interventions & BP Energy Diagnostics
-
-Introduces deterministic channel-geometry interventions and belief propagation energy diagnostics.
-
-This release expands the structural experimentation framework introduced in v3.8.x and enables deeper analysis of syndrome-only inference geometry.
-
-Channel Geometry Interventions
-
-Two deterministic interventions are available.
-
-Centered Field Projection
-
-Removes the uniform syndrome bias before projection:
-
-b = 1 − 2s
-b_centered = b − mean(b)
-
-LLR = Hᵀ b_centered
-
-Purpose:
-
-remove global field collapse
-
-restore directional likelihood structure
-
-preserve deterministic decoding
-
-Pseudo-Prior Injection
-
-Adds a weak deterministic prior derived from parity structure:
-
-parity_bias = Hᵀ(1 − 2s)
-
-LLR ← LLR + κ · parity_bias
-
-Default:
-
-κ = 0.25
-
-Properties:
-
-deterministic
-
-no oracle leakage
-
-opt-in only
-
-BP Energy Diagnostics
-
-An optional diagnostic records per-iteration BP energy traces:
-
-E = − Σ (LLR_i · belief_i)
-
-This allows analysis of:
-
-convergence dynamics
-
-oscillatory BP behavior
-
-likelihood alignment
-
-Energy tracing is strictly diagnostic and does not alter decoder behavior.
-
-DPS Harness Expansion
-
-The deterministic evaluation harness now supports geometry-intervention modes.
-
-Mode	Centered	Prior	geom_v1	RPC
-baseline	F	F	F	F
-centered	T	F	F	F
-prior	F	T	F	F
-centered_prior	T	T	F	F
-geom_centered	T	F	T	F
-geom_centered_prior	T	T	T	F
-rpc_centered	T	F	F	T
-rpc_centered_prior	T	T	F	T
-
-All modes reuse identical deterministic error instances.
-
-Stability Improvements
-
-Stabilized bp_decode return structure across optional features
-
-Added epsilon threshold for DPS sign detection
-
-Strengthened baseline invariance tests
-
-v3.8.1 — Structural Geometry Evaluation
-
-Introduces a deterministic Distance Performance Scaling (DPS) evaluation harness.
-
-New module:
-
-bench/dps_v381_eval.py
-
-Features:
-
-Deterministic RNG (seed = 42)
-
-Pre-generated error instances reused across modes
-
-Activation audits for structural interventions
-
-Determinism verification
-
-DPS slope measurement across distances
-
-Evaluation modes:
-
-Mode	Schedule	RPC
-baseline	flooding	disabled
-rpc_only	flooding	enabled
-geom_v1_only	geom_v1	disabled
-rpc_geom	geom_v1	enabled
-
-Frame error rate uses syndrome-consistency semantics:
-
-syndrome(H, correction) != s
-
-This release established a reproducible experimental harness for structural decoder analysis.
-
-v3.8.0 — Structural Geometry Core
-
-Adds deterministic infrastructure for topology and inference-geometry experiments.
-
-RPC Augmentation
-
-Deterministic redundant parity checks generated via lexicographic row-pair XOR.
-
-Properties:
-
-deterministic
-
-no feasible-set change
-
-opt-in only
-
-no in-place mutation
-
-geom_v1 Schedule
-
-Flooding-style belief propagation with deterministic check-degree scaling:
-
-α_c = 1 / sqrt(d_c)
-
-No adaptive logic or stochastic elements are introduced.
-
-Adapter Integration
-
-Structural interventions are applied at the adapter layer so that baseline decoder behavior remains unchanged when disabled.
-
+Code Construction
+↓
+Channel Model
+↓
 Decoder Core
+↓
+Postprocessing
+↓
+Diagnostics
+↓
+Predictors
+↓
+Decoder Control
+↓
+Benchmark Harness
 
-The decoding stack supports multiple belief propagation variants:
 
-sum_product
+Each layer is isolated to preserve reproducibility and interpretability.
 
-min_sum
+The decoder core remains the experimental object while diagnostics and controllers act as external instrumentation.
 
-norm_min_sum
+---
 
-offset_min_sum
+# Determinism Guarantees
 
-Scheduling modes:
+The system enforces strict deterministic execution.
 
-flooding
+Key guarantees include:
 
-layered
+- no hidden randomness
+- deterministic scheduling
+- deterministic perturbation experiments
+- stable JSON artifacts
+- identical outputs across repeated runs
 
-residual
+Baseline decoder results remain unchanged when diagnostics are disabled.
 
-hybrid_residual
+---
 
-adaptive
+# Research Applications
 
-geom_v1
+The QEC framework enables research into:
 
-All schedules are deterministic.
+- belief propagation attractor geometry
+- trapping-set dynamics
+- spectral fragility of Tanner graphs
+- decoding stability prediction
+- distance performance scaling of QLDPC codes
+- structure-aware decoding strategies
 
-Deterministic Postprocessing
+The system is intended as a **research instrument** for studying inference dynamics in sparse graphical models used in quantum error correction.
 
-Deterministic correction refinement algorithms include:
+---
 
-Method	Description
-osd1	deterministic single-bit ordered statistics
-osd_cs	combination-sweep ordered statistics
-mp_osd1	posterior-aware OSD-1
-mp_osd_cs	posterior-aware combination sweep
-guided_decimation	BP-guided deterministic variable freezing
+# Running Experiments
 
-Postprocessing is strictly layered and does not modify BP schedules.
+Example benchmark execution:
 
-Channel Models
 
-Channel models generate deterministic LLR vectors:
+PYTHONPATH=. python bench/dps_v381_eval.py
+--trials 200
+--distances 5 7
+--p-values 0.03
 
-Model	Description
-oracle	full error visibility
-bsc_syndrome	syndrome-only inference
-custom	pluggable deterministic models
 
-Channel models are isolated from decoder logic.
+Additional experimental features can be enabled using CLI flags for diagnostics, predictors, and controller experiments.
 
-Benchmarking & Diagnostics
+---
 
-Benchmark tools provide deterministic measurement of:
+# Repository Documentation
 
-FER (frame error rate)
+Key project documentation includes:
 
-DPS (distance performance scaling)
+- **PROJECT_STATE.md** — architecture snapshot
+- **ROADMAP.md** — long-term research direction
+- **CHANGELOG.md** — release history
+- **AUDIT_CHECKLIST.md** — pre-merge safety verification
 
-syndrome consistency rate
+These documents define the current system state and research trajectory.
 
-inversion diagnostics
+---
 
-activation audit reports
+# Design Philosophy
 
-BP energy convergence traces
+The project follows several guiding principles:
 
-The system separates measurement instrumentation from decoder implementation.
-
-Architecture
-
-Layered architecture with strict boundaries.
-
-Layer 1 — Decoder Core
-Belief propagation + deterministic postprocessing
-
-Layer 2 — Channel Models
-Deterministic LLR generation
-
-Layer 3 — Benchmark & Diagnostics
-FER / DPS / structural analysis
-
-Interop Layer — JSON schema + hash verification
-
-No layer mutates another layer’s invariants.
-
-Reproducibility Anchor
-
-Deterministic schema versions:
-
-SCHEMA_VERSION = 3.0.1
-INTEROP_SCHEMA_VERSION = 3.1.2
-
-Deterministic suite artifact:
-
-SHA256
-431f7573a0ba8af4784b385f528cfe99d6169eb74798eabddd146def278b6d77
-
-Golden vector hash:
-
-86babd2ec81daa165d3ce778b9eb71a3766667484e1c51a2000642ae08ec9569
-
-Deterministic configuration:
-
-runtime_mode="off"
-deterministic_metadata=True
-seed=12345
-Structural Guarantees
-
-Baseline decoder invariants are preserved across releases:
-
-Flooding schedule unchanged
-
-Layered schedule unchanged
-
-_bp_postprocess() unchanged
-
-No stochastic elements
-
-No hidden randomness
-
-No schema drift
-
-No identity/hash drift for baseline decoders
-
-All releases require the full test suite to pass.
-
-Design Philosophy
-
-Small is beautiful.
-Determinism is holy.
-Stability is engineered.
+Small is beautiful.  
+Determinism is essential.  
+Transparent algorithms beat opaque heuristics.
 
 Negative results are data.
 
-Author
-
-Trent Slade
-QSOL-IMC
-
-ORCID
-https://orcid.org/0009-0002-4515-9237
-
 ---
 
-# Project State & Documentation
+# Author
 
-Additional project documentation:
+**Trent Slade**  
+QSOL-IMC
 
-- **PROJECT_STATE.md** — current architectural snapshot of the system
-- **ROADMAP.md** — long-term research direction and architectural governance
-- **CHANGELOG.md** — full release history and version notes
-
-These documents provide the canonical reference for the system architecture, research trajectory, and deterministic guarantees of QEC.
+ORCID  
+https://orcid.org/0009-0002-4515-9237

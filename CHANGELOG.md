@@ -6,6 +6,372 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+Changelog
+
+All notable changes to this project are documented in this file.
+
+This project follows Semantic Versioning (SemVer).
+
+[7.0.0] — 2026-03-11
+
+Spectral-Guided Decoder Control Framework
+
+Added
+Spectral Decoder Controller
+
+src/qec/experiments/spectral_decoder_controller.py
+
+Introduces a deterministic spectral-guided decoder control layer that integrates spectral diagnostics and BP stability prediction into controlled decoding experiments.
+
+The controller acts as an external policy layer that observes structural risk signals and adjusts decoder behavior without modifying the core decoder implementation.
+
+Primary entry point:
+
+run_spectral_decoder_control_experiment(...)
+
+The controller consumes outputs from the v6.x diagnostics stack including:
+
+non-backtracking eigenvector localization (v6.1)
+
+spectral trapping-set candidates (v6.2)
+
+spectral–BP attractor alignment (v6.3)
+
+spectral failure risk scoring (v6.4)
+
+BP stability predictor (v6.8)
+
+predictor validation framework (v6.9)
+
+These signals are used to guide deterministic decoding control policies.
+
+Predictor-Guided Scheduling
+
+The controller selects a control mode based on predicted BP instability and estimated decoding failure risk.
+
+Available control modes:
+
+standard
+risk_guided_damping
+risk_guided_schedule
+
+Mode selection is deterministic and based entirely on predictor outputs.
+
+Baseline decoding behavior remains unchanged when the controller is disabled.
+
+Adaptive Damping Controller
+
+Implements deterministic per-node damping derived from structural risk scores.
+
+Damping rule:
+
+damping(node) = base_damping + alpha * normalized_risk
+
+Default parameters:
+
+base_damping = 0.5
+alpha = 0.25
+
+Normalization:
+
+normalized_risk = risk / max_risk
+
+Damping values are safely clamped:
+
+0.5 ≤ damping ≤ 0.9
+
+The adaptive damping mechanism reduces oscillatory message passing in high-risk Tanner graph regions.
+
+Decoder Mode Switching Hook
+
+Introduces a clean architecture hook for future adaptive decoding strategies.
+
+Potential future transitions include:
+
+BP → OSD
+BP → BPGD
+BP → hybrid decoding
+
+v7.0 implements the control interface but does not introduce additional decoders.
+
+CLI Integration
+
+bench/dps_v381_eval.py
+
+New CLI flag:
+
+--spectral-decoder-controller
+
+Activates the experimental control pipeline.
+
+The flag automatically enables the BP stability predictor:
+
+--spectral-decoder-controller ⇒ --bp-stability-predictor
+
+Execution pipeline:
+
+spectral diagnostics
+→ BP stability predictor
+→ spectral decoder controller
+→ controlled decoding experiment
+
+The feature is fully optional and does not affect existing experiments when disabled.
+
+Phase Diagram Metrics
+
+The deterministic DPS harness now records controller-specific metrics:
+
+mean_controller_bp_failure_risk
+controller_instability_fraction
+mean_controller_accuracy
+mean_controller_error_rate
+mean_controlled_delta_iterations
+mean_controlled_delta_success
+
+These metrics enable systematic evaluation of spectral-guided decoding policies.
+
+Experimental BP Reference Implementation
+
+The controller includes a self-contained experimental BP flooding decoder used exclusively for controlled comparison experiments.
+
+Properties:
+
+deterministic execution
+
+no changes to the core decoder
+
+identical message passing semantics
+
+isolated experimental environment
+
+This mirrors the experimental decoder pattern introduced in earlier experiment modules.
+
+Repository Governance
+
+Added repository safety document:
+
+AUDIT_CHECKLIST.md
+
+Defines the standard pre-merge verification procedure used for new features and experimental modules.
+
+The checklist verifies:
+
+decoder safety
+
+deterministic execution
+
+numerical stability
+
+CLI compatibility
+
+artifact schema integrity
+
+experimental isolation
+
+Tests
+
+New test suite:
+
+tests/test_spectral_decoder_controller.py
+
+Test coverage includes:
+
+deterministic control-mode selection
+
+adaptive damping bounds enforcement
+
+node risk ordering determinism
+
+JSON artifact serialization
+
+CLI pipeline integration
+
+decoder safety validation
+
+All tests confirm that enabling the controller does not alter baseline decoder outputs.
+
+Constraints
+
+Decoder untouched
+
+No modifications were made to:
+
+src/qec/decoder/
+
+BP message passing, scheduling logic, and convergence behavior remain unchanged.
+
+Determinism preserved
+
+The controller introduces no stochastic elements.
+
+Guarantees include:
+
+deterministic node ordering
+
+no randomness
+
+stable JSON artifacts
+
+reproducible experiment outputs
+
+Repeated runs produce identical results.
+
+Schema unchanged
+
+No schema version bump required.
+
+Controller metrics are appended under a dedicated experiment namespace.
+
+Dependencies unchanged
+
+No new dependencies introduced.
+
+The implementation uses:
+
+Python stdlib
+NumPy
+
+Additive only
+
+All new functionality is opt-in via CLI flags.
+
+Existing diagnostics and experiments remain fully functional and unchanged.
+
+[6.9.0] — 2026-03-11
+
+BP Stability Predictor Validation Framework
+
+Added
+
+Validation framework for evaluating the predictive accuracy of the BP stability predictor introduced in v6.8.0.
+
+The framework compares predicted instability signals against observed decoding outcomes across deterministic DPS experiments.
+
+New experimental module:
+
+src/qec/experiments/bp_predictor_validation.py
+
+Primary functionality:
+
+runs deterministic decoding trials
+
+records predicted instability signals
+
+compares predictions against observed decoding success or failure
+
+measures predictor accuracy across phase-diagram cells
+
+Reported metrics include:
+
+predictor_accuracy
+predictor_precision
+predictor_recall
+false_positive_rate
+false_negative_rate
+CLI Integration
+
+New CLI flag:
+
+--bp-predictor-validation
+
+Executes validation experiments within the DPS harness and appends validation statistics to benchmark artifacts.
+
+Constraints
+
+Decoder core unchanged
+
+Deterministic execution preserved
+
+No schema version change
+
+Dependencies unchanged (stdlib + NumPy)
+
+Feature fully opt-in
+
+[6.8.0] — 2026-03-10
+
+BP Stability Predictor
+
+Added
+
+Introduces a structural predictor for belief propagation instability derived from spectral and Tanner graph diagnostics.
+
+The predictor estimates the likelihood that BP decoding will enter unstable or failure regimes before decoding begins.
+
+New module:
+
+src/qec/diagnostics/bp_stability_predictor.py
+
+Primary signals used:
+
+non-backtracking spectral radius
+
+spectral instability ratio
+
+eigenvector localization (IPR)
+
+spectral trapping-set indicators
+
+Tanner graph structural metrics
+
+Predictor outputs include:
+
+bp_failure_risk
+predicted_instability
+spectral_instability_ratio
+
+These signals enable early identification of Tanner graphs likely to exhibit decoding instability.
+
+CLI Integration
+
+New CLI flag:
+
+--bp-stability-predictor
+
+When enabled, predictor outputs are computed before decoding experiments and appended to DPS benchmark artifacts.
+
+Constraints
+
+Decoder untouched
+
+Predictor operates purely on structural diagnostics
+
+Deterministic execution preserved
+
+No additional dependencies
+
+[6.7.1] — 2026-03-10
+
+Spectral Graph Optimization Stability Fixes
+
+Fixed
+
+Refinements and stability fixes to the spectral Tanner graph optimization experiment introduced in v6.7.0.
+
+Improvements include:
+
+deterministic candidate swap ordering stabilization
+
+stricter duplicate-edge validation
+
+improved node-degree preservation checks
+
+more robust spectral score evaluation during candidate selection
+
+These changes improve experimental reliability while preserving the deterministic behavior of the optimization pipeline.
+
+Constraints
+
+Decoder untouched
+
+Experimental module unchanged in interface
+
+Deterministic execution preserved
+
+No schema changes
+
+Dependencies unchanged
+
 [6.7.0] — 2026-03-10
 Spectral Tanner Graph Optimization
 
