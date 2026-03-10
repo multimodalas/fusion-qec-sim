@@ -159,6 +159,10 @@ from src.qec.experiments.spectral_instability_phase_map import (
     run_spectral_phase_map_experiment,
     compute_phase_map_aggregate_metrics,
 )
+from src.qec.experiments.spectral_graph_repair_loop import (
+    run_spectral_graph_repair_loop,
+    compute_repair_loop_aggregate_metrics,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -1127,6 +1131,7 @@ def run_evaluation(
     enable_spectral_decoder_controller: bool = False,
     enable_spectral_cluster_control: bool = False,
     enable_spectral_phase_map: bool = False,
+    enable_spectral_graph_repair_loop: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1139,6 +1144,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v7.3.0: Spectral graph repair loop implies spectral phase map.
+    if enable_spectral_graph_repair_loop:
+        enable_spectral_phase_map = True
     # v7.2.0: Spectral phase map implies BP stability predictor.
     if enable_spectral_phase_map:
         enable_bp_stability_predictor = True
@@ -2059,6 +2067,80 @@ def run_evaluation(
                         }
         out["spectral_graph_optimization"] = sgo_results
 
+    # v7.3.0: Spectral graph repair loop experiment.
+    if enable_spectral_graph_repair_loop and "spectral_failure_risk" in out and "bp_stability_predictor" in out and nb_localization_results:
+        sgrl_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        sfr_data_sgrl = out["spectral_failure_risk"]
+        bsp_data_sgrl = out["bp_stability_predictor"]
+        spm_data_sgrl = out.get("spectral_phase_map", {})
+        for mode_name in MODE_ORDER:
+            sgrl_results[mode_name] = {}
+            sfr_mode_sgrl = sfr_data_sgrl.get(mode_name, {})
+            bsp_mode_sgrl = bsp_data_sgrl.get(mode_name, {})
+            for p in p_values:
+                sgrl_results[mode_name][p] = {}
+                sfr_p_sgrl = sfr_mode_sgrl.get(p, {})
+                bsp_p_sgrl = bsp_mode_sgrl.get(p, {})
+                for distance in distances:
+                    sfr_cell_sgrl = sfr_p_sgrl.get(distance)
+                    bsp_cell_sgrl = bsp_p_sgrl.get(distance)
+                    if sfr_cell_sgrl is None or bsp_cell_sgrl is None:
+                        continue
+                    per_trial_risks_sgrl = sfr_cell_sgrl.get("per_trial", [])
+                    per_trial_preds_sgrl = bsp_cell_sgrl.get("per_trial", [])
+                    if not per_trial_risks_sgrl or not per_trial_preds_sgrl:
+                        continue
+                    H_sgrl = codes[distance]
+                    m_sgrl, n_sgrl = H_sgrl.shape
+                    num_edges_sgrl = int(np.count_nonzero(H_sgrl))
+                    avg_var_deg_sgrl = (
+                        num_edges_sgrl / n_sgrl if n_sgrl > 0 else 0.0
+                    )
+                    avg_chk_deg_sgrl = (
+                        num_edges_sgrl / m_sgrl if m_sgrl > 0 else 0.0
+                    )
+                    loc_sgrl = nb_localization_results.get(distance, {})
+                    nb_max_ipr_sgrl = loc_sgrl.get("nb_max_ipr", 0.0)
+                    if nb_max_ipr_sgrl is None:
+                        ipr_scores_sgrl = loc_sgrl.get("ipr_scores", [])
+                        nb_max_ipr_sgrl = max(ipr_scores_sgrl) if ipr_scores_sgrl else 0.0
+                    instances_sgrl = all_instances[(distance, p)]
+                    trial_repair_results: list[dict[str, Any]] = []
+                    n_sgrl_trials = min(
+                        len(per_trial_risks_sgrl),
+                        len(per_trial_preds_sgrl),
+                        len(instances_sgrl),
+                    )
+                    for i_sgrl in range(n_sgrl_trials):
+                        risk_t_sgrl = per_trial_risks_sgrl[i_sgrl]
+                        pred_t_sgrl = per_trial_preds_sgrl[i_sgrl]
+                        inst_sgrl = instances_sgrl[i_sgrl]
+                        exp_sgrl = run_spectral_graph_repair_loop(
+                            H_sgrl,
+                            inst_sgrl["llr"],
+                            inst_sgrl["s"],
+                            risk_t_sgrl,
+                            nb_spectral_radius=pred_t_sgrl.get(
+                                "spectral_radius", 0.0,
+                            ),
+                            spectral_instability_ratio=pred_t_sgrl.get(
+                                "spectral_instability_ratio", 0.0,
+                            ),
+                            ipr_localization_score=float(nb_max_ipr_sgrl),
+                            avg_variable_degree=round(avg_var_deg_sgrl, 12),
+                            avg_check_degree=round(avg_chk_deg_sgrl, 12),
+                            max_candidates=10,
+                            max_iters=max_iters,
+                        )
+                        trial_repair_results.append(exp_sgrl)
+                    if trial_repair_results:
+                        aggregate_sgrl = compute_repair_loop_aggregate_metrics(
+                            trial_repair_results,
+                        )
+                        aggregate_sgrl["per_trial"] = trial_repair_results
+                        sgrl_results[mode_name][p][distance] = aggregate_sgrl
+        out["spectral_graph_repair_loop"] = sgrl_results
+
     return out
 
 
@@ -2355,6 +2437,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable cluster-aware decoder scheduling (v7.1, implies --spectral-decoder-controller --bp-stability-predictor)")
     parser.add_argument("--spectral-phase-map", action="store_true",
                         help="Enable spectral instability phase map (v7.2, implies --bp-stability-predictor)")
+    parser.add_argument("--spectral-graph-repair-loop", action="store_true",
+                        help="Enable spectral graph repair loop experiment (v7.3, implies --spectral-phase-map)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2573,6 +2657,8 @@ def main() -> None:
         print("Spectral cluster control: ENABLED")
     if args.spectral_phase_map:
         print("Spectral instability phase map: ENABLED")
+    if args.spectral_graph_repair_loop:
+        print("Spectral graph repair loop: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2613,17 +2699,18 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
         enable_spectral_graph_optimization=args.spectral_graph_optimization,
-        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map,
+        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop,
         enable_bp_prediction_validation=args.bp_prediction_validation,
         enable_spectral_decoder_controller=args.spectral_decoder_controller or args.spectral_cluster_control,
         enable_spectral_cluster_control=args.spectral_cluster_control,
-        enable_spectral_phase_map=args.spectral_phase_map,
+        enable_spectral_phase_map=args.spectral_phase_map or args.spectral_graph_repair_loop,
+        enable_spectral_graph_repair_loop=args.spectral_graph_repair_loop,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
