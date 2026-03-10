@@ -232,6 +232,12 @@ def _aggregate_cell(
             "mean_bp_failure_risk": None,
             "instability_fraction": None,
             "mean_spectral_instability_ratio": None,
+            "mean_prediction_accuracy": None,
+            "mean_prediction_precision": None,
+            "mean_prediction_recall": None,
+            "mean_false_positive_rate": None,
+            "mean_true_positive_rate": None,
+            "mean_prediction_error_rate": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -277,6 +283,10 @@ def _aggregate_cell(
     bsp_failure_risk_values: list[float | None] = []
     bsp_instability_values: list[float | None] = []
     bsp_spectral_ratio_values: list[float | None] = []
+
+    # v6.9 BP prediction validation collectors (opt-in, additive).
+    bpv_predicted_instability: list[bool | None] = []
+    bpv_decoder_success: list[bool | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -340,6 +350,16 @@ def _aggregate_cell(
             trial.get("spectral_instability_ratio"),
         )
 
+        # v6.9 BP prediction validation (opt-in, additive).
+        bpv_pred = trial.get("predicted_instability")
+        bpv_predicted_instability.append(
+            bpv_pred if isinstance(bpv_pred, bool) else None,
+        )
+        bpv_ds = trial.get("decoder_success")
+        bpv_decoder_success.append(
+            bpv_ds if isinstance(bpv_ds, bool) else None,
+        )
+
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
     success_fraction = float(success_count) / n
@@ -362,6 +382,57 @@ def _aggregate_cell(
     phase_entropy = _shannon_entropy([
         success_fraction, boundary_fraction, failure_fraction,
     ])
+
+    # v6.9: Compute BP prediction validation metrics from paired data.
+    bpv_tp = 0
+    bpv_fp = 0
+    bpv_tn = 0
+    bpv_fn = 0
+    bpv_count = 0
+    for pred_flag, ds_flag in zip(bpv_predicted_instability, bpv_decoder_success):
+        if pred_flag is None or ds_flag is None:
+            continue
+        bpv_count += 1
+        actual_failure = not ds_flag
+        if pred_flag and actual_failure:
+            bpv_tp += 1
+        elif pred_flag and not actual_failure:
+            bpv_fp += 1
+        elif not pred_flag and not actual_failure:
+            bpv_tn += 1
+        else:
+            bpv_fn += 1
+
+    if bpv_count > 0:
+        mean_prediction_accuracy = round(
+            (bpv_tp + bpv_tn) / bpv_count, 12,
+        )
+        mean_prediction_precision = (
+            round(bpv_tp / (bpv_tp + bpv_fp), 12)
+            if (bpv_tp + bpv_fp) > 0 else 0.0
+        )
+        mean_prediction_recall = (
+            round(bpv_tp / (bpv_tp + bpv_fn), 12)
+            if (bpv_tp + bpv_fn) > 0 else 0.0
+        )
+        mean_false_positive_rate = (
+            round(bpv_fp / (bpv_fp + bpv_tn), 12)
+            if (bpv_fp + bpv_tn) > 0 else 0.0
+        )
+        mean_true_positive_rate = (
+            round(bpv_tp / (bpv_tp + bpv_fn), 12)
+            if (bpv_tp + bpv_fn) > 0 else 0.0
+        )
+        mean_prediction_error_rate = round(
+            (bpv_fp + bpv_fn) / bpv_count, 12,
+        )
+    else:
+        mean_prediction_accuracy = None
+        mean_prediction_precision = None
+        mean_prediction_recall = None
+        mean_false_positive_rate = None
+        mean_true_positive_rate = None
+        mean_prediction_error_rate = None
 
     return {
         "x": x_val,
@@ -402,4 +473,10 @@ def _aggregate_cell(
         "mean_spectral_instability_ratio": _safe_mean(
             bsp_spectral_ratio_values,
         ),
+        "mean_prediction_accuracy": mean_prediction_accuracy,
+        "mean_prediction_precision": mean_prediction_precision,
+        "mean_prediction_recall": mean_prediction_recall,
+        "mean_false_positive_rate": mean_false_positive_rate,
+        "mean_true_positive_rate": mean_true_positive_rate,
+        "mean_prediction_error_rate": mean_prediction_error_rate,
     }
