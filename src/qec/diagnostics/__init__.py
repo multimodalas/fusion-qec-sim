@@ -28,5 +28,6 @@ from .bp_boundary_analysis import compute_bp_boundary_analysis
 from .tanner_spectral_analysis import compute_tanner_spectral_analysis
 from .spectral_boundary_alignment import compute_spectral_boundary_alignment
 from .spectral_trapping_sets import compute_spectral_trapping_sets
-from .bp_phase_space import compute_bp_phase_space
+from .bp_phase_space import compute_bp_phase_space, compute_metastability_score
 from .ternary_decoder_topology import compute_ternary_decoder_topology
+from .basin_probe import probe_local_ternary_basin

@@ -104,10 +104,15 @@ from src.qec.diagnostics.spectral_trapping_sets import (
 
 from src.qec.diagnostics.bp_phase_space import (
     compute_bp_phase_space,
+    compute_metastability_score,
 )
 
 from src.qec.diagnostics.ternary_decoder_topology import (
     compute_ternary_decoder_topology,
+)
+
+from src.qec.diagnostics.basin_probe import (
+    probe_local_ternary_basin,
 )
 
 # ── Mode definitions ─────────────────────────────────────────────────
@@ -315,6 +320,8 @@ def run_mode(
     enable_bp_boundary_analysis: bool = False,
     enable_bp_phase_space: bool = False,
     enable_ternary_topology: bool = False,
+    enable_ternary_transition_metrics: bool = False,
+    enable_ternary_basin_probe: bool = False,
 ) -> dict[str, Any]:
     """Run a single mode over pre-generated instances.
 
@@ -343,6 +350,10 @@ def run_mode(
     ``bp_phase_space``.
     When *enable_ternary_topology* is True, also returns
     ``ternary_topology``.
+    When *enable_ternary_transition_metrics* is True, transition
+    metrics are included in ternary topology output.
+    When *enable_ternary_basin_probe* is True, also returns
+    ``ternary_basin_probe``.
     """
     if decoder_fn is None:
         decoder_fn = bp_decode
@@ -351,6 +362,12 @@ def run_mode(
     schedule = mode_cfg["schedule"]
     structural: StructuralConfig = mode_cfg["structural"]
 
+    # v5.8.0: basin probe implies ternary topology.
+    if enable_ternary_basin_probe:
+        enable_ternary_topology = True
+    # v5.8.0: transition metrics implies ternary topology.
+    if enable_ternary_transition_metrics:
+        enable_ternary_topology = True
     # v5.7.0: ternary topology implies phase-space.
     if enable_ternary_topology:
         enable_bp_phase_space = True
@@ -409,6 +426,7 @@ def run_mode(
     all_bp_boundary_analyses: list[dict[str, Any]] = []
     all_bp_phase_space: list[dict[str, Any]] = []
     all_ternary_topology: list[dict[str, Any]] = []
+    all_ternary_basin_probes: list[dict[str, Any]] = []
     comparison_results: list[dict[str, Any]] = []
 
     for trial_idx, inst in enumerate(instances):
@@ -695,7 +713,34 @@ def run_mode(
                     phase_space_result=ps_result,
                     syndrome_residuals=syndrome_residuals_tt,
                 )
+
+                # v5.8.0: Add metastability score.
+                if enable_ternary_transition_metrics:
+                    ms = compute_metastability_score(ps_result["residual_norms"])
+                    tt_result["metastability_score"] = ms
+
                 all_ternary_topology.append(tt_result)
+
+                # v5.8.0: Deterministic local basin probe.
+                if enable_ternary_basin_probe and llr_hist is not None and llr_hist.shape[0] > 0:
+                    final_llr = llr_hist[-1].copy()
+
+                    def _basin_decode_fn(llr_in: np.ndarray) -> np.ndarray:
+                        return decoder_fn(
+                            H, llr_in,
+                            max_iters=max_iters,
+                            bp_mode=bp_mode,
+                            schedule=schedule,
+                        )
+
+                    basin_result = probe_local_ternary_basin(
+                        llr_vector=final_llr,
+                        decode_function=_basin_decode_fn,
+                        perturbation_scale=1e-3,
+                        syndrome_function=lambda c: syndrome(H, c),
+                        syndrome_target=s,
+                    )
+                    all_ternary_basin_probes.append(basin_result)
 
         # FER: syndrome-consistency semantics.
         # A frame error occurs when syndrome(H_original, correction) != s_original.
@@ -956,6 +1001,8 @@ def run_mode(
                 float(final_state_counts.get(-1, 0)) / float(n_tt)
             ),
         }
+    if all_ternary_basin_probes:
+        out["ternary_basin_probe"] = all_ternary_basin_probes
     if comparison_results:
         out["decoder_comparison"] = comparison_results
     return out
@@ -1010,6 +1057,8 @@ def run_evaluation(
     enable_spectral_trapping_sets: bool = False,
     enable_bp_phase_space: bool = False,
     enable_ternary_topology: bool = False,
+    enable_ternary_transition_metrics: bool = False,
+    enable_ternary_basin_probe: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1022,6 +1071,12 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v5.8.0: basin probe implies ternary topology.
+    if enable_ternary_basin_probe:
+        enable_ternary_topology = True
+    # v5.8.0: transition metrics implies ternary topology.
+    if enable_ternary_transition_metrics:
+        enable_ternary_topology = True
     # v5.7.0: ternary topology implies phase-space.
     if enable_ternary_topology:
         enable_bp_phase_space = True
@@ -1121,6 +1176,8 @@ def run_evaluation(
                     enable_bp_boundary_analysis=enable_bp_boundary_analysis,
                     enable_bp_phase_space=enable_bp_phase_space,
                     enable_ternary_topology=enable_ternary_topology,
+                    enable_ternary_transition_metrics=enable_ternary_transition_metrics,
+                    enable_ternary_basin_probe=enable_ternary_basin_probe,
                     decoder_fn=decoder_fn,
                     compare_decoders=compare_decoders,
                     paired_seed=paired_seed,
@@ -1481,6 +1538,10 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP phase-space exploration (v5.7)")
     parser.add_argument("--ternary-topology", action="store_true",
                         help="Enable ternary decoder topology classification (v5.7, implies --bp-phase-space)")
+    parser.add_argument("--ternary-transition-metrics", action="store_true",
+                        help="Add ternary transition metrics to output (v5.8, implies --ternary-topology)")
+    parser.add_argument("--ternary-basin-probe", action="store_true",
+                        help="Perform deterministic local basin probe around final LLR state (v5.8, implies --ternary-topology)")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1582,8 +1643,10 @@ def main() -> None:
         enable_tanner_spectral_analysis=args.tanner_spectral_analysis or args.spectral_boundary_alignment or args.spectral_trapping_sets,
         enable_spectral_boundary_alignment=args.spectral_boundary_alignment,
         enable_spectral_trapping_sets=args.spectral_trapping_sets,
-        enable_bp_phase_space=args.bp_phase_space or args.ternary_topology,
-        enable_ternary_topology=args.ternary_topology,
+        enable_bp_phase_space=args.bp_phase_space or args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe,
+        enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe,
+        enable_ternary_transition_metrics=args.ternary_transition_metrics,
+        enable_ternary_basin_probe=args.ternary_basin_probe,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,

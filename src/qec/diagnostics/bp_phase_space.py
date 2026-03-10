@@ -1,10 +1,14 @@
 """
-v5.7.0 — BP Phase-Space Explorer.
+v5.8.0 — BP Phase-Space Explorer.
 
 Deterministic, observational diagnostic that treats BP decoding as a
 trajectory through an observable phase space.  Records per-iteration
 observable decoder states and projects them into a reduced coordinate
 system for analysis.
+
+v5.8.0 additions:
+    - compute_metastability_score(): mean absolute difference of
+      residual norms over last N iterations, normalized by mean residual.
 
 Does not modify decoder internals.  Treats the decoder as a pure
 function.  All outputs are JSON-serializable.
@@ -123,3 +127,46 @@ def compute_bp_phase_space(
         "final_phase_coordinate": final_phase_coordinate,
         "oscillation_score": oscillation_score,
     }
+
+
+def compute_metastability_score(
+    residual_norms: list[float],
+    tail_length: int = 5,
+) -> float:
+    """Compute metastability score from residual norms.
+
+    The metastability score is the mean absolute difference between
+    consecutive residual norms over the last *tail_length* iterations,
+    normalized by the mean residual over the same window.
+
+    Parameters
+    ----------
+    residual_norms : list[float]
+        Per-iteration residual norms (from ``compute_bp_phase_space``).
+    tail_length : int
+        Number of tail iterations to consider.  If the residual norms
+        list is shorter than *tail_length*, the full list is used.
+
+    Returns
+    -------
+    float
+        Metastability score.  Low → convergence, medium → plateau
+        metastability, high → oscillation.  Returns 0.0 if fewer
+        than 2 residual norms are available.
+    """
+    if len(residual_norms) < 2:
+        return 0.0
+
+    # Restrict to tail window.
+    tail = residual_norms[-tail_length:] if tail_length < len(residual_norms) else list(residual_norms)
+
+    # Mean absolute difference of consecutive values.
+    abs_diffs = [abs(tail[i + 1] - tail[i]) for i in range(len(tail) - 1)]
+    mean_abs_diff = sum(abs_diffs) / float(len(abs_diffs))
+
+    # Normalize by mean residual in the window.
+    mean_residual = sum(abs(r) for r in tail) / float(len(tail))
+    if mean_residual < 1e-15:
+        return 0.0
+
+    return float(mean_abs_diff / mean_residual)

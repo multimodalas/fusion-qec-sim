@@ -6,6 +6,61 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.8.0] — 2026-03-10
+Ternary Basin Analysis & Transition Metrics
+
+Added
+
+Ternary Transition Detection (src/qec/diagnostics/ternary_decoder_topology.py):
+
+Extended compute_ternary_decoder_topology() with transition metrics:
+  boundary_crossings: number of transitions involving state 0
+  regime_switch_count: number of state changes between +1/0/-1
+  first_success_iteration: first index where state == +1
+  first_failure_iteration: first index where state == -1
+
+Metastability Scoring (src/qec/diagnostics/bp_phase_space.py):
+
+compute_metastability_score(): mean absolute difference of residual
+norms over last N iterations, normalized by mean residual.
+Low score → convergence, medium → plateau, high → oscillation.
+
+Local Basin Probe (src/qec/diagnostics/basin_probe.py):
+
+probe_local_ternary_basin(): deterministic local basin probing via
+fixed-direction LLR perturbations. Returns per-direction ternary
+classifications and success/failure/boundary fractions.
+No random perturbations. All directions are deterministic.
+
+Harness integration:
+
+--ternary-transition-metrics CLI flag: adds transition metrics and
+metastability score to ternary topology output.
+--ternary-basin-probe CLI flag: performs deterministic local basin
+probe around final LLR state.
+
+Improved
+
+Ternary topology classifier robustness via transition detection.
+Trajectory diagnostics with boundary-crossing and regime-switch metrics.
+
+Tests
+
+Test suites: tests/test_ternary_transitions.py, tests/test_basin_probe.py.
+Covers transition detection, metastability scoring, basin probe
+determinism, classification reproducibility, JSON serialization,
+input mutation safety, and backward compatibility.
+
+Unchanged
+
+Decoder core logic: untouched.
+Baseline decoding outputs remain byte-identical.
+Schema version: unchanged.
+All existing diagnostics: unchanged.
+v5.7.0 output fields: fully preserved (backward compatible).
+
+---
+
 [5.7.0] — 2026-03-10
 BP Phase-Space Explorer & Ternary Topology Classification
 
