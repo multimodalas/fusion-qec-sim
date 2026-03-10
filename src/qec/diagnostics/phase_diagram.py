@@ -216,6 +216,9 @@ def _aggregate_cell(
             "mean_bethe_min_eigenvalue": None,
             "mean_bp_stability_score": None,
             "mean_jacobian_spectral_radius_est": None,
+            "mean_nb_max_ipr": None,
+            "mean_nb_num_localized_modes": None,
+            "mean_nb_top_localization_score": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -235,6 +238,11 @@ def _aggregate_cell(
     bethe_min_values: list[float | None] = []
     bp_stability_values: list[float | None] = []
     jacobian_est_values: list[float | None] = []
+
+    # v6.1 localization collectors (opt-in, additive).
+    nb_max_ipr_values: list[float | None] = []
+    nb_num_localized_values: list[float | None] = []
+    nb_top_localization_values: list[float | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -263,6 +271,11 @@ def _aggregate_cell(
         bethe_min_values.append(trial.get("bethe_min_eigenvalue"))
         bp_stability_values.append(trial.get("bp_stability_score"))
         jacobian_est_values.append(trial.get("jacobian_spectral_radius_est"))
+
+        # v6.1 localization diagnostics (opt-in, additive).
+        nb_max_ipr_values.append(trial.get("nb_max_ipr"))
+        nb_num_localized_values.append(trial.get("nb_num_localized_modes"))
+        nb_top_localization_values.append(trial.get("nb_top_localization_score"))
 
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
@@ -306,4 +319,7 @@ def _aggregate_cell(
         "mean_bethe_min_eigenvalue": _safe_mean(bethe_min_values),
         "mean_bp_stability_score": _safe_mean(bp_stability_values),
         "mean_jacobian_spectral_radius_est": _safe_mean(jacobian_est_values),
+        "mean_nb_max_ipr": _safe_mean(nb_max_ipr_values),
+        "mean_nb_num_localized_modes": _safe_mean(nb_num_localized_values),
+        "mean_nb_top_localization_score": _safe_mean(nb_top_localization_values),
     }

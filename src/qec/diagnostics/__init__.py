@@ -44,4 +44,5 @@ from .non_backtracking_spectrum import compute_non_backtracking_spectrum
 from .bethe_hessian import compute_bethe_hessian
 from .bp_stability_proxy import estimate_bp_stability
 from .bp_jacobian_estimator import estimate_bp_jacobian_spectral_radius
+from .nb_localization import compute_nb_localization_metrics
 from .phase_heatmap import print_phase_heatmap
