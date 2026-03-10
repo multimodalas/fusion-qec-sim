@@ -222,6 +222,9 @@ def _aggregate_cell(
             "mean_nb_candidate_nodes": None,
             "mean_nb_max_node_participation": None,
             "mean_nb_candidate_clusters": None,
+            "mean_spectral_bp_alignment": None,
+            "mean_candidate_node_overlap_fraction": None,
+            "mean_candidate_cluster_overlap_fraction": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -251,6 +254,11 @@ def _aggregate_cell(
     nb_candidate_nodes_values: list[float | None] = []
     nb_max_participation_values: list[float | None] = []
     nb_candidate_clusters_values: list[float | None] = []
+
+    # v6.3 spectral-BP alignment collectors (opt-in, additive).
+    sbpa_alignment_values: list[float | None] = []
+    sbpa_cand_overlap_values: list[float | None] = []
+    sbpa_cluster_overlap_values: list[float | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -289,6 +297,11 @@ def _aggregate_cell(
         nb_candidate_nodes_values.append(trial.get("nb_num_candidate_nodes"))
         nb_max_participation_values.append(trial.get("nb_max_node_participation"))
         nb_candidate_clusters_values.append(trial.get("nb_num_candidate_clusters"))
+
+        # v6.3 spectral-BP alignment diagnostics (opt-in, additive).
+        sbpa_alignment_values.append(trial.get("spectral_bp_alignment_score"))
+        sbpa_cand_overlap_values.append(trial.get("candidate_node_overlap_fraction"))
+        sbpa_cluster_overlap_values.append(trial.get("max_cluster_alignment"))
 
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
@@ -338,4 +351,7 @@ def _aggregate_cell(
         "mean_nb_candidate_nodes": _safe_mean(nb_candidate_nodes_values),
         "mean_nb_max_node_participation": _safe_mean(nb_max_participation_values),
         "mean_nb_candidate_clusters": _safe_mean(nb_candidate_clusters_values),
+        "mean_spectral_bp_alignment": _safe_mean(sbpa_alignment_values),
+        "mean_candidate_node_overlap_fraction": _safe_mean(sbpa_cand_overlap_values),
+        "mean_candidate_cluster_overlap_fraction": _safe_mean(sbpa_cluster_overlap_values),
     }

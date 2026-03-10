@@ -139,6 +139,9 @@ from src.qec.diagnostics.bp_jacobian_estimator import (
 from src.qec.diagnostics.phase_heatmap import (
     print_phase_heatmap,
 )
+from src.qec.diagnostics.spectral_bp_alignment import (
+    compute_spectral_bp_alignment,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -1084,6 +1087,7 @@ def run_evaluation(
     enable_ternary_topology: bool = False,
     enable_ternary_transition_metrics: bool = False,
     enable_ternary_basin_probe: bool = False,
+    enable_spectral_bp_alignment: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1096,6 +1100,10 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v6.3.0: spectral-BP alignment implies iteration diagnostics.
+    if enable_spectral_bp_alignment:
+        enable_iteration_diagnostics = True
+
     # v5.8.0: basin probe implies ternary topology.
     if enable_ternary_basin_probe:
         enable_ternary_topology = True
@@ -1168,6 +1176,23 @@ def run_evaluation(
             tanner_spectral_modes[distance] = [
                 eigvecs[:n, i].copy() for i in range(top_k)
             ]
+
+    # v6.1/v6.2/v6.3: NB localization and trapping candidates (once per code).
+    nb_localization_results: dict[int, dict[str, Any]] = {}
+    nb_trapping_results: dict[int, dict[str, Any]] = {}
+    if enable_spectral_bp_alignment:
+        from src.qec.diagnostics.nb_localization import (
+            compute_nb_localization_metrics,
+        )
+        from src.qec.diagnostics.nb_trapping_candidates import (
+            compute_nb_trapping_candidates,
+        )
+        for distance in distances:
+            loc = compute_nb_localization_metrics(codes[distance])
+            nb_localization_results[distance] = loc
+            nb_trapping_results[distance] = compute_nb_trapping_candidates(
+                codes[distance], loc,
+            )
 
     # Deterministic loop order: modes → p_values → distances.
     for mode_name in MODE_ORDER:
@@ -1306,6 +1331,61 @@ def run_evaluation(
                             "regime_trace_results": r["bp_regime_trace"],
                         })
         out["bp_phase_diagram"] = compute_bp_phase_diagram(phase_run_results)
+
+    # v6.3.0: Spectral–BP attractor alignment analysis.
+    if enable_spectral_bp_alignment and nb_trapping_results:
+        sbpa_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        for mode_name in MODE_ORDER:
+            sbpa_results[mode_name] = {}
+            for p in p_values:
+                sbpa_results[mode_name][p] = {}
+                for distance in distances:
+                    r = results[mode_name][p][distance]
+                    trapping = nb_trapping_results.get(distance)
+                    iter_diags = r.get("iteration_diagnostics", [])
+                    if trapping is None or not iter_diags:
+                        continue
+                    # Per-trial alignment, then aggregate.
+                    trial_alignments: list[dict[str, Any]] = []
+                    for diag in iter_diags:
+                        boi = diag.get("belief_oscillation_index", {})
+                        boi_vec = boi.get("boi_vector")
+                        if boi_vec is None:
+                            continue
+                        boi_arr = np.asarray(boi_vec, dtype=np.float64)
+                        bp_scores = {
+                            i: float(boi_arr[i]) for i in range(len(boi_arr))
+                        }
+                        ta = compute_spectral_bp_alignment(
+                            trapping, bp_scores,
+                        )
+                        trial_alignments.append(ta)
+                    if trial_alignments:
+                        mean_align = sum(
+                            t["spectral_bp_alignment_score"]
+                            for t in trial_alignments
+                        ) / len(trial_alignments)
+                        mean_cand_overlap = sum(
+                            t["candidate_node_overlap_fraction"]
+                            for t in trial_alignments
+                        ) / len(trial_alignments)
+                        mean_cluster_overlap = sum(
+                            t["max_cluster_alignment"]
+                            for t in trial_alignments
+                        ) / len(trial_alignments)
+                        max_align = max(
+                            t["spectral_bp_alignment_score"]
+                            for t in trial_alignments
+                        )
+                        sbpa_results[mode_name][p][distance] = {
+                            "mean_spectral_bp_alignment": round(mean_align, 12),
+                            "mean_candidate_node_overlap_fraction": round(mean_cand_overlap, 12),
+                            "mean_candidate_cluster_overlap_fraction": round(mean_cluster_overlap, 12),
+                            "max_spectral_bp_alignment": round(max_align, 12),
+                            "num_trials": len(trial_alignments),
+                            "per_trial": trial_alignments,
+                        }
+        out["spectral_bp_alignment"] = sbpa_results
 
     return out
 
@@ -1581,6 +1661,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable non-backtracking localization diagnostics (v6.1)")
     parser.add_argument("--nb-trapping-candidates", action="store_true",
                         help="Enable spectral trapping-set candidate detection (v6.2, implies --nb-localization)")
+    parser.add_argument("--spectral-bp-alignment", action="store_true",
+                        help="Enable spectral-BP attractor alignment diagnostics (v6.3, implies --nb-trapping-candidates --iteration-diagnostics)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -1779,6 +1861,8 @@ def main() -> None:
         print("Non-backtracking localization diagnostics: ENABLED")
     if args.nb_trapping_candidates:
         print("Spectral trapping-set candidate detection: ENABLED")
+    if args.spectral_bp_alignment:
+        print("Spectral-BP attractor alignment diagnostics: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1800,9 +1884,9 @@ def main() -> None:
         trials=args.trials,
         max_iters=args.max_iters,
         bp_mode=args.bp_mode,
-        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
+        enable_energy_trace=args.landscape or args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis or args.spectral_bp_alignment,
         enable_landscape=args.landscape,
-        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis,
+        enable_iteration_diagnostics=args.iteration_diagnostics or args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection or args.bp_fixed_point_analysis or args.bp_basin_analysis or args.bp_landscape_map or args.bp_barrier_analysis or args.spectral_bp_alignment,
         enable_bp_dynamics=args.bp_dynamics or args.bp_transitions or args.bp_phase_diagram or args.bp_freeze_detection,
         enable_bp_transitions=args.bp_transitions or args.bp_phase_diagram,
         enable_bp_phase_diagram=args.bp_phase_diagram,
@@ -1819,6 +1903,7 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
