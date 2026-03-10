@@ -6,6 +6,56 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[5.5.0] — 2026-03-10
+Spectral–Boundary Alignment Diagnostics
+
+Added
+
+Spectral–Boundary Alignment Diagnostic (src/qec/diagnostics/):
+
+spectral_boundary_alignment.py: deterministic spectral-boundary
+alignment module implementing compute_spectral_boundary_alignment().
+
+Measures cosine similarity between Tanner spectral eigenvectors
+(from v5.4 spectral analysis) and BP decision boundary directions
+(from v5.3 boundary analysis).
+
+Fully deterministic observational diagnostic that integrates with
+the existing v5 diagnostic stack.
+
+Output metrics:
+
+alignment_scores
+max_alignment
+mean_alignment
+dominant_alignment_mode
+mode_count
+
+Harness integration:
+
+--spectral-boundary-alignment CLI flag added to bench/dps_v381_eval.py.
+Automatically enables --tanner-spectral-analysis, --bp-boundary-analysis,
+and --bp-barrier-analysis as dependencies.
+
+Per-run experiment logging includes:
+
+alignment_max
+alignment_mean
+dominant_alignment_mode
+mode_count
+p (error rate)
+FER (frame error rate)
+boundary_eps
+barrier_eps
+
+Design Goals
+
+Investigate whether spectral localization predicts decoder fragility.
+Enable correlation studies between spectral modes and FER scaling.
+Connect graph-theoretic structure to dynamical decoding vulnerability.
+
+---
+
 [5.4.0] — 2026-03-08
 Tanner Spectral Fragility Diagnostics
 
