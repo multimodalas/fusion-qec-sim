@@ -219,6 +219,9 @@ def _aggregate_cell(
             "mean_nb_max_ipr": None,
             "mean_nb_num_localized_modes": None,
             "mean_nb_top_localization_score": None,
+            "mean_nb_candidate_nodes": None,
+            "mean_nb_max_node_participation": None,
+            "mean_nb_candidate_clusters": None,
         }
 
     # ── Count ternary states ────────────────────────────────────
@@ -243,6 +246,11 @@ def _aggregate_cell(
     nb_max_ipr_values: list[float | None] = []
     nb_num_localized_values: list[float | None] = []
     nb_top_localization_values: list[float | None] = []
+
+    # v6.2 trapping-set candidate collectors (opt-in, additive).
+    nb_candidate_nodes_values: list[float | None] = []
+    nb_max_participation_values: list[float | None] = []
+    nb_candidate_clusters_values: list[float | None] = []
 
     for trial in trial_results:
         state = trial.get("final_ternary_state", 0)
@@ -276,6 +284,11 @@ def _aggregate_cell(
         nb_max_ipr_values.append(trial.get("nb_max_ipr"))
         nb_num_localized_values.append(trial.get("nb_num_localized_modes"))
         nb_top_localization_values.append(trial.get("nb_top_localization_score"))
+
+        # v6.2 trapping-set candidate diagnostics (opt-in, additive).
+        nb_candidate_nodes_values.append(trial.get("nb_num_candidate_nodes"))
+        nb_max_participation_values.append(trial.get("nb_max_node_participation"))
+        nb_candidate_clusters_values.append(trial.get("nb_num_candidate_clusters"))
 
     # ── Fractions ───────────────────────────────────────────────
     n = float(trial_count)
@@ -322,4 +335,7 @@ def _aggregate_cell(
         "mean_nb_max_ipr": _safe_mean(nb_max_ipr_values),
         "mean_nb_num_localized_modes": _safe_mean(nb_num_localized_values),
         "mean_nb_top_localization_score": _safe_mean(nb_top_localization_values),
+        "mean_nb_candidate_nodes": _safe_mean(nb_candidate_nodes_values),
+        "mean_nb_max_node_participation": _safe_mean(nb_max_participation_values),
+        "mean_nb_candidate_clusters": _safe_mean(nb_candidate_clusters_values),
     }

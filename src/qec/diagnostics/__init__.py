@@ -18,6 +18,7 @@ non-backtracking spectrum diagnostics,
 Bethe Hessian spectral analysis,
 BP stability proxy metrics,
 BP Jacobian spectral radius estimation,
+spectral trapping-set candidate detection,
 and ASCII phase heatmap output
 for BP convergence traces.
 Does not modify decoder internals.
@@ -45,4 +46,5 @@ from .bethe_hessian import compute_bethe_hessian
 from .bp_stability_proxy import estimate_bp_stability
 from .bp_jacobian_estimator import estimate_bp_jacobian_spectral_radius
 from .nb_localization import compute_nb_localization_metrics
+from .nb_trapping_candidates import compute_nb_trapping_candidates
 from .phase_heatmap import print_phase_heatmap
