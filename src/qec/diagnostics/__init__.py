@@ -8,7 +8,8 @@ freeze detection, fixed-point trap analysis, basin-of-attraction
 analysis, attractor landscape mapping, free-energy barrier
 estimation, pseudocodeword boundary estimation,
 Tanner spectral fragility diagnostics,
-and spectral–boundary alignment diagnostics
+spectral–boundary alignment diagnostics,
+and spectral trapping-set diagnostics
 for BP convergence traces.
 Does not modify decoder internals.
 """
@@ -24,3 +25,4 @@ from .bp_barrier_analysis import compute_bp_barrier_analysis
 from .bp_boundary_analysis import compute_bp_boundary_analysis
 from .tanner_spectral_analysis import compute_tanner_spectral_analysis
 from .spectral_boundary_alignment import compute_spectral_boundary_alignment
+from .spectral_trapping_sets import compute_spectral_trapping_sets
