@@ -20,6 +20,7 @@ BP stability proxy metrics,
 BP Jacobian spectral radius estimation,
 spectral trapping-set candidate detection,
 spectral–BP attractor alignment diagnostics,
+spectral failure risk scoring,
 and ASCII phase heatmap output
 for BP convergence traces.
 Does not modify decoder internals.
@@ -49,4 +50,5 @@ from .bp_jacobian_estimator import estimate_bp_jacobian_spectral_radius
 from .nb_localization import compute_nb_localization_metrics
 from .nb_trapping_candidates import compute_nb_trapping_candidates
 from .spectral_bp_alignment import compute_spectral_bp_alignment
+from .spectral_failure_risk import compute_spectral_failure_risk
 from .phase_heatmap import print_phase_heatmap
