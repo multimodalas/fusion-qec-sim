@@ -1132,6 +1132,7 @@ def run_evaluation(
     enable_spectral_cluster_control: bool = False,
     enable_spectral_phase_map: bool = False,
     enable_spectral_graph_repair_loop: bool = False,
+    enable_spectral_multistep_repair: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1144,6 +1145,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v7.3.x: Spectral multistep repair implies repair loop.
+    if enable_spectral_multistep_repair:
+        enable_spectral_graph_repair_loop = True
     # v7.3.0: Spectral graph repair loop implies spectral phase map.
     if enable_spectral_graph_repair_loop:
         enable_spectral_phase_map = True
@@ -2131,6 +2135,9 @@ def run_evaluation(
                             avg_check_degree=round(avg_chk_deg_sgrl, 12),
                             max_candidates=10,
                             max_iters=max_iters,
+                            enable_multistep_repair=enable_spectral_multistep_repair,
+                            max_repair_depth=2 if enable_spectral_multistep_repair else 1,
+                            enable_pruning=True,
                         )
                         trial_repair_results.append(exp_sgrl)
                     if trial_repair_results:
@@ -2439,6 +2446,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral instability phase map (v7.2, implies --bp-stability-predictor)")
     parser.add_argument("--spectral-graph-repair-loop", action="store_true",
                         help="Enable spectral graph repair loop experiment (v7.3, implies --spectral-phase-map)")
+    parser.add_argument("--spectral-multistep-repair", action="store_true",
+                        help="Enable multi-step spectral graph repair with pruning (v7.3.x, implies --spectral-graph-repair-loop)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2659,6 +2668,8 @@ def main() -> None:
         print("Spectral instability phase map: ENABLED")
     if args.spectral_graph_repair_loop:
         print("Spectral graph repair loop: ENABLED")
+    if args.spectral_multistep_repair:
+        print("Spectral multi-step repair: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2699,18 +2710,19 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
         enable_spectral_graph_optimization=args.spectral_graph_optimization,
-        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop,
+        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
         enable_bp_prediction_validation=args.bp_prediction_validation,
         enable_spectral_decoder_controller=args.spectral_decoder_controller or args.spectral_cluster_control,
         enable_spectral_cluster_control=args.spectral_cluster_control,
-        enable_spectral_phase_map=args.spectral_phase_map or args.spectral_graph_repair_loop,
-        enable_spectral_graph_repair_loop=args.spectral_graph_repair_loop,
+        enable_spectral_phase_map=args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
+        enable_spectral_graph_repair_loop=args.spectral_graph_repair_loop or args.spectral_multistep_repair,
+        enable_spectral_multistep_repair=args.spectral_multistep_repair,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
