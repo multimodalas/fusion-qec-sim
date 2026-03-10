@@ -84,26 +84,25 @@ def compute_spectral_trapping_sets(
         importance = np.abs(v_var)
 
         # Step 4: Deterministic threshold.
-        mean_imp = float(np.mean(importance))
-        std_imp = float(np.std(importance))
-        threshold = mean_imp + std_imp
+        mean_imp = importance.mean()
+        std_imp = importance.std()
+        threshold = float(mean_imp) + float(std_imp)
 
-        # Identify localized nodes (deterministic boolean mask).
-        above = importance > threshold
-        cluster_nodes = [int(i) for i in np.where(above)[0]]
-        cluster_size = len(cluster_nodes)
+        # Identify localized nodes (vectorized).
+        indices = np.flatnonzero(importance > threshold)
+        cluster_size = indices.size
 
         if cluster_size == 0:
             continue
 
         # Step 5–6: Record cluster metadata.
-        cluster_importance = importance[above]
+        cluster_importance = importance[indices]
         clusters.append({
             "mode_index": mode_idx,
             "cluster_size": cluster_size,
-            "nodes": cluster_nodes,
-            "max_importance": float(np.max(cluster_importance)),
-            "mean_importance": float(np.mean(cluster_importance)),
+            "nodes": indices.astype(int).tolist(),
+            "max_importance": float(cluster_importance.max()),
+            "mean_importance": float(cluster_importance.mean()),
         })
 
     # Aggregate metrics.

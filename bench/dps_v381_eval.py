@@ -999,9 +999,10 @@ def run_evaluation(
                 codes[distance],
             )
 
-    # v5.5.0: Extract spectral eigenvectors for alignment analysis.
+    # v5.5.0 / v5.6.0: Extract spectral eigenvectors (shared, once per code).
+    tanner_eigenvectors: dict[int, np.ndarray] = {}
     tanner_spectral_modes: dict[int, list[np.ndarray]] = {}
-    if enable_spectral_boundary_alignment:
+    if enable_spectral_boundary_alignment or enable_spectral_trapping_sets:
         for distance in distances:
             H = codes[distance]
             m, n = H.shape
@@ -1011,6 +1012,7 @@ def run_evaluation(
             eigvals, eigvecs = np.linalg.eigh(A)
             sort_idx = np.argsort(-eigvals)
             eigvecs = eigvecs[:, sort_idx]
+            tanner_eigenvectors[distance] = eigvecs
             top_k = min(3, eigvecs.shape[1])
             tanner_spectral_modes[distance] = [
                 eigvecs[:n, i].copy() for i in range(top_k)
@@ -1078,24 +1080,12 @@ def run_evaluation(
         }
 
     # v5.6.0: Spectral trapping-set analysis (once per code instance).
-    if enable_spectral_trapping_sets and tanner_spectral_results:
+    if enable_spectral_trapping_sets and tanner_eigenvectors:
         trapping_set_results: dict[int, dict[str, Any]] = {}
-        for distance in sorted(tanner_spectral_results.keys()):
+        for distance in sorted(tanner_eigenvectors.keys()):
             H = codes[distance]
-            m, n = H.shape
-            # Extract eigenvectors from the Tanner adjacency matrix.
-            top_block = np.concatenate(
-                [np.zeros((n, n), dtype=np.float64), H.T.astype(np.float64)],
-                axis=1,
-            )
-            bottom_block = np.concatenate(
-                [H.astype(np.float64), np.zeros((m, m), dtype=np.float64)],
-                axis=1,
-            )
-            A = np.concatenate([top_block, bottom_block], axis=0)
-            eigvals, eigvecs = np.linalg.eigh(A)
-            sort_idx = np.argsort(-eigvals)
-            eigvecs = eigvecs[:, sort_idx]
+            n = H.shape[1]
+            eigvecs = tanner_eigenvectors[distance]
             top_k = min(3, eigvecs.shape[1])
             modes_for_trapping = [eigvecs[:, i].copy() for i in range(top_k)]
             ts = compute_spectral_trapping_sets(modes_for_trapping, n)
