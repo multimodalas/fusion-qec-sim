@@ -22,6 +22,7 @@ spectral trapping-set candidate detection,
 spectral–BP attractor alignment diagnostics,
 spectral failure risk scoring,
 BP stability prediction,
+instability sensitivity maps,
 and ASCII phase heatmap output
 for BP convergence traces.
 Does not modify decoder internals.
@@ -54,3 +55,8 @@ from .spectral_bp_alignment import compute_spectral_bp_alignment
 from .spectral_failure_risk import compute_spectral_failure_risk
 from .phase_heatmap import print_phase_heatmap
 from .bp_stability_predictor import compute_bp_stability_prediction
+from .sensitivity_map import (
+    compute_proxy_sensitivity_scores,
+    compute_measured_instability_deltas,
+    compute_sensitivity_map,
+)

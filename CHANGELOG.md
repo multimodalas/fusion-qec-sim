@@ -12,6 +12,77 @@ All notable changes to this project are documented in this file.
 
 This project follows Semantic Versioning (SemVer).
 
+[7.6.0] — 2026-03-10
+
+Deterministic Instability Sensitivity Maps & Optional Sensitivity-Based Preconditioner
+
+Added
+
+Per-Edge Proxy Spectral Sensitivity Scoring
+
+`src/qec/diagnostics/sensitivity_map.py`
+
+Computes a fast proxy sensitivity score for each Tanner graph edge based on the
+dominant non-backtracking eigenvector: sensitivity(e) ~ |v_i|^2 * |v_j|^2.
+Approximates the contribution of each edge to the NB spectral radius without
+expensive per-edge recomputation.
+
+Per-Edge Measured Instability Delta
+
+`src/qec/diagnostics/sensitivity_map.py`
+
+For each edge, temporarily removes it, recomputes the composite instability
+score, and records the signed delta relative to baseline. Provides exact
+ground-truth sensitivity at O(edges) cost.
+
+Combined Sensitivity Map Artifact
+
+`src/qec/diagnostics/sensitivity_map.py`
+
+Produces a canonical JSON-serializable artifact combining proxy sensitivity
+scores, measured instability deltas, top-sensitive edge annotations, and
+aggregate summary statistics.
+
+Sensitivity-Based Preconditioned Graph Optimizer
+
+`src/qec/experiments/sensitivity_preconditioner.py`
+
+Optional preconditioner for graph optimization that uses proxy sensitivity
+scores to weight edge-swap candidate generation. High-sensitivity edges are
+preferentially targeted for swaps. Falls back to v7.5 gradient-based
+candidates when disabled (default baseline preserved).
+
+Comparative Experiment Harness
+
+`src/qec/experiments/sensitivity_preconditioner.py`
+
+`run_sensitivity_preconditioner_experiment()` runs baseline vs
+sensitivity-preconditioned optimization and produces a comparative report
+with delta metrics.
+
+Deterministic Test Suite
+
+`tests/test_sensitivity_map.py` — 24 tests covering determinism, proxy
+sensitivity correctness, measured delta consistency, JSON artifact stability,
+canonical ordering, layer safety, and edge cases.
+
+`tests/test_sensitivity_preconditioner.py` — 24 tests covering determinism,
+baseline preservation, improvement monotonicity, candidate generation validity,
+degree preservation, experiment report completeness, JSON stability, layer
+safety, and edge cases.
+
+Architecture
+
+- Layer 3 (Diagnostics): `sensitivity_map.py` — observational only, no decoder
+  modification, no experiment imports, deterministic, side-effect free.
+- Layer 5 (Experiments): `sensitivity_preconditioner.py` — consumes diagnostics
+  and v7.5 optimizer, opt-in, additive, baseline-preserving.
+- All outputs rounded to 12 decimal places.
+- Canonical ordering with deterministic tie-breaking throughout.
+- No new dependencies introduced.
+
+---
+
 [7.0.0] — 2026-03-11
 
 Spectral-Guided Decoder Control Framework
