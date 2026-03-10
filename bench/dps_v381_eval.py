@@ -1092,6 +1092,8 @@ def run_evaluation(
     enable_ternary_basin_probe: bool = False,
     enable_spectral_bp_alignment: bool = False,
     enable_spectral_failure_risk: bool = False,
+    enable_risk_aware_damping_experiment: bool = False,
+    enable_risk_guided_perturbation_experiment: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1104,6 +1106,12 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v6.5.0: experiments imply spectral failure risk.
+    if enable_risk_aware_damping_experiment:
+        enable_spectral_failure_risk = True
+    if enable_risk_guided_perturbation_experiment:
+        enable_spectral_failure_risk = True
+
     # v6.4.0: spectral failure risk implies spectral-BP alignment.
     if enable_spectral_failure_risk:
         enable_spectral_bp_alignment = True
@@ -1440,6 +1448,116 @@ def run_evaluation(
                         }
         out["spectral_failure_risk"] = sfr_results
 
+    # v6.5.0: Risk-aware damping experiment.
+    if enable_risk_aware_damping_experiment and "spectral_failure_risk" in out:
+        from src.qec.experiments.risk_aware_damping import (
+            run_risk_aware_damping_experiment,
+        )
+        rad_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        sfr_data = out["spectral_failure_risk"]
+        for mode_name in MODE_ORDER:
+            rad_results[mode_name] = {}
+            sfr_mode = sfr_data.get(mode_name, {})
+            for p in p_values:
+                rad_results[mode_name][p] = {}
+                sfr_p = sfr_mode.get(p, {})
+                for distance in distances:
+                    sfr_cell = sfr_p.get(distance)
+                    if sfr_cell is None:
+                        continue
+                    per_trial_risks = sfr_cell.get("per_trial", [])
+                    if not per_trial_risks:
+                        continue
+                    H = codes[distance]
+                    instances = all_instances[(distance, p)]
+                    trial_experiments: list[dict[str, Any]] = []
+                    for t_idx, (inst, risk_t) in enumerate(
+                        zip(instances, per_trial_risks),
+                    ):
+                        exp = run_risk_aware_damping_experiment(
+                            H,
+                            inst["llr"],
+                            inst["s"],
+                            risk_t,
+                            max_iters=max_iters,
+                        )
+                        trial_experiments.append(exp)
+                    if trial_experiments:
+                        n_exp = len(trial_experiments)
+                        mean_delta_iters = sum(
+                            t["delta_iterations"] for t in trial_experiments
+                        ) / n_exp
+                        mean_delta_success = sum(
+                            t["delta_success"] for t in trial_experiments
+                        ) / n_exp
+                        rad_results[mode_name][p][distance] = {
+                            "mean_delta_iterations": round(mean_delta_iters, 12),
+                            "mean_delta_success": round(mean_delta_success, 12),
+                            "num_trials": n_exp,
+                            "per_trial": trial_experiments,
+                        }
+        out["risk_aware_damping_experiment"] = rad_results
+
+    # v6.5.0: Risk-guided perturbation experiment.
+    if enable_risk_guided_perturbation_experiment and "spectral_failure_risk" in out:
+        from src.qec.experiments.risk_guided_perturbation import (
+            run_risk_guided_perturbation,
+        )
+        rgp_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        sfr_data = out["spectral_failure_risk"]
+        for mode_name in MODE_ORDER:
+            rgp_results[mode_name] = {}
+            sfr_mode = sfr_data.get(mode_name, {})
+            for p in p_values:
+                rgp_results[mode_name][p] = {}
+                sfr_p = sfr_mode.get(p, {})
+                for distance in distances:
+                    sfr_cell = sfr_p.get(distance)
+                    if sfr_cell is None:
+                        continue
+                    per_trial_risks = sfr_cell.get("per_trial", [])
+                    if not per_trial_risks:
+                        continue
+                    H = codes[distance]
+                    instances = all_instances[(distance, p)]
+                    trial_experiments: list[dict[str, Any]] = []
+                    for t_idx, (inst, risk_t) in enumerate(
+                        zip(instances, per_trial_risks),
+                    ):
+                        exp = run_risk_guided_perturbation(
+                            H,
+                            inst["llr"],
+                            inst["s"],
+                            risk_t,
+                            max_iters=max_iters,
+                        )
+                        trial_experiments.append(exp)
+                    if trial_experiments:
+                        n_exp = len(trial_experiments)
+                        mean_delta_iters = sum(
+                            t["delta_iterations"] for t in trial_experiments
+                        ) / n_exp
+                        mean_delta_success = sum(
+                            t["delta_success"] for t in trial_experiments
+                        ) / n_exp
+                        n_stalls = sum(
+                            1 for t in trial_experiments
+                            if t["stall_detected"]
+                        )
+                        n_perturbed = sum(
+                            1 for t in trial_experiments
+                            if t["perturbation_applied"]
+                        )
+                        rgp_results[mode_name][p][distance] = {
+                            "mean_delta_iterations": round(mean_delta_iters, 12),
+                            "mean_delta_success": round(mean_delta_success, 12),
+                            "num_stalls_detected": n_stalls,
+                            "num_perturbations_applied": n_perturbed,
+                            "num_trials": n_exp,
+                            "per_trial": trial_experiments,
+                        }
+        out["risk_guided_perturbation_experiment"] = rgp_results
+
     return out
 
 
@@ -1718,6 +1836,10 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral-BP attractor alignment diagnostics (v6.3, implies --nb-trapping-candidates --iteration-diagnostics)")
     parser.add_argument("--spectral-failure-risk", action="store_true",
                         help="Enable spectral failure risk scoring (v6.4, implies --spectral-bp-alignment)")
+    parser.add_argument("--risk-aware-damping-experiment", action="store_true",
+                        help="Enable risk-aware damping experiment (v6.5, implies --spectral-failure-risk)")
+    parser.add_argument("--risk-guided-perturbation-experiment", action="store_true",
+                        help="Enable risk-guided perturbation experiment (v6.5, implies --spectral-failure-risk)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -1920,6 +2042,10 @@ def main() -> None:
         print("Spectral-BP attractor alignment diagnostics: ENABLED")
     if args.spectral_failure_risk:
         print("Spectral failure risk scoring: ENABLED")
+    if args.risk_aware_damping_experiment:
+        print("Risk-aware damping experiment: ENABLED")
+    if args.risk_guided_perturbation_experiment:
+        print("Risk-guided perturbation experiment: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1960,8 +2086,10 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk,
-        enable_spectral_failure_risk=args.spectral_failure_risk,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment,
+        enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
+        enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,

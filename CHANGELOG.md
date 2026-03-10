@@ -6,6 +6,95 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.5.0] — 2026-03-10
+Risk-Aware Decoder Experiments
+
+Added
+
+Experiment Infrastructure (src/qec/experiments/):
+
+New experiment module package for decoder behaviour experiments that use
+spectral structural signals (v6.0–v6.4) to guide decoder behaviour.
+Experiments run two deterministic decodes (baseline and experimental)
+and return comparison metrics.  All experiments are opt-in, additive,
+and do not modify the existing BP decoder.
+
+Experiment 1 — Risk-Aware Damping (src/qec/experiments/risk_aware_damping.py):
+
+run_risk_aware_damping_experiment(): tests whether per-node damping guided
+by structural risk signals can improve BP convergence.
+
+Algorithm:
+  1. Identifies high-risk nodes: nodes with risk >= 0.5 * max(node_risk_scores).
+  2. Runs baseline decode with uniform scalar damping.
+  3. Runs experimental decode with elevated damping (base * 1.5) for high-risk
+     nodes using a self-contained experimental flooding BP implementation.
+  4. Compares iterations to convergence, decoder success, and residual norms.
+
+Output fields: high_risk_nodes, base_damping, risk_damping, baseline_metrics,
+experiment_metrics, delta_iterations, delta_success, node_risk_scores,
+cluster_risk_scores, top_risk_clusters.
+
+Experiment 2 — Risk-Guided Perturbation (src/qec/experiments/risk_guided_perturbation.py):
+
+run_risk_guided_perturbation(): tests whether deterministic perturbation
+of high-risk node LLRs can help BP escape stall conditions.
+
+Algorithm:
+  1. Detects stall: residual norm change < epsilon for N consecutive iterations.
+  2. On stall, applies deterministic perturbation to high-risk nodes:
+     llr[node] += perturbation_strength * sign(llr[node])
+     where perturbation_strength defaults to 0.1 * mean(|llr|).
+  3. Continues decoding after perturbation.
+
+Output fields: high_risk_nodes, baseline_metrics, experiment_metrics,
+stall_detected, perturbation_applied, delta_iterations, delta_success,
+node_risk_scores, cluster_risk_scores, top_risk_clusters.
+
+CLI Flags (bench/dps_v381_eval.py):
+
+--risk-aware-damping-experiment: enable risk-aware damping experiment
+(implies --spectral-failure-risk).
+
+--risk-guided-perturbation-experiment: enable risk-guided perturbation
+experiment (implies --spectral-failure-risk).
+
+Evaluation Harness Integration:
+
+Per-trial experiment execution after v6.4 risk scoring.  Aggregates
+mean_delta_iterations and mean_delta_success across trials per
+(mode, p, distance) cell.  Perturbation experiment also tracks
+num_stalls_detected and num_perturbations_applied.
+
+Scientific Framing
+
+These experiments explore whether spectral structural signals (v6.0–v6.4)
+can guide decoder behaviour.  They do not claim guaranteed improvement.
+Experimental decodes use self-contained research BP implementations that
+do not modify the existing decoder.  Results are designed for analysis
+and comparison, not production use.
+
+Structural outputs (node_risk_scores, cluster_risk_scores, top_risk_clusters)
+are passed through for downstream reuse by future experiments including
+Tanner graph rewrite experiments (planned for v6.6).
+
+Constraints
+
+Decoder untouched: no changes to BP message passing, scheduling,
+or convergence logic.  Experimental decodes use separate, self-contained
+BP implementations for research comparison.
+
+Determinism preserved: no randomness, no global state, all outputs
+are deterministic pure functions of inputs.
+
+Schema unchanged: no schema version bump.
+
+Dependencies unchanged: stdlib + NumPy only.
+
+Additive only: all new modules and CLI flags are opt-in.
+
+---
+
 [6.4.0] — 2026-03-10
 Spectral Failure Risk Scoring
 
