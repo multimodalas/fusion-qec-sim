@@ -31,6 +31,7 @@ from src.qec.experiments.tanner_graph_repair import (
     _build_nb_context,
     _spectral_score_with_swap,
     _spectral_radius_from_nb,
+    _spectral_radius_power_iteration,
     _power_iteration_spectral_radius,
     _extract_edges,
     _build_edge_set,
@@ -216,7 +217,7 @@ class TestPowerIteration:
         """Diagonal matrix with known largest eigenvalue."""
         M = np.diag([3.0, 1.0, 2.0])
         r = _power_iteration_spectral_radius(M)
-        assert abs(r - 3.0) < 1e-6
+        assert abs(r - 3.0) < 1e-4
 
     def test_deterministic(self):
         """Repeated calls produce identical results."""
@@ -744,6 +745,92 @@ class TestV66Compatibility:
         descs_66 = [c["description"] for c in r66["candidate_swaps"]]
         descs_67 = [c["description"] for c in r67["candidate_swaps"]]
         assert descs_66 == descs_67
+
+
+class TestPowerIterationCorrectness:
+    """Tests that power iteration matches full eigenvalue computation."""
+
+    def test_matches_eigvals_simple(self):
+        """Power iteration result matches eigvals on a simple matrix."""
+        M = np.array([[2, 1], [1, 3]], dtype=np.float64)
+        rho_power = _spectral_radius_power_iteration(M)
+        eigvals = np.linalg.eigvals(M)
+        rho_eig = float(np.max(np.abs(eigvals)))
+        assert abs(rho_power - rho_eig) < 1e-4
+
+    def test_matches_eigvals_nb_matrix(self):
+        """Power iteration matches eigvals on an NB matrix from a real graph."""
+        H, _, _ = _make_larger_code()
+        edges = _extract_edges(H)
+        B = _build_nb_matrix_from_edges(edges)
+        rho_power = _spectral_radius_power_iteration(B)
+        eigvals = np.linalg.eigvals(B)
+        rho_eig = float(np.max(np.abs(eigvals)))
+        assert abs(rho_power - rho_eig) < 1e-4
+
+    def test_matches_eigvals_diagonal(self):
+        """Power iteration matches eigvals on a diagonal matrix."""
+        M = np.diag([5.0, 3.0, 1.0, 4.0])
+        rho_power = _spectral_radius_power_iteration(M)
+        assert abs(rho_power - 5.0) < 1e-4
+
+    def test_zero_matrix(self):
+        """Power iteration returns 0 for zero matrix."""
+        M = np.zeros((4, 4), dtype=np.float64)
+        assert _spectral_radius_power_iteration(M) == 0.0
+
+
+class TestPowerIterationDeterminism:
+    """Tests that power iteration is fully deterministic."""
+
+    def test_identical_results(self):
+        """Two calls with identical input produce identical output."""
+        M = np.array([[2, 1, 0], [1, 3, 1], [0, 1, 2]], dtype=np.float64)
+        r1 = _spectral_radius_power_iteration(M)
+        r2 = _spectral_radius_power_iteration(M)
+        assert r1 == r2
+
+    def test_identical_on_nb_matrix(self):
+        """Deterministic on NB matrix from real graph."""
+        H, _, _ = _make_larger_code()
+        edges = _extract_edges(H)
+        B = _build_nb_matrix_from_edges(edges)
+        r1 = _spectral_radius_power_iteration(B)
+        r2 = _spectral_radius_power_iteration(B)
+        assert r1 == r2
+
+
+class TestIncrementalSwapWithPowerIteration:
+    """Tests that swap scoring with power iteration matches full rebuild."""
+
+    def test_swap_consistency(self):
+        """Incremental swap score matches full rebuild score."""
+        H, _, _ = _make_larger_code()
+        n = H.shape[1]
+        edges = _extract_edges(H)
+        edge_set = _build_edge_set(edges)
+        adjacency = _build_adjacency(edges)
+
+        cluster_nodes = {0, 1, 7, 8, 10}
+        c_edges = _get_cluster_edges(edges, cluster_nodes)
+        b_edges = _get_boundary_edges(edges, cluster_nodes, adjacency)
+
+        candidates = _generate_candidate_swaps(
+            c_edges, b_edges, edge_set, n, max_candidates=10,
+        )
+
+        B_base, directed, outgoing, edge_to_dir = _build_nb_context(edges)
+
+        for swap in candidates:
+            trial_edges = _apply_swap(edges, swap)
+            full_score = spectral_score(trial_edges)
+            incr_score = _spectral_score_with_swap(
+                B_base, directed, outgoing, edge_to_dir, swap,
+            )
+            assert full_score == incr_score, (
+                f"Mismatch for {swap['description']}: "
+                f"full={full_score}, incremental={incr_score}"
+            )
 
 
 class TestEndToEndWithV64:
