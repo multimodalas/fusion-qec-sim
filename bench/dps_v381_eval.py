@@ -2182,6 +2182,8 @@ def main() -> None:
         print("Risk-aware damping experiment: ENABLED")
     if args.risk_guided_perturbation_experiment:
         print("Risk-guided perturbation experiment: ENABLED")
+    if args.spectral_graph_optimization:
+        print("Spectral graph optimization: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
