@@ -32,6 +32,7 @@ _W3_CLUSTER_RISK = 0.25
 _W4_INSTABILITY_RATIO = 0.15
 
 _DEFAULT_INSTABILITY_THRESHOLD = 0.5
+_ROC_DECIMAL_PLACES = 12
 
 
 # ── Core Feature 1: Phase Map Predictor ───────────────────────────────
@@ -107,6 +108,134 @@ def compute_spectral_instability_score(
     score = max(0.0, min(1.0, score))
 
     return round(score, 12)
+
+
+# ── Feature 1a: ROC Curve Calculation ────────────────────────────────
+
+def compute_roc_curve(
+    instability_scores: list[float],
+    observed_failures: list[bool],
+) -> dict[str, list[float]]:
+    """Compute a deterministic ROC curve from instability scores and outcomes.
+
+    Parameters
+    ----------
+    instability_scores : list[float]
+        Per-trial spectral instability scores in [0, 1].
+    observed_failures : list[bool]
+        Per-trial observed decoder failure flags.
+
+    Returns
+    -------
+    dict[str, list[float]]
+        JSON-serializable dictionary with keys:
+
+        - ``roc_thresholds`` : list[float] — sorted ascending
+        - ``roc_tpr`` : list[float] — true positive rate at each threshold
+        - ``roc_fpr`` : list[float] — false positive rate at each threshold
+
+        All floats rounded to 12 decimal places.
+    """
+    n = len(instability_scores)
+    if n == 0 or len(observed_failures) != n:
+        return {
+            "roc_thresholds": [],
+            "roc_tpr": [],
+            "roc_fpr": [],
+        }
+
+    total_positives = sum(1 for f in observed_failures if f)
+    total_negatives = n - total_positives
+
+    # Edge case: all same class — return trivial ROC.
+    if total_positives == 0 or total_negatives == 0:
+        return {
+            "roc_thresholds": [0.0, 1.0],
+            "roc_tpr": [1.0, 0.0] if total_positives > 0 else [0.0, 0.0],
+            "roc_fpr": [1.0, 0.0] if total_negatives > 0 else [0.0, 0.0],
+        }
+
+    # Sorted unique thresholds (ascending).
+    thresholds_set: set[float] = set()
+    for s in instability_scores:
+        thresholds_set.add(round(s, _ROC_DECIMAL_PLACES))
+    thresholds = sorted(thresholds_set)
+
+    roc_thresholds: list[float] = []
+    roc_tpr: list[float] = []
+    roc_fpr: list[float] = []
+
+    # At threshold below min score, everything is predicted positive.
+    # Walk thresholds ascending: at each threshold t, predict positive if score > t.
+    # Include boundary points for (FPR=1,TPR=1) and (FPR=0,TPR=0).
+
+    # Start point: threshold = 0 (below all scores → predict all positive).
+    roc_thresholds.append(0.0)
+    roc_tpr.append(round(1.0, _ROC_DECIMAL_PLACES))
+    roc_fpr.append(round(1.0, _ROC_DECIMAL_PLACES))
+
+    for t in thresholds:
+        tp = 0
+        fp = 0
+        for i in range(n):
+            if instability_scores[i] > t:
+                if observed_failures[i]:
+                    tp += 1
+                else:
+                    fp += 1
+        tpr = round(tp / total_positives, _ROC_DECIMAL_PLACES)
+        fpr = round(fp / total_negatives, _ROC_DECIMAL_PLACES)
+        roc_thresholds.append(round(t, _ROC_DECIMAL_PLACES))
+        roc_tpr.append(tpr)
+        roc_fpr.append(fpr)
+
+    # End point: threshold = 1.0 (above all scores → predict none positive).
+    if roc_thresholds[-1] < 1.0:
+        roc_thresholds.append(1.0)
+        roc_tpr.append(0.0)
+        roc_fpr.append(0.0)
+
+    return {
+        "roc_thresholds": roc_thresholds,
+        "roc_tpr": roc_tpr,
+        "roc_fpr": roc_fpr,
+    }
+
+
+# ── Feature 1b: AUC Metric ──────────────────────────────────────────
+
+def compute_auc(
+    roc_fpr: list[float],
+    roc_tpr: list[float],
+) -> float:
+    """Compute AUC via deterministic trapezoidal integration.
+
+    Parameters
+    ----------
+    roc_fpr : list[float]
+        False positive rates from :func:`compute_roc_curve`.
+    roc_tpr : list[float]
+        True positive rates from :func:`compute_roc_curve`.
+
+    Returns
+    -------
+    float
+        AUC clamped to [0, 1], rounded to 12 decimal places.
+    """
+    n = len(roc_fpr)
+    if n < 2 or len(roc_tpr) != n:
+        return 0.0
+
+    area = 0.0
+    for i in range(n - 1):
+        dx = roc_fpr[i + 1] - roc_fpr[i]
+        dy = (roc_tpr[i + 1] + roc_tpr[i]) / 2.0
+        area += dx * dy
+
+    # AUC computed with FPR descending gives negative area; take absolute.
+    area = abs(area)
+    area = max(0.0, min(1.0, area))
+    return round(area, _ROC_DECIMAL_PLACES)
 
 
 # ── Core Feature 2: Phase Map Experiment ──────────────────────────────
@@ -185,6 +314,10 @@ def compute_phase_map_aggregate_metrics(
         - ``false_positive_rate`` : float
         - ``false_negative_rate`` : float
         - ``confusion_matrix`` : dict with TP, FP, TN, FN counts
+        - ``roc_auc`` : float — area under the ROC curve
+        - ``roc_curve_fpr`` : list[float] — ROC false positive rates
+        - ``roc_curve_tpr`` : list[float] — ROC true positive rates
+        - ``roc_curve_thresholds`` : list[float] — ROC thresholds
         - ``num_trials`` : int
 
         All floats rounded to 12 decimal places.
@@ -204,6 +337,10 @@ def compute_phase_map_aggregate_metrics(
                 "true_negatives": 0,
                 "false_negatives": 0,
             },
+            "roc_auc": 0.0,
+            "roc_curve_fpr": [],
+            "roc_curve_tpr": [],
+            "roc_curve_thresholds": [],
             "num_trials": 0,
         }
 
@@ -241,6 +378,12 @@ def compute_phase_map_aggregate_metrics(
     fpr = round(fp / (fp + tn), 12) if (fp + tn) > 0 else 0.0
     fnr = round(fn / (fn + tp), 12) if (fn + tp) > 0 else 0.0
 
+    # ROC curve and AUC from continuous instability scores.
+    scores = [trial["spectral_instability_score"] for trial in trial_results]
+    failures = [trial["observed_failure"] for trial in trial_results]
+    roc = compute_roc_curve(scores, failures)
+    roc_auc_value = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+
     return {
         "mean_spectral_instability_score": mean_score,
         "predicted_failure_fraction": predicted_fraction,
@@ -254,5 +397,9 @@ def compute_phase_map_aggregate_metrics(
             "true_negatives": tn,
             "false_negatives": fn,
         },
+        "roc_auc": roc_auc_value,
+        "roc_curve_fpr": roc["roc_fpr"],
+        "roc_curve_tpr": roc["roc_tpr"],
+        "roc_curve_thresholds": roc["roc_thresholds"],
         "num_trials": n,
     }

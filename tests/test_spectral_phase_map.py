@@ -27,6 +27,8 @@ from src.qec.experiments.spectral_instability_phase_map import (
     compute_spectral_instability_score,
     run_spectral_phase_map_experiment,
     compute_phase_map_aggregate_metrics,
+    compute_roc_curve,
+    compute_auc,
 )
 
 
@@ -263,6 +265,10 @@ class TestAggregateMetrics:
             "false_positive_rate",
             "false_negative_rate",
             "confusion_matrix",
+            "roc_auc",
+            "roc_curve_fpr",
+            "roc_curve_tpr",
+            "roc_curve_thresholds",
             "num_trials",
         }
         assert set(result.keys()) == expected_keys
@@ -345,6 +351,200 @@ class TestAggregateMetrics:
         result = compute_phase_map_aggregate_metrics(trials)
         assert abs(result["predicted_failure_fraction"] - 2.0 / 3.0) < 1e-10
         assert abs(result["observed_failure_fraction"] - 1.0 / 3.0) < 1e-10
+
+
+# ── ROC Curve & AUC ──────────────────────────────────────────────────
+
+
+class TestRocCurve:
+    """Tests for compute_roc_curve."""
+
+    def test_empty_inputs(self):
+        """Empty inputs produce empty ROC."""
+        roc = compute_roc_curve([], [])
+        assert roc["roc_thresholds"] == []
+        assert roc["roc_tpr"] == []
+        assert roc["roc_fpr"] == []
+
+    def test_mismatched_lengths(self):
+        """Mismatched input lengths produce empty ROC."""
+        roc = compute_roc_curve([0.5, 0.6], [True])
+        assert roc["roc_thresholds"] == []
+
+    def test_thresholds_sorted_ascending(self):
+        """ROC thresholds are sorted ascending."""
+        scores = [0.9, 0.1, 0.5, 0.3, 0.7]
+        failures = [True, False, True, False, True]
+        roc = compute_roc_curve(scores, failures)
+        for i in range(len(roc["roc_thresholds"]) - 1):
+            assert roc["roc_thresholds"][i] <= roc["roc_thresholds"][i + 1]
+
+    def test_fpr_non_decreasing_reversed(self):
+        """ROC FPR is non-decreasing when traversed from (0,0) to (1,1).
+
+        Since thresholds are ascending, FPR decreases along the list.
+        Reversing the FPR list should give non-decreasing order.
+        """
+        scores = [0.9, 0.1, 0.5, 0.3, 0.7]
+        failures = [True, False, True, False, True]
+        roc = compute_roc_curve(scores, failures)
+        fpr_reversed = list(reversed(roc["roc_fpr"]))
+        for i in range(len(fpr_reversed) - 1):
+            assert fpr_reversed[i] <= fpr_reversed[i + 1]
+
+    def test_tpr_non_decreasing_reversed(self):
+        """ROC TPR is non-decreasing when traversed from (0,0) to (1,1)."""
+        scores = [0.9, 0.1, 0.5, 0.3, 0.7]
+        failures = [True, False, True, False, True]
+        roc = compute_roc_curve(scores, failures)
+        tpr_reversed = list(reversed(roc["roc_tpr"]))
+        for i in range(len(tpr_reversed) - 1):
+            assert tpr_reversed[i] <= tpr_reversed[i + 1]
+
+    def test_equal_length_outputs(self):
+        """All ROC output lists have equal length."""
+        scores = [0.2, 0.8, 0.5]
+        failures = [False, True, False]
+        roc = compute_roc_curve(scores, failures)
+        assert len(roc["roc_thresholds"]) == len(roc["roc_tpr"])
+        assert len(roc["roc_thresholds"]) == len(roc["roc_fpr"])
+
+    def test_rounding_precision(self):
+        """All ROC values are rounded to 12 decimal places."""
+        scores = [1.0 / 3.0, 2.0 / 3.0]
+        failures = [True, False]
+        roc = compute_roc_curve(scores, failures)
+        for val in roc["roc_tpr"] + roc["roc_fpr"] + roc["roc_thresholds"]:
+            assert val == round(val, 12)
+
+
+class TestAuc:
+    """Tests for compute_auc."""
+
+    def test_empty_inputs(self):
+        """Empty inputs return 0.0."""
+        assert compute_auc([], []) == 0.0
+
+    def test_auc_bounds(self):
+        """AUC is clamped to [0, 1]."""
+        scores = [0.9, 0.1, 0.5, 0.3, 0.7]
+        failures = [True, False, True, False, True]
+        roc = compute_roc_curve(scores, failures)
+        auc = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+        assert 0.0 <= auc <= 1.0
+
+    def test_perfect_predictor_auc(self):
+        """Perfect predictor yields AUC = 1.0.
+
+        All failures have higher scores than all successes.
+        """
+        scores = [0.9, 0.8, 0.7, 0.2, 0.1, 0.05]
+        failures = [True, True, True, False, False, False]
+        roc = compute_roc_curve(scores, failures)
+        auc = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+        assert auc == 1.0
+
+    def test_random_predictor_auc(self):
+        """Deterministic 'random-like' predictor yields AUC near 0.5.
+
+        Construct balanced data where scores do not separate classes.
+        """
+        # Interleaved: failure at even scores, success at odd scores.
+        scores = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        failures = [True, False, True, False, True, False, True, False, True, False]
+        roc = compute_roc_curve(scores, failures)
+        auc = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+        assert abs(auc - 0.5) < 0.15  # Within reasonable range of 0.5
+
+    def test_auc_rounding(self):
+        """AUC is rounded to 12 decimal places."""
+        scores = [0.3, 0.7]
+        failures = [False, True]
+        roc = compute_roc_curve(scores, failures)
+        auc = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+        assert auc == round(auc, 12)
+
+
+class TestRocDeterminism:
+    """Tests for ROC/AUC determinism."""
+
+    def test_repeated_roc_identical(self):
+        """Repeated ROC computations produce identical results."""
+        scores = [0.9, 0.1, 0.5, 0.3, 0.7, 0.4, 0.6, 0.2, 0.8, 0.05]
+        failures = [True, False, True, False, True, False, True, False, True, False]
+        roc1 = compute_roc_curve(scores, failures)
+        roc2 = compute_roc_curve(scores, failures)
+        assert roc1 == roc2
+
+    def test_repeated_auc_identical(self):
+        """Repeated AUC computations produce identical results."""
+        scores = [0.9, 0.1, 0.5, 0.3, 0.7]
+        failures = [True, False, True, False, True]
+        roc = compute_roc_curve(scores, failures)
+        auc1 = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+        auc2 = compute_auc(roc["roc_fpr"], roc["roc_tpr"])
+        assert auc1 == auc2
+
+    def test_aggregate_roc_determinism(self):
+        """Aggregate metrics with ROC are deterministic across runs."""
+        trials = [
+            run_spectral_phase_map_experiment(0.9, False),
+            run_spectral_phase_map_experiment(0.1, True),
+            run_spectral_phase_map_experiment(0.5, False),
+            run_spectral_phase_map_experiment(0.3, True),
+        ]
+        a1 = compute_phase_map_aggregate_metrics(trials)
+        a2 = compute_phase_map_aggregate_metrics(trials)
+        assert a1["roc_auc"] == a2["roc_auc"]
+        assert a1["roc_curve_fpr"] == a2["roc_curve_fpr"]
+        assert a1["roc_curve_tpr"] == a2["roc_curve_tpr"]
+        assert a1["roc_curve_thresholds"] == a2["roc_curve_thresholds"]
+
+
+class TestAggregateRocIntegration:
+    """Tests for ROC/AUC fields in aggregate metrics."""
+
+    def test_aggregate_contains_roc_fields(self):
+        """Aggregate metrics include ROC/AUC fields."""
+        trials = [
+            run_spectral_phase_map_experiment(0.7, False),
+            run_spectral_phase_map_experiment(0.3, True),
+        ]
+        result = compute_phase_map_aggregate_metrics(trials)
+        assert "roc_auc" in result
+        assert "roc_curve_fpr" in result
+        assert "roc_curve_tpr" in result
+        assert "roc_curve_thresholds" in result
+
+    def test_aggregate_roc_auc_bounds(self):
+        """Aggregate ROC AUC is in [0, 1]."""
+        trials = [
+            run_spectral_phase_map_experiment(0.7, False),
+            run_spectral_phase_map_experiment(0.3, True),
+            run_spectral_phase_map_experiment(0.5, True),
+        ]
+        result = compute_phase_map_aggregate_metrics(trials)
+        assert 0.0 <= result["roc_auc"] <= 1.0
+
+    def test_empty_aggregate_roc(self):
+        """Empty trials produce empty ROC and AUC = 0."""
+        result = compute_phase_map_aggregate_metrics([])
+        assert result["roc_auc"] == 0.0
+        assert result["roc_curve_fpr"] == []
+        assert result["roc_curve_tpr"] == []
+        assert result["roc_curve_thresholds"] == []
+
+    def test_aggregate_roc_json_serializable(self):
+        """ROC fields in aggregate are JSON-serializable."""
+        trials = [
+            run_spectral_phase_map_experiment(0.8, False),
+            run_spectral_phase_map_experiment(0.2, True),
+        ]
+        result = compute_phase_map_aggregate_metrics(trials)
+        serialized = json.dumps(result)
+        deserialized = json.loads(serialized)
+        assert deserialized["roc_auc"] == result["roc_auc"]
+        assert deserialized["roc_curve_fpr"] == result["roc_curve_fpr"]
 
 
 # ── JSON Stability ────────────────────────────────────────────────────
