@@ -1,7 +1,7 @@
 # QSOLKCB / QEC  
 ### Deterministic Quantum Error Correction Research Framework
 
-[![Release v5.4.0](https://img.shields.io/badge/release-v7.0.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v7.0.0)
+[![Release v5.4.0](https://img.shields.io/badge/release-v7.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v7.1.0)
 [![Research Framework](https://img.shields.io/badge/type-research%20framework-blue)]
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
 

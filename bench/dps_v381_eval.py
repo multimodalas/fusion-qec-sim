@@ -154,6 +154,11 @@ from src.qec.experiments.bp_prediction_validation import (
 from src.qec.experiments.spectral_decoder_controller import (
     run_spectral_decoder_control_experiment,
 )
+from src.qec.experiments.spectral_instability_phase_map import (
+    compute_spectral_instability_score,
+    run_spectral_phase_map_experiment,
+    compute_phase_map_aggregate_metrics,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -1121,6 +1126,7 @@ def run_evaluation(
     enable_bp_prediction_validation: bool = False,
     enable_spectral_decoder_controller: bool = False,
     enable_spectral_cluster_control: bool = False,
+    enable_spectral_phase_map: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1133,6 +1139,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v7.2.0: Spectral phase map implies BP stability predictor.
+    if enable_spectral_phase_map:
+        enable_bp_stability_predictor = True
     # v7.1.0: Spectral cluster control implies spectral decoder controller.
     if enable_spectral_cluster_control:
         enable_spectral_decoder_controller = True
@@ -1607,6 +1616,84 @@ def run_evaluation(
                     validation = run_bp_prediction_validation(trial_pairs)
                     bpv_results[mode_name][p][distance] = validation
         out["bp_prediction_validation"] = bpv_results
+
+    # v7.2.0: Spectral instability phase map.
+    if enable_spectral_phase_map and "bp_stability_predictor" in out and nb_localization_results:
+        spm_results: dict[str, dict[float, dict[int, dict[str, Any]]]] = {}
+        bsp_data_spm = out["bp_stability_predictor"]
+        sfr_data_spm = out.get("spectral_failure_risk", {})
+        for mode_name in MODE_ORDER:
+            spm_results[mode_name] = {}
+            bsp_mode_spm = bsp_data_spm.get(mode_name, {})
+            sfr_mode_spm = sfr_data_spm.get(mode_name, {})
+            for p in p_values:
+                spm_results[mode_name][p] = {}
+                bsp_p_spm = bsp_mode_spm.get(p, {})
+                sfr_p_spm = sfr_mode_spm.get(p, {})
+                for distance in distances:
+                    bsp_cell_spm = bsp_p_spm.get(distance)
+                    if bsp_cell_spm is None:
+                        continue
+                    H_spm = codes[distance]
+                    m_spm, n_spm = H_spm.shape
+                    num_edges_spm = int(np.count_nonzero(H_spm))
+                    avg_var_deg = (
+                        num_edges_spm / n_spm if n_spm > 0 else 0.0
+                    )
+                    avg_chk_deg = (
+                        num_edges_spm / m_spm if m_spm > 0 else 0.0
+                    )
+                    loc_spm = nb_localization_results.get(distance, {})
+                    nb_max_ipr_spm = loc_spm.get("nb_max_ipr", 0.0)
+                    if nb_max_ipr_spm is None:
+                        ipr_scores_spm = loc_spm.get("ipr_scores", [])
+                        nb_max_ipr_spm = max(ipr_scores_spm) if ipr_scores_spm else 0.0
+                    sfr_cell_spm = sfr_p_spm.get(distance, {})
+                    per_trial_preds_spm = bsp_cell_spm.get("per_trial", [])
+                    per_trial_risks_spm = sfr_cell_spm.get("per_trial", [])
+                    mode_result_spm = results[mode_name][p][distance]
+                    per_trial_success_spm = mode_result_spm.get(
+                        "per_trial_decoder_success", [],
+                    )
+                    if not per_trial_preds_spm or not per_trial_success_spm:
+                        continue
+                    n_spm_trials = min(
+                        len(per_trial_preds_spm), len(per_trial_success_spm),
+                    )
+                    trial_phase_map: list[dict[str, Any]] = []
+                    for i_spm in range(n_spm_trials):
+                        pred_spm = per_trial_preds_spm[i_spm]
+                        # Get cluster risk scores for this trial.
+                        cluster_risks: list[float] = []
+                        if i_spm < len(per_trial_risks_spm):
+                            risk_t_spm = per_trial_risks_spm[i_spm]
+                            cluster_risks = risk_t_spm.get(
+                                "cluster_risk_scores", [],
+                            )
+                        score = compute_spectral_instability_score(
+                            nb_spectral_radius=pred_spm.get(
+                                "spectral_radius", 0.0,
+                            ),
+                            spectral_instability_ratio=pred_spm.get(
+                                "spectral_instability_ratio", 0.0,
+                            ),
+                            ipr_localization_score=float(nb_max_ipr_spm),
+                            cluster_risk_scores=cluster_risks,
+                            avg_variable_degree=round(avg_var_deg, 12),
+                            avg_check_degree=round(avg_chk_deg, 12),
+                        )
+                        trial_result = run_spectral_phase_map_experiment(
+                            spectral_instability_score=score,
+                            decoder_success=per_trial_success_spm[i_spm],
+                        )
+                        trial_phase_map.append(trial_result)
+                    if trial_phase_map:
+                        aggregate = compute_phase_map_aggregate_metrics(
+                            trial_phase_map,
+                        )
+                        aggregate["per_trial"] = trial_phase_map
+                        spm_results[mode_name][p][distance] = aggregate
+        out["spectral_phase_map"] = spm_results
 
     # v7.0.0 / v7.1.0: Spectral decoder controller experiment.
     if enable_spectral_decoder_controller and "bp_stability_predictor" in out and "spectral_failure_risk" in out:
@@ -2266,6 +2353,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral decoder controller experiment (v7.0, implies --bp-stability-predictor)")
     parser.add_argument("--spectral-cluster-control", action="store_true",
                         help="Enable cluster-aware decoder scheduling (v7.1, implies --spectral-decoder-controller --bp-stability-predictor)")
+    parser.add_argument("--spectral-phase-map", action="store_true",
+                        help="Enable spectral instability phase map (v7.2, implies --bp-stability-predictor)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2482,6 +2571,8 @@ def main() -> None:
         print("Spectral decoder controller: ENABLED")
     if args.spectral_cluster_control:
         print("Spectral cluster control: ENABLED")
+    if args.spectral_phase_map:
+        print("Spectral instability phase map: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2522,16 +2613,17 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
         enable_spectral_graph_optimization=args.spectral_graph_optimization,
-        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control,
+        enable_bp_stability_predictor=args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map,
         enable_bp_prediction_validation=args.bp_prediction_validation,
         enable_spectral_decoder_controller=args.spectral_decoder_controller or args.spectral_cluster_control,
         enable_spectral_cluster_control=args.spectral_cluster_control,
+        enable_spectral_phase_map=args.spectral_phase_map,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
