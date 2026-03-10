@@ -11,7 +11,9 @@ Tanner spectral fragility diagnostics,
 spectral–boundary alignment diagnostics,
 spectral trapping-set diagnostics,
 BP phase-space exploration,
-and ternary decoder topology classification
+ternary decoder topology classification,
+decoder phase diagram aggregation,
+and phase boundary analysis
 for BP convergence traces.
 Does not modify decoder internals.
 """
@@ -31,3 +33,5 @@ from .spectral_trapping_sets import compute_spectral_trapping_sets
 from .bp_phase_space import compute_bp_phase_space, compute_metastability_score
 from .ternary_decoder_topology import compute_ternary_decoder_topology
 from .basin_probe import probe_local_ternary_basin
+from .phase_diagram import build_decoder_phase_diagram, make_phase_grid
+from .phase_boundary_analysis import analyze_phase_boundaries

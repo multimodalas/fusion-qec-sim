@@ -115,6 +115,15 @@ from src.qec.diagnostics.basin_probe import (
     probe_local_ternary_basin,
 )
 
+from src.qec.diagnostics.phase_diagram import (
+    build_decoder_phase_diagram,
+    make_phase_grid,
+)
+
+from src.qec.diagnostics.phase_boundary_analysis import (
+    analyze_phase_boundaries,
+)
+
 # ── Mode definitions ─────────────────────────────────────────────────
 
 _RPC_ON = RPCConfig(enabled=True, max_rows=64, w_min=2, w_max=32)
@@ -1542,6 +1551,18 @@ def _parse_args() -> argparse.Namespace:
                         help="Add ternary transition metrics to output (v5.8, implies --ternary-topology)")
     parser.add_argument("--ternary-basin-probe", action="store_true",
                         help="Perform deterministic local basin probe around final LLR state (v5.8, implies --ternary-topology)")
+    parser.add_argument("--phase-diagram", action="store_true",
+                        help="Enable decoder phase diagram generation (v5.9, implies --ternary-topology --ternary-transition-metrics)")
+    parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
+                        help="Phase diagram x-axis parameter name (default: physical_error_rate)")
+    parser.add_argument("--phase-grid-y", type=str, default="code_distance",
+                        help="Phase diagram y-axis parameter name (default: code_distance)")
+    parser.add_argument("--phase-grid-x-values", type=float, nargs="+", default=None,
+                        help="Phase diagram x-axis values (default: uses --p-values)")
+    parser.add_argument("--phase-grid-y-values", type=float, nargs="+", default=None,
+                        help="Phase diagram y-axis values (default: uses --distances)")
+    parser.add_argument("--phase-diagram-output", type=str, default=None,
+                        help="Output path for phase diagram JSON artifact")
     parser.add_argument("--decoder", type=str, default="reference",
                         choices=["reference", "experimental"],
                         help="Decoder implementation to use (default: reference)")
@@ -1562,6 +1583,112 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--p-values", type=float, nargs="+",
                         default=DEFAULT_P_VALUES)
     return parser.parse_args()
+
+
+def _run_phase_diagram(args: argparse.Namespace, eval_result: dict[str, Any]) -> None:
+    """Build and print a decoder phase diagram from evaluation results.
+
+    Extracts ternary topology results from the existing evaluation run
+    and aggregates them into a phase-diagram JSON artifact.
+    """
+    import json as _json
+
+    # Determine grid axes.
+    x_name = args.phase_grid_x
+    y_name = args.phase_grid_y
+    x_values = args.phase_grid_x_values if args.phase_grid_x_values else [float(v) for v in args.p_values]
+    y_values = args.phase_grid_y_values if args.phase_grid_y_values else [float(v) for v in args.distances]
+
+    grid = make_phase_grid(x_name, x_values, y_name, y_values)
+
+    results = eval_result["results"]
+
+    # Use the first mode in the evaluation for phase diagram.
+    mode_name = MODE_ORDER[0]
+
+    def trial_runner(x_val, y_val):
+        """Extract ternary topology results for grid point (x, y).
+
+        Maps x to p-value and y to distance by finding the closest
+        matching values in the evaluation results.
+        """
+        # Map x to p-value and y to distance.
+        p = float(x_val)
+        d = int(y_val)
+
+        mode_results = results.get(mode_name, {})
+        p_results = mode_results.get(p, {})
+        d_result = p_results.get(d, {})
+
+        ternary_list = d_result.get("ternary_topology", [])
+        return ternary_list
+
+    phase_diagram = build_decoder_phase_diagram(grid, trial_runner)
+    boundary_analysis = analyze_phase_boundaries(phase_diagram)
+
+    # Print phase-map summary table.
+    print("\n" + "=" * 60)
+    print("v5.9.0 — Decoder Phase Diagram Summary")
+    print("=" * 60)
+    print(f"Grid: {x_name} x {y_name}")
+    print(f"  {x_name}: {x_values}")
+    print(f"  {y_name}: {y_values}")
+    print(f"  Mode: {mode_name}")
+
+    # Dominant phase table.
+    print(f"\nDominant Phase Map ({x_name} → columns, {y_name} → rows):")
+    header = f"{'':>12s}"
+    for x in x_values:
+        header += f" {x:>10}"
+    print(header)
+
+    for y in y_values:
+        row = f"{y:>12}"
+        for x in x_values:
+            cell = _find_cell(phase_diagram["cells"], x, y)
+            if cell is not None:
+                phase_label = {1: "+1", 0: " 0", -1: "-1"}.get(cell["dominant_phase"], " ?")
+                row += f" {phase_label:>10s}"
+            else:
+                row += f" {'--':>10s}"
+        print(row)
+
+    # Summary counts.
+    cells = phase_diagram["cells"]
+    success_cells = sum(1 for c in cells if c["dominant_phase"] == 1)
+    boundary_cells = sum(1 for c in cells if c["dominant_phase"] == 0)
+    failure_cells = sum(1 for c in cells if c["dominant_phase"] == -1)
+    total_cells = len(cells)
+
+    print(f"\nPhase counts: {success_cells} success (+1), "
+          f"{boundary_cells} boundary (0), {failure_cells} failure (-1) "
+          f"out of {total_cells} cells")
+
+    bs = boundary_analysis["boundary_summary"]
+    print(f"Boundary analysis: {bs['num_boundary_cells']} boundary, "
+          f"{bs['num_mixed_cells']} mixed, {bs['num_critical_cells']} critical")
+
+    # Write JSON output if requested.
+    if args.phase_diagram_output:
+        output = {
+            "phase_diagram": phase_diagram,
+            "boundary_analysis": boundary_analysis,
+        }
+        with open(args.phase_diagram_output, "w") as f:
+            _json.dump(output, f, indent=2)
+        print(f"\nPhase diagram written to: {args.phase_diagram_output}")
+
+
+def _find_cell(
+    cells: list[dict[str, Any]],
+    x: float | int,
+    y: float | int,
+) -> dict[str, Any] | None:
+    """Find a cell by (x, y) coordinates."""
+    for cell in cells:
+        if cell["x"] == x and cell["y"] == y:
+            return cell
+    return None
 
 
 def main() -> None:
@@ -1607,6 +1734,8 @@ def main() -> None:
         print("BP phase-space exploration: ENABLED")
     if args.ternary_topology:
         print("Ternary decoder topology classification: ENABLED")
+    if args.phase_diagram:
+        print("Decoder phase diagram generation: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -1643,9 +1772,9 @@ def main() -> None:
         enable_tanner_spectral_analysis=args.tanner_spectral_analysis or args.spectral_boundary_alignment or args.spectral_trapping_sets,
         enable_spectral_boundary_alignment=args.spectral_boundary_alignment,
         enable_spectral_trapping_sets=args.spectral_trapping_sets,
-        enable_bp_phase_space=args.bp_phase_space or args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe,
-        enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe,
-        enable_ternary_transition_metrics=args.ternary_transition_metrics,
+        enable_bp_phase_space=args.bp_phase_space or args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
+        enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
+        enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
@@ -1663,6 +1792,10 @@ def main() -> None:
 
     if args.decoder_report and args.compare_decoders:
         print_decoder_report(eval_result)
+
+    # v5.9.0: Phase diagram generation.
+    if args.phase_diagram:
+        _run_phase_diagram(args, eval_result)
 
     # Determinism check.
     det_result = run_determinism_check(
