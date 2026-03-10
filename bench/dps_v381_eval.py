@@ -34,8 +34,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import math
+import os
 import sys
+from pathlib import Path
 from typing import Any
+
+# Ensure repo root is on Python path so `src.*` imports resolve.
+_REPO_ROOT = str(Path(__file__).resolve().parents[1])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import numpy as np
 
@@ -2832,7 +2839,7 @@ def main() -> None:
     if args.spectral_optimizer_sanity:
         _rng_sanity = np.random.default_rng(args.seed)
         _code_sanity = create_code("rate_0.50", lifting_size=32, seed=args.seed)
-        _H_sanity = _code_sanity.hx
+        _H_sanity = _code_sanity.H_X
         _instances_sanity = _pre_generate_instances(
             _H_sanity, args.p_values[0], min(args.trials, 20), _rng_sanity,
         )
