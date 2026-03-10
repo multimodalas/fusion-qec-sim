@@ -163,6 +163,9 @@ from src.qec.experiments.spectral_graph_repair_loop import (
     run_spectral_graph_repair_loop,
     compute_repair_loop_aggregate_metrics,
 )
+from src.qec.experiments.spectral_graph_design_rules import (
+    run_spectral_graph_design_analysis,
+)
 
 # ── Mode definitions ─────────────────────────────────────────────────
 
@@ -1133,6 +1136,7 @@ def run_evaluation(
     enable_spectral_phase_map: bool = False,
     enable_spectral_graph_repair_loop: bool = False,
     enable_spectral_multistep_repair: bool = False,
+    enable_spectral_graph_design_analysis: bool = False,
     decoder_fn=None,
     compare_decoders: bool = False,
     paired_seed: bool = False,
@@ -1145,6 +1149,9 @@ def run_evaluation(
       slopes[mode_name][p] = DPS slope
       audit[mode_name][p][distance] = audit_summary
     """
+    # v7.4.0: Spectral graph design analysis implies spectral failure risk.
+    if enable_spectral_graph_design_analysis:
+        enable_spectral_failure_risk = True
     # v7.3.x: Spectral multistep repair implies repair loop.
     if enable_spectral_multistep_repair:
         enable_spectral_graph_repair_loop = True
@@ -1514,6 +1521,43 @@ def run_evaluation(
                             "per_trial": trial_risks,
                         }
         out["spectral_failure_risk"] = sfr_results
+
+    # v7.4.0: Spectral graph design analysis (per-code, before decoding).
+    if enable_spectral_graph_design_analysis and "spectral_failure_risk" in out and nb_localization_results:
+        from src.qec.diagnostics.non_backtracking_spectrum import (
+            compute_non_backtracking_spectrum as _compute_nb_spectrum_design,
+        )
+        sgda_results: dict[int, dict[str, Any]] = {}
+        sfr_data_sgda = out["spectral_failure_risk"]
+        for distance in distances:
+            H_sgda = codes[distance]
+            m_sgda, n_sgda = H_sgda.shape
+            num_edges_sgda = int(np.count_nonzero(H_sgda))
+            avg_var_deg_sgda = num_edges_sgda / n_sgda if n_sgda > 0 else 0.0
+            avg_chk_deg_sgda = num_edges_sgda / m_sgda if m_sgda > 0 else 0.0
+            nb_spec_sgda = _compute_nb_spectrum_design(H_sgda)
+            loc_sgda = nb_localization_results.get(distance, {})
+            # Aggregate risk across modes: use first available mode's risk.
+            risk_sgda: dict[str, Any] = {}
+            instab_ratio_sgda = 0.0
+            for mode_name in MODE_ORDER:
+                sfr_mode_sgda = sfr_data_sgda.get(mode_name, {})
+                for p in p_values:
+                    sfr_cell_sgda = sfr_mode_sgda.get(p, {}).get(distance)
+                    if sfr_cell_sgda is not None:
+                        risk_sgda = sfr_cell_sgda
+                        break
+                if risk_sgda:
+                    break
+            sgda_results[distance] = run_spectral_graph_design_analysis(
+                nb_spectrum_result=nb_spec_sgda,
+                localization_result=loc_sgda,
+                risk_result=risk_sgda,
+                spectral_instability_ratio=instab_ratio_sgda,
+                avg_variable_degree=round(avg_var_deg_sgda, 12),
+                avg_check_degree=round(avg_chk_deg_sgda, 12),
+            )
+        out["spectral_graph_design_analysis"] = sgda_results
 
     # v6.8.0: BP stability predictor.
     if enable_bp_stability_predictor and "spectral_failure_risk" in out and nb_localization_results:
@@ -2448,6 +2492,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable spectral graph repair loop experiment (v7.3, implies --spectral-phase-map)")
     parser.add_argument("--spectral-multistep-repair", action="store_true",
                         help="Enable multi-step spectral graph repair with pruning (v7.3.x, implies --spectral-graph-repair-loop)")
+    parser.add_argument("--spectral-design-analysis", action="store_true",
+                        help="Enable spectral Tanner graph design analysis (v7.4, implies --spectral-failure-risk)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -2670,6 +2716,8 @@ def main() -> None:
         print("Spectral graph repair loop: ENABLED")
     if args.spectral_multistep_repair:
         print("Spectral multi-step repair: ENABLED")
+    if args.spectral_design_analysis:
+        print("Spectral graph design analysis: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")
@@ -2710,8 +2758,8 @@ def main() -> None:
         enable_ternary_topology=args.ternary_topology or args.ternary_transition_metrics or args.ternary_basin_probe or args.phase_diagram,
         enable_ternary_transition_metrics=args.ternary_transition_metrics or args.phase_diagram,
         enable_ternary_basin_probe=args.ternary_basin_probe,
-        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
-        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
+        enable_spectral_bp_alignment=args.spectral_bp_alignment or args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair or args.spectral_design_analysis,
+        enable_spectral_failure_risk=args.spectral_failure_risk or args.risk_aware_damping_experiment or args.risk_guided_perturbation_experiment or args.tanner_graph_repair_experiment or args.spectral_graph_optimization or args.bp_stability_predictor or args.bp_prediction_validation or args.spectral_decoder_controller or args.spectral_cluster_control or args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair or args.spectral_design_analysis,
         enable_risk_aware_damping_experiment=args.risk_aware_damping_experiment,
         enable_risk_guided_perturbation_experiment=args.risk_guided_perturbation_experiment,
         enable_tanner_graph_repair_experiment=args.tanner_graph_repair_experiment,
@@ -2723,6 +2771,7 @@ def main() -> None:
         enable_spectral_phase_map=args.spectral_phase_map or args.spectral_graph_repair_loop or args.spectral_multistep_repair,
         enable_spectral_graph_repair_loop=args.spectral_graph_repair_loop or args.spectral_multistep_repair,
         enable_spectral_multistep_repair=args.spectral_multistep_repair,
+        enable_spectral_graph_design_analysis=args.spectral_design_analysis,
         decoder_fn=selected_decoder,
         compare_decoders=args.compare_decoders,
         paired_seed=args.paired_seed,
