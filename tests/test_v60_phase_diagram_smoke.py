@@ -124,6 +124,26 @@ class TestV60PhaseDiagramSmoke:
                      cell["failure_fraction"])
             assert abs(total - 1.0) < 1e-10
 
+    def test_trapping_candidate_fields_present(self):
+        """Phase diagram cells contain v6.2 trapping-set candidate fields."""
+        result = run_phase_diagram_demo()
+        pd = result["phase_diagram"]
+
+        for cell in pd["cells"]:
+            assert "mean_nb_candidate_nodes" in cell
+            assert "mean_nb_max_node_participation" in cell
+            assert "mean_nb_candidate_clusters" in cell
+
+    def test_trapping_candidate_fields_populated(self):
+        """Trapping-set candidate fields have non-None values."""
+        result = run_phase_diagram_demo()
+        pd = result["phase_diagram"]
+
+        for cell in pd["cells"]:
+            assert cell["mean_nb_candidate_nodes"] is not None
+            assert cell["mean_nb_max_node_participation"] is not None
+            assert cell["mean_nb_candidate_clusters"] is not None
+
     def test_json_roundtrip(self):
         """Output survives JSON serialization roundtrip."""
         result = run_phase_diagram_demo()

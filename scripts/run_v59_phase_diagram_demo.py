@@ -58,6 +58,9 @@ from src.qec.diagnostics.bp_jacobian_estimator import (
 from src.qec.diagnostics.nb_localization import (
     compute_nb_localization_metrics,
 )
+from src.qec.diagnostics.nb_trapping_candidates import (
+    compute_nb_trapping_candidates,
+)
 from src.qec.diagnostics.phase_heatmap import (
     print_phase_heatmap,
 )
@@ -108,6 +111,9 @@ def run_phase_diagram_demo() -> dict[str, Any]:
 
         # v6.1: Compute localization diagnostics per grid point (code-level).
         localization_result = compute_nb_localization_metrics(H)
+
+        # v6.2: Compute trapping-set candidate diagnostics per grid point.
+        trapping_result = compute_nb_trapping_candidates(H, localization_result)
 
         # Deterministic RNG derived from base seed + grid point.
         seed = RNG_BASE_SEED + int(p * 100000) + d * 1000
@@ -165,6 +171,11 @@ def run_phase_diagram_demo() -> dict[str, Any]:
             tt_result["nb_max_ipr"] = localization_result["max_ipr"]
             tt_result["nb_num_localized_modes"] = len(localization_result["localized_modes"])
             tt_result["nb_top_localization_score"] = localization_result["top_localization_score"]
+
+            # v6.2: Attach trapping-set candidate diagnostics to trial result.
+            tt_result["nb_num_candidate_nodes"] = trapping_result["num_candidate_nodes"]
+            tt_result["nb_max_node_participation"] = trapping_result["max_node_participation"]
+            tt_result["nb_num_candidate_clusters"] = trapping_result["num_candidate_clusters"]
 
             trial_results.append(tt_result)
 

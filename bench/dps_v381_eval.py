@@ -1579,6 +1579,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Enable BP Jacobian spectral radius estimator (v6.0)")
     parser.add_argument("--nb-localization", action="store_true",
                         help="Enable non-backtracking localization diagnostics (v6.1)")
+    parser.add_argument("--nb-trapping-candidates", action="store_true",
+                        help="Enable spectral trapping-set candidate detection (v6.2, implies --nb-localization)")
     parser.add_argument("--phase-grid-x", type=str, default="physical_error_rate",
                         help="Phase diagram x-axis parameter name (default: physical_error_rate)")
     parser.add_argument("--phase-grid-y", type=str, default="code_distance",
@@ -1775,6 +1777,8 @@ def main() -> None:
         print("BP Jacobian spectral radius estimator: ENABLED")
     if args.nb_localization:
         print("Non-backtracking localization diagnostics: ENABLED")
+    if args.nb_trapping_candidates:
+        print("Spectral trapping-set candidate detection: ENABLED")
     print(f"Decoder: {args.decoder}")
     if args.compare_decoders:
         print("Decoder comparison mode: ENABLED")

@@ -6,6 +6,56 @@ This project follows Semantic Versioning (SemVer).
 
 ---
 
+[6.2.0] — 2026-03-10
+Spectral Trapping-Set Candidate Detection
+
+Added
+
+Spectral Trapping-Set Candidate Detection (src/qec/diagnostics/nb_trapping_candidates.py):
+
+compute_nb_trapping_candidates(): identifies structural trapping-set candidates
+by counting node participation across localized non-backtracking eigenmodes.
+Nodes appearing in multiple localized modes are flagged as candidates for
+fragile Tanner substructures (trapping sets, absorbing sets).
+
+Output fields: node_participation_counts, candidate_variable_nodes,
+candidate_check_nodes, candidate_clusters, max_node_participation,
+num_candidate_nodes, num_candidate_clusters, participation_threshold.
+
+Cluster detection: connected components among candidate nodes in the Tanner
+graph using union-find with deterministic tie-breaking.
+
+Consumes v6.1 localization outputs — does not recompute spectra.
+
+Phase Diagram Trapping-Set Overlays (src/qec/diagnostics/phase_diagram.py):
+
+Extended phase diagram cell aggregation with optional trapping-set fields:
+mean_nb_candidate_nodes, mean_nb_max_node_participation, mean_nb_candidate_clusters.
+Fields are additive — appear only when trapping-set diagnostics are enabled.
+All v6.1, v6.0, and v5.9 fields fully preserved.
+
+CLI Flag (bench/dps_v381_eval.py):
+
+--nb-trapping-candidates: enable spectral trapping-set candidate detection
+(implies --nb-localization).
+
+Scientific Framing:
+
+This diagnostic identifies Tanner graph regions that repeatedly participate
+in localized spectral modes.  These regions are structural candidates for
+trapping sets but the diagnostic does not claim perfect prediction.  Framed
+as a structural probe for fragile subgraphs.
+
+Constraints:
+
+Decoder core untouched.
+Fully deterministic (no randomness).
+JSON-serializable outputs.
+Additive diagnostic only.
+Schema version unchanged (3.0.1).
+
+---
+
 [6.1.0] — 2026-03-10
 Non-Backtracking Localization
 
