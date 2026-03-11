@@ -139,7 +139,8 @@ class TestMutateTannerGraph:
         assert get_operator_for_generation(0) == "edge_swap"
         assert get_operator_for_generation(1) == "local_rewire"
         assert get_operator_for_generation(5) == "cycle_guided_mutation"
-        assert get_operator_for_generation(6) == "edge_swap"
+        assert get_operator_for_generation(6) == "spectral_pressure_guided_mutation"
+        assert get_operator_for_generation(7) == "edge_swap"
 
     def test_returns_valid(self):
         H = _small_H()
@@ -148,7 +149,7 @@ class TestMutateTannerGraph:
         assert op in [
             "edge_swap", "local_rewire", "cycle_break",
             "degree_preserving_rotation", "seeded_reconstruction",
-            "cycle_guided_mutation",
+            "cycle_guided_mutation", "spectral_pressure_guided_mutation",
         ]
 
     def test_explicit_operator(self):
