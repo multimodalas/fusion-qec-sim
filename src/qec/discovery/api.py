@@ -1,5 +1,5 @@
 """
-v9.0.0 — Discovery Public API.
+v9.2.0 — Discovery Public API.
 
 Exposes all public discovery functions from a single module.
 Import from here for stable access to the discovery layer.
@@ -18,6 +18,7 @@ from src.qec.discovery.archive import update_discovery_archive
 from src.qec.discovery.spectral_bad_edge import detect_bad_edges
 from src.qec.discovery.cycle_pressure import compute_cycle_pressure
 from src.qec.discovery.ace_filter import compute_local_ace_score
+from src.qec.discovery.incremental_metrics import update_metrics_incrementally
 
 __all__ = [
     "run_structure_discovery",
@@ -28,4 +29,5 @@ __all__ = [
     "detect_bad_edges",
     "compute_cycle_pressure",
     "compute_local_ace_score",
+    "update_metrics_incrementally",
 ]

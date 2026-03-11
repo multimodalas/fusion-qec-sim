@@ -1,8 +1,10 @@
 """
-v9.0.0 — Plot Discovery Run.
+v9.2.0 — Plot Discovery Run.
 
 Loads a discovery run artifact and prints generation-level summary
 statistics.  Optional matplotlib plotting when available.
+
+Supports both v9.0.0 (flat) and v9.2.0 (metadata + results) formats.
 
 Usage:
     python scripts/plot_discovery_run.py [artifact_path]
@@ -14,19 +16,28 @@ import json
 import sys
 
 
+def _get_results(data: dict) -> dict:
+    """Extract results from artifact, supporting both old and new formats."""
+    if "results" in data:
+        return data["results"]
+    return data
+
+
 def print_discovery_summary(artifact_path: str = "artifacts/discovery_run.json") -> None:
     """Print a text summary of a discovery run artifact."""
     with open(artifact_path) as f:
         data = json.load(f)
 
-    config = data.get("config", {})
+    results = _get_results(data)
+
+    config = results.get("config", {})
     print(f"Discovery Run Summary")
     print(f"  Generations: {config.get('num_generations', '?')}")
     print(f"  Population:  {config.get('population_size', '?')}")
     print(f"  Seed:        {config.get('base_seed', '?')}")
     print()
 
-    summaries = data.get("generation_summaries", [])
+    summaries = results.get("generation_summaries", [])
     print(f"{'Gen':>4}  {'Composite':>12}  {'Instability':>12}  {'Radius':>10}  {'Archive':>8}  {'Feasible':>8}  {'Novel':>6}")
     print("-" * 75)
     for s in summaries:
@@ -40,7 +51,7 @@ def print_discovery_summary(artifact_path: str = "artifacts/discovery_run.json")
             f"{s['num_novel']:6d}"
         )
 
-    best = data.get("best_candidate", {})
+    best = results.get("best_candidate", {})
     if best:
         print()
         print(f"Best candidate: {best.get('candidate_id', '?')}")
@@ -60,7 +71,9 @@ def plot_discovery_run(artifact_path: str = "artifacts/discovery_run.json") -> N
     with open(artifact_path) as f:
         data = json.load(f)
 
-    summaries = data.get("generation_summaries", [])
+    results = _get_results(data)
+
+    summaries = results.get("generation_summaries", [])
     gens = [s["generation"] for s in summaries]
     composites = [s["best_composite_score"] for s in summaries]
     instabilities = [s["best_instability_score"] for s in summaries]

@@ -1,8 +1,8 @@
 """
-v9.0.0 — Discovery Run Experiment.
+v9.2.0 — Discovery Run Experiment.
 
 Runs the structure discovery engine and saves generation-level
-artifacts to JSON.
+artifacts to JSON.  Includes reproducibility metadata.
 
 Layer 5 — Experiments.
 Does not modify decoder internals.  Fully deterministic.
@@ -15,6 +15,7 @@ import os
 from typing import Any
 
 from src.qec.discovery.discovery_engine import run_structure_discovery
+from src.qec.utils.reproducibility import collect_environment_metadata
 from src.utils.canonicalize import canonicalize
 
 
@@ -58,23 +59,32 @@ def run_discovery_experiment(
         archive_top_k=archive_top_k,
     )
 
+    metadata = collect_environment_metadata(
+        spec=spec,
+        generation_count=num_generations,
+        population_size=population_size,
+    )
+
     artifact = {
-        "spec": {
-            "num_variables": spec["num_variables"],
-            "num_checks": spec["num_checks"],
-            "variable_degree": spec["variable_degree"],
-            "check_degree": spec["check_degree"],
+        "metadata": metadata,
+        "results": {
+            "spec": {
+                "num_variables": spec["num_variables"],
+                "num_checks": spec["num_checks"],
+                "variable_degree": spec["variable_degree"],
+                "check_degree": spec["check_degree"],
+            },
+            "config": {
+                "num_generations": num_generations,
+                "population_size": population_size,
+                "base_seed": base_seed,
+                "archive_top_k": archive_top_k,
+            },
+            "best_candidate": result["best_candidate"],
+            "elite_history": result["elite_history"],
+            "archive_summary": result["archive_summary"],
+            "generation_summaries": result["generation_summaries"],
         },
-        "config": {
-            "num_generations": num_generations,
-            "population_size": population_size,
-            "base_seed": base_seed,
-            "archive_top_k": archive_top_k,
-        },
-        "best_candidate": result["best_candidate"],
-        "elite_history": result["elite_history"],
-        "archive_summary": result["archive_summary"],
-        "generation_summaries": result["generation_summaries"],
     }
 
     artifact = canonicalize(artifact)
@@ -83,5 +93,17 @@ def run_discovery_experiment(
     with open(output_path, "w") as f:
         json.dump(artifact, f, sort_keys=True, separators=(",", ":"))
         f.write("\n")
+
+    # Export archive artifact with metadata
+    archive_path = output_path.replace("discovery_run", "discovery_archive")
+    if archive_path != output_path:
+        archive_artifact = {
+            "metadata": metadata,
+            "archive": result["archive_summary"],
+        }
+        archive_artifact = canonicalize(archive_artifact)
+        with open(archive_path, "w") as f:
+            json.dump(archive_artifact, f, sort_keys=True, separators=(",", ":"))
+            f.write("\n")
 
     return artifact

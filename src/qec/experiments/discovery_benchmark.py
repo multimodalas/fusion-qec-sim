@@ -1,8 +1,8 @@
 """
-v9.0.0 — Discovery Benchmark.
+v9.2.0 — Discovery Benchmark.
 
 Runs the discovery engine across multiple graph specifications
-and records comparative results.
+and records comparative results.  Includes reproducibility metadata.
 
 Layer 5 — Experiments.
 Does not modify decoder internals.  Fully deterministic.
@@ -17,6 +17,7 @@ import struct
 from typing import Any
 
 from src.qec.discovery.discovery_engine import run_structure_discovery
+from src.qec.utils.reproducibility import collect_environment_metadata
 from src.utils.canonicalize import canonicalize
 
 
@@ -95,15 +96,23 @@ def run_discovery_benchmark(
             "num_generations_run": len(discovery["generation_summaries"]),
         })
 
+    metadata = collect_environment_metadata(
+        generation_count=num_generations,
+        population_size=population_size,
+    )
+
     artifact = {
-        "num_specs": len(specs),
-        "config": {
-            "num_generations": num_generations,
-            "population_size": population_size,
-            "base_seed": base_seed,
-            "archive_top_k": archive_top_k,
+        "metadata": metadata,
+        "benchmark_results": {
+            "num_specs": len(specs),
+            "config": {
+                "num_generations": num_generations,
+                "population_size": population_size,
+                "base_seed": base_seed,
+                "archive_top_k": archive_top_k,
+            },
+            "results": results,
         },
-        "results": results,
     }
 
     artifact = canonicalize(artifact)
