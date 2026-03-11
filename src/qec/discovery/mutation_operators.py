@@ -1,5 +1,5 @@
 """
-v9.0.0 — Deterministic Mutation Operators.
+v9.4.0 — Deterministic Mutation Operators.
 
 Implements deterministic graph mutation operators for the structure
 discovery engine.  Each operator produces a new H matrix without
@@ -11,6 +11,7 @@ Operators:
   - cycle_break: target an edge in a short cycle
   - degree_preserving_rotation: rotate edges between two variable nodes
   - seeded_reconstruction: reconstruct a subgraph region
+  - cycle_guided_mutation: rewire highest cycle-pressure edge
 
 Operator schedule: operator = operators[generation % len(operators)]
 
@@ -27,6 +28,10 @@ from typing import Any
 
 import numpy as np
 
+from src.qec.discovery.cycle_guided_mutation import (
+    cycle_pressure_guided_mutation,
+)
+
 
 _OPERATORS = [
     "edge_swap",
@@ -34,6 +39,7 @@ _OPERATORS = [
     "cycle_break",
     "degree_preserving_rotation",
     "seeded_reconstruction",
+    "cycle_guided_mutation",
 ]
 
 
@@ -400,6 +406,7 @@ _OPERATOR_FUNCTIONS = {
     "cycle_break": cycle_break,
     "degree_preserving_rotation": degree_preserving_rotation,
     "seeded_reconstruction": seeded_reconstruction,
+    "cycle_guided_mutation": cycle_pressure_guided_mutation,
 }
 
 
