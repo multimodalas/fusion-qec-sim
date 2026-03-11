@@ -1,7 +1,7 @@
 """
-v10.0.0 — Guided Mutation Operators.
+v10.1.0 — Guided Mutation Operators.
 
-Five deterministic mutation operators guided by spectral and structural
+Six deterministic mutation operators guided by spectral and structural
 analysis of the Tanner graph.
 
 Operators:
@@ -10,6 +10,7 @@ Operators:
   3. ace_repair — improve ACE spectrum for low-ACE variable nodes
   4. girth_preserving_rewire — rewire without decreasing girth
   5. expansion_driven_rewire — improve neighbourhood expansion
+  6. ipr_trapping_pressure — rewire high-IPR variable nodes (proto-trapping sets)
 
 Layer 3 — Discovery.
 Does not import or modify the decoder (Layer 1).
@@ -39,6 +40,7 @@ _OPERATORS = [
     "ace_repair",
     "girth_preserving_rewire",
     "expansion_driven_rewire",
+    "ipr_trapping_pressure",
 ]
 
 
@@ -525,6 +527,100 @@ def expansion_driven_rewire(
 
 
 # -----------------------------------------------------------
+# 6. IPR Trapping Pressure
+# -----------------------------------------------------------
+
+
+def ipr_trapping_pressure_mutation(
+    H: np.ndarray,
+    *,
+    seed: int = 0,
+) -> np.ndarray:
+    """Rewire edges at high-IPR variable nodes (proto-trapping sets).
+
+    Computes the dominant eigenvector of H^T H, ranks variable nodes
+    by eigenvector magnitude (localization), and rewires an edge from
+    the most localized variable to a low-localization variable.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Binary parity-check matrix, shape (m, n).
+    seed : int
+        Deterministic seed.
+
+    Returns
+    -------
+    np.ndarray
+        Mutated parity-check matrix.
+    """
+    H_arr = np.asarray(H, dtype=np.float64)
+    m, n = H_arr.shape
+    H_out = H_arr.copy()
+
+    if m == 0 or n == 0:
+        return H_out
+
+    # Compute dominant eigenvector of H^T H via power iteration
+    HtH = H_arr.T @ H_arr
+    x = np.ones(n, dtype=np.float64)
+    x /= np.linalg.norm(x)
+
+    for _ in range(50):
+        y = HtH @ x
+        norm_y = np.linalg.norm(y)
+        if norm_y < 1e-15:
+            return H_out
+        x = y / norm_y
+
+    mag = np.abs(x)
+
+    # Rank variable nodes by eigenvector magnitude (descending)
+    ranked_vars = sorted(
+        range(n),
+        key=lambda vi: (-round(mag[vi], _ROUND), vi),
+    )
+
+    rng = np.random.RandomState(seed)
+
+    # Try to rewire from highest-localization variable
+    for vi_target in ranked_vars:
+        checks = sorted(ci for ci in range(m) if H_out[ci, vi_target] != 0)
+        if not checks:
+            continue
+
+        # Safety: ensure degree > 1
+        if H_out[:, vi_target].sum() <= 1:
+            continue
+
+        ci_remove = checks[rng.randint(0, len(checks))]
+        if H_out[ci_remove].sum() <= 1:
+            continue
+
+        H_out[ci_remove, vi_target] = 0.0
+
+        # Rewire to a low-magnitude variable not already in this check
+        low_vars = sorted(
+            range(n),
+            key=lambda vi: (round(mag[vi], _ROUND), vi),
+        )
+        rewired = False
+        for vi_new in low_vars:
+            if H_out[ci_remove, vi_new] == 0.0:
+                H_out[ci_remove, vi_new] = 1.0
+                rewired = True
+                break
+
+        if not rewired:
+            H_out[ci_remove, vi_target] = 1.0  # Restore
+            continue
+
+        return H_out
+
+    return H_out
+
+
+# -----------------------------------------------------------
 # Dispatcher
 # -----------------------------------------------------------
 
@@ -535,6 +631,7 @@ _OPERATOR_FUNCTIONS = {
     "ace_repair": ace_repair_mutation,
     "girth_preserving_rewire": girth_preserving_rewire,
     "expansion_driven_rewire": expansion_driven_rewire,
+    "ipr_trapping_pressure": ipr_trapping_pressure_mutation,
 }
 
 
