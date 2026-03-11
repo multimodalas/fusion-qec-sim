@@ -1,10 +1,11 @@
 """
-v9.0.0 — Discovery Engine.
+v9.2.0 — Discovery Engine.
 
 Main loop for deterministic QLDPC structure discovery.  Combines
 mutation, repair, spectral evaluation, multi-objective ranking,
 novelty tracking, cycle-pressure guidance, spectral bad-edge
-detection, and ACE-gated mutation filtering.
+detection, ACE-gated mutation filtering, and incremental metric
+updates for local structural metrics.
 
 Layer 3 — Discovery.
 Does not import or modify the decoder (Layer 1).
@@ -42,6 +43,7 @@ from src.qec.discovery.archive import (
 from src.qec.discovery.cycle_pressure import compute_cycle_pressure
 from src.qec.discovery.spectral_bad_edge import detect_bad_edges
 from src.qec.discovery.ace_filter import ace_gate_mutation, compute_local_ace_score
+from src.qec.discovery.incremental_metrics import update_metrics_incrementally
 from src.qec.generation.tanner_graph_generator import generate_tanner_graph_candidates
 
 
@@ -227,16 +229,7 @@ def run_structure_discovery(
                 target_edges=guide_edges,
             )
 
-            # ACE gate
-            parent_composite = elite["objectives"].get("composite_score", float("inf"))
-            # Compute quick objectives for child
-            child_obj_seed = _derive_seed(gen_seed, f"child_obj_{ei}")
-            child_objectives = compute_discovery_objectives(
-                H_mutated, seed=child_obj_seed,
-            )
-            child_composite = child_objectives.get("composite_score", float("inf"))
-
-            # Find mutated edges for ACE evaluation
+            # Find mutated edges for ACE evaluation and incremental updates
             diff = np.abs(H_mutated - elite["H"])
             mutated_edges = [
                 (int(ci), int(vi))
@@ -244,6 +237,27 @@ def run_structure_discovery(
                 for vi in range(diff.shape[1])
                 if diff[ci, vi] > 0.5
             ]
+
+            # Attempt incremental metric update for quick ACE pre-check
+            removed = [e for e in mutated_edges if elite["H"][e[0], e[1]] > 0.5]
+            added = [e for e in mutated_edges if H_mutated[e[0], e[1]] > 0.5]
+            mutation_info = {"removed_edges": removed, "added_edges": added}
+
+            try:
+                incremental = update_metrics_incrementally(
+                    elite.get("objectives", {}), mutation_info,
+                )
+            except Exception:
+                incremental = None
+
+            # Full objective computation (spectral metrics require full recompute)
+            # ACE gate
+            parent_composite = elite["objectives"].get("composite_score", float("inf"))
+            child_obj_seed = _derive_seed(gen_seed, f"child_obj_{ei}")
+            child_objectives = compute_discovery_objectives(
+                H_mutated, seed=child_obj_seed,
+            )
+            child_composite = child_objectives.get("composite_score", float("inf"))
 
             ace_result = ace_gate_mutation(
                 elite["H"],

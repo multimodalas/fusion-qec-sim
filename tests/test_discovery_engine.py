@@ -113,10 +113,13 @@ class TestDiscoveryExperiment:
             artifact = run_discovery_experiment(
                 spec, num_generations=2, population_size=4, output_path=path,
             )
-            assert "spec" in artifact
-            assert "config" in artifact
-            assert "best_candidate" in artifact
-            assert "generation_summaries" in artifact
+            assert "metadata" in artifact
+            assert "results" in artifact
+            results = artifact["results"]
+            assert "spec" in results
+            assert "config" in results
+            assert "best_candidate" in results
+            assert "generation_summaries" in results
 
     def test_artifact_valid_json(self):
         spec = _default_spec()
@@ -143,10 +146,11 @@ class TestDiscoveryExperiment:
                 base_seed=42, output_path=p2,
             )
             with open(p1) as f:
-                d1 = f.read()
+                d1 = json.load(f)
             with open(p2) as f:
-                d2 = f.read()
-            assert d1 == d2
+                d2 = json.load(f)
+            # Compare results (excluding timestamp in metadata)
+            assert json.dumps(d1["results"], sort_keys=True) == json.dumps(d2["results"], sort_keys=True)
 
 
 class TestDiscoveryBenchmark:
@@ -167,8 +171,11 @@ class TestDiscoveryBenchmark:
             result = run_discovery_benchmark(
                 specs, num_generations=1, population_size=4, output_path=path,
             )
-            assert result["num_specs"] == 2
-            assert len(result["results"]) == 2
+            assert "metadata" in result
+            assert "benchmark_results" in result
+            bench = result["benchmark_results"]
+            assert bench["num_specs"] == 2
+            assert len(bench["results"]) == 2
 
     def test_benchmark_deterministic(self):
         specs = [_default_spec()]
@@ -184,6 +191,6 @@ class TestDiscoveryBenchmark:
                 base_seed=42, output_path=p2,
             )
             assert (
-                r1["results"][0]["best_composite_score"]
-                == r2["results"][0]["best_composite_score"]
+                r1["benchmark_results"]["results"][0]["best_composite_score"]
+                == r2["benchmark_results"]["results"][0]["best_composite_score"]
             )

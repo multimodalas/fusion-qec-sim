@@ -1,7 +1,9 @@
 """
-v9.0.0 — Inspect Discovery Archive.
+v9.2.0 — Inspect Discovery Archive.
 
-Loads a discovery run artifact and prints archive category details.
+Loads a discovery run or archive artifact and prints archive category details.
+
+Supports both v9.0.0 (flat) and v9.2.0 (metadata + results/archive) formats.
 
 Usage:
     python scripts/inspect_discovery_archive.py [artifact_path]
@@ -18,7 +20,15 @@ def inspect_archive(artifact_path: str = "artifacts/discovery_run.json") -> None
     with open(artifact_path) as f:
         data = json.load(f)
 
-    archive = data.get("archive_summary", {})
+    # Support v9.2.0 archive artifact format
+    if "archive" in data:
+        archive = data["archive"]
+    # Support v9.2.0 discovery_run format (nested under results)
+    elif "results" in data:
+        archive = data["results"].get("archive_summary", {})
+    # Support v9.0.0 flat format
+    else:
+        archive = data.get("archive_summary", {})
 
     print("Discovery Archive Summary")
     print("=" * 60)
