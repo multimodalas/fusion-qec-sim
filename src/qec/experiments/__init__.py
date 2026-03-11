@@ -39,3 +39,7 @@ from .eeec_anomaly_scan import (
     detect_eeec_anomaly,
     run_eeec_anomaly_scan,
 )
+from .spectral_heatmap_experiment import (
+    run_spectral_heatmap_experiment,
+    serialize_heatmap_artifact,
+)
