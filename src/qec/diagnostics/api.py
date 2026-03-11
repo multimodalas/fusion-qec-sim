@@ -1,5 +1,5 @@
 """
-v8.2.0 — Diagnostics Public API.
+v8.3.0 — Diagnostics Public API.
 
 Exposes all public diagnostic functions from a single module.
 Import from here for stable access to the diagnostics layer.
@@ -128,4 +128,14 @@ from src.qec.diagnostics.nb_sign_trapping_sets import detect_nb_sign_trapping_se
 from src.qec.diagnostics.critical_radius import estimate_critical_spectral_radius
 from src.qec.diagnostics.spectral_critical_line import (
     predict_spectral_critical_radius,
+)
+
+# ── v8.3.0: Stability optimization & spectral invariant discovery ──
+from src.qec.diagnostics.stability_optimizer import (
+    optimize_tanner_graph_stability,
+)
+from src.qec.diagnostics.repair_candidates import generate_repair_candidates
+from src.qec.diagnostics.repair_scoring import score_repair_candidate
+from src.qec.diagnostics.spectral_invariant_discovery import (
+    discover_spectral_invariants,
 )
