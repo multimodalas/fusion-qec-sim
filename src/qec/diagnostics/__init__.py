@@ -65,3 +65,9 @@ from .spectral_nb import (
     compute_nb_spectrum,
     compute_edge_sensitivity_ranking,
 )
+from .spectral_heatmaps import (
+    compute_spectral_heatmaps,
+    rank_variable_nodes_by_heat,
+    rank_check_nodes_by_heat,
+    rank_edges_by_heat,
+)
