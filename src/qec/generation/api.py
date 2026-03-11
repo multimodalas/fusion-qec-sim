@@ -23,3 +23,8 @@ from src.qec.generation.candidate_ranking import (
 from src.qec.generation.export_generated_graph import (
     export_generated_graph,
 )
+
+# ── v8.5.0: Deterministic cycle-avoidant construction ───────────
+from src.qec.generation.deterministic_construction import (
+    construct_deterministic_tanner_graph,
+)

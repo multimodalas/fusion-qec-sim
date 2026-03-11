@@ -34,6 +34,9 @@ from src.qec.generation.candidate_ranking import (
 from src.qec.generation.export_generated_graph import (
     export_generated_graph,
 )
+from src.qec.generation.deterministic_construction import (
+    construct_deterministic_tanner_graph,
+)
 from src.qec.experiments.generation_trajectory import (
     run_generation_trajectory,
 )
@@ -376,3 +379,71 @@ class TestGenerationBenchmark:
             assert r1["results"][0]["best_instability_score"] == (
                 r2["results"][0]["best_instability_score"]
             )
+
+
+# ── Deterministic construction tests ────────────────────────────
+
+
+class TestDeterministicConstruction:
+    """Tests for the v8.5.0 deterministic cycle-avoidant construction."""
+
+    def test_deterministic_reproducibility(self):
+        """Identical specs produce identical matrices across calls."""
+        spec = _default_spec()
+        H1 = construct_deterministic_tanner_graph(spec)
+        H2 = construct_deterministic_tanner_graph(spec)
+        np.testing.assert_array_equal(H1, H2)
+
+    def test_degree_constraints(self):
+        """Column sums equal variable_degree, row sums equal check_degree."""
+        spec = _default_spec()
+        H = construct_deterministic_tanner_graph(spec)
+        np.testing.assert_array_equal(
+            H.sum(axis=0),
+            np.full(spec["num_variables"], spec["variable_degree"]),
+        )
+        np.testing.assert_array_equal(
+            H.sum(axis=1),
+            np.full(spec["num_checks"], spec["check_degree"]),
+        )
+
+    def test_invalid_specification_raises(self):
+        """Mismatched n*dv != m*dc raises ValueError."""
+        bad_spec = {
+            "num_variables": 6,
+            "num_checks": 3,
+            "variable_degree": 2,
+            "check_degree": 5,  # 6*2 != 3*5
+        }
+        with pytest.raises(ValueError, match="Degree constraint violated"):
+            construct_deterministic_tanner_graph(bad_spec)
+
+    def test_generator_deterministic_with_construction(self):
+        """generate_tanner_graph_candidates remains deterministic."""
+        spec = _default_spec()
+        c1 = generate_tanner_graph_candidates(spec, 4, base_seed=77)
+        c2 = generate_tanner_graph_candidates(spec, 4, base_seed=77)
+        for a, b in zip(c1, c2):
+            np.testing.assert_array_equal(a["H"], b["H"])
+            assert a["candidate_id"] == b["candidate_id"]
+
+    def test_structural_sanity(self):
+        """Evaluate a constructed graph and verify metrics exist."""
+        spec = _default_spec()
+        H = construct_deterministic_tanner_graph(spec)
+        metrics = evaluate_tanner_graph_candidate(H)
+        required_keys = {
+            "spectral_radius", "entropy", "spectral_gap",
+            "bethe_margin", "support_dimension", "curvature",
+            "cycle_density", "sis", "instability_score",
+            "predicted_regime",
+        }
+        assert required_keys == set(metrics.keys())
+        assert np.all((H == 0) | (H == 1))
+
+    def test_H_shape_and_dtype(self):
+        """Output has correct shape and dtype."""
+        spec = _default_spec()
+        H = construct_deterministic_tanner_graph(spec)
+        assert H.shape == (spec["num_checks"], spec["num_variables"])
+        assert H.dtype == np.float64
