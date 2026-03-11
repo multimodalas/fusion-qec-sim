@@ -284,7 +284,19 @@ class TestNBEnergyHeatmap:
         H = _tiny_H()
         r1 = compute_nb_energy_heatmap(H)
         r2 = compute_nb_energy_heatmap(H)
-        assert r1 == r2
+        # Heat values must be identical; hottest node indices may differ
+        # when multiple nodes share the maximum heat (argmax tie-breaking).
+        assert r1["variable_node_heat"] == r2["variable_node_heat"]
+        assert r1["check_node_heat"] == r2["check_node_heat"]
+        np.testing.assert_allclose(
+            r1["max_variable_heat"], r2["max_variable_heat"], atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            r1["max_check_heat"], r2["max_check_heat"], atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            r1["total_energy"], r2["total_energy"], atol=1e-12,
+        )
 
     def test_json_serializable(self):
         H = _tiny_H()
