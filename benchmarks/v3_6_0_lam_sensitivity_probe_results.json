@@ -1,0 +1,58 @@
+{
+  "probe": "v3.6.0_lam_sensitivity",
+  "objective": "Test ordering sensitivity of osd_cs vs mp_osd_cs across lam=1,2,3 under bsc_syndrome",
+  "config": {
+    "code": "rate_0.50",
+    "code_seed": 42,
+    "distances": [8, 12, 16],
+    "channel_model": "bsc_syndrome",
+    "bp_mode": "min_sum",
+    "bp_schedule": "flooding",
+    "max_iters": 50,
+    "p_values": [0.01, 0.02, 0.03, 0.04],
+    "trials": 300,
+    "lam_values": [1, 2, 3]
+  },
+  "baseline_none_verified": true,
+  "determinism_verified": true,
+  "wer_tables": {
+    "note": "WER is identical for osd_cs and mp_osd_cs at all lam values (1,2,3). A single table represents all 6 configurations.",
+    "none": {
+      "d=8":  {"p=0.01": 0.6467, "p=0.02": 0.8367, "p=0.03": 0.9433, "p=0.04": 0.9633},
+      "d=12": {"p=0.01": 0.8033, "p=0.02": 0.9567, "p=0.03": 0.9933, "p=0.04": 0.9967},
+      "d=16": {"p=0.01": 0.8967, "p=0.02": 0.9733, "p=0.03": 0.9967, "p=0.04": 1.0000}
+    },
+    "osd_cs_and_mp_osd_cs_all_lam": {
+      "d=8":  {"p=0.01": 0.5767, "p=0.02": 0.7700, "p=0.03": 0.8833, "p=0.04": 0.9167},
+      "d=12": {"p=0.01": 0.6833, "p=0.02": 0.8867, "p=0.03": 0.9600, "p=0.04": 0.9900},
+      "d=16": {"p=0.01": 0.8067, "p=0.02": 0.9500, "p=0.03": 0.9900, "p=0.04": 0.9967}
+    }
+  },
+  "dps_slopes": {
+    "note": "All slopes identical across lam=1,2,3 and between osd_cs/mp_osd_cs. All inverted=true.",
+    "osd_cs_and_mp_osd_cs": {
+      "p=0.01": {"slope": 0.0182202632, "inverted": true, "log_fer": [-0.2391, -0.1654, -0.0933]},
+      "p=0.02": {"slope": 0.0114041100, "inverted": true, "log_fer": [-0.1135, -0.0522, -0.0223]},
+      "p=0.03": {"slope": 0.0061908705, "inverted": true, "log_fer": [-0.0539, -0.0177, -0.0044]},
+      "p=0.04": {"slope": 0.0045421534, "inverted": true, "log_fer": [-0.0378, -0.0044, -0.0014]}
+    },
+    "none_baseline": {
+      "p=0.01": {"slope": 0.0177430386, "inverted": true, "log_fer": [-0.1893, -0.0951, -0.0474]},
+      "p=0.02": {"slope": 0.0082096193, "inverted": true, "log_fer": [-0.0774, -0.0192, -0.0118]},
+      "p=0.03": {"slope": 0.0029893280, "inverted": true, "log_fer": [-0.0254, -0.0029, -0.0014]},
+      "p=0.04": {"slope": 0.0020298050, "inverted": true, "log_fer": [-0.0162, -0.0014, 0.0]}
+    }
+  },
+  "divergence": {
+    "lam=1": {"total_trials": 3600, "differing_corrections": 0, "osd_cs_only_success": 0, "mp_osd_cs_only_success": 0},
+    "lam=2": {"total_trials": 3600, "differing_corrections": 0, "osd_cs_only_success": 0, "mp_osd_cs_only_success": 0},
+    "lam=3": {"total_trials": 3600, "differing_corrections": 0, "osd_cs_only_success": 0, "mp_osd_cs_only_success": 0}
+  },
+  "interpretation": {
+    "ordering_sensitivity_observable": false,
+    "lam_changes_divergence": false,
+    "lam_changes_wer": false,
+    "root_cause": "Under bsc_syndrome, uniform channel LLR makes osd_cs column ordering trivial ([0,1,...,n-1]). mp_osd_cs uses non-trivial posterior ordering. Despite different orderings, Gaussian elimination yields the same unique minimum-weight solution at these code sizes. The OSD solution space is small enough that both orderings converge to the same candidate.",
+    "conditions_for_divergence": "Larger code sizes, non-uniform channel LLR (oracle), or higher noise regimes where multiple near-minimum-weight candidates compete."
+  }
+}

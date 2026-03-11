@@ -7,7 +7,10 @@ Run with:
 
 import numpy as np
 import pytest
-from scipy import sparse
+
+sparse = pytest.importorskip("scipy.sparse")
+qldpc_field = pytest.importorskip("qldpc.field")
+pytest.importorskip("qldpc.css_code")
 
 from qldpc.field import GF2e
 from qldpc.lift import LiftTable

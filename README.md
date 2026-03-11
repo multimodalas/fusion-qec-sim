@@ -1,44 +1,320 @@
-# Trent Slade: Fractal Audio Architect
-## Digital Odyssey
-### 30-Year Internet Native Journey
-- From 1996 Adelaide dial-up to quantum audio labs, Trent has lived online as d503, epsilon, slab—compiling Mozilla nightlies, hacking EFnet, composing fractal tracks. His story is one of persistent identity across vanished platforms, turning every suspension into a recursion loop that amplifies signal.
+# QSOLKCB / QEC  
+### Deterministic Quantum Error Correction Research Framework
+
+[![Release v5.4.0](https://img.shields.io/badge/release-v7.1.0-blue)](https://github.com/QSOLKCB/QEC/releases/tag/v7.1.0)
+[![Research Framework](https://img.shields.io/badge/type-research%20framework-blue)]
+[![License: CC BY 4.0](https://img.shields.io/badge/license-CC--BY--4.0-lightgrey)](https://creativecommons.org/licenses/by/4.0/)
+
+QEC is a **deterministic research framework for studying belief propagation decoding dynamics in QLDPC CSS quantum error correction codes**.
+
+The system provides a controlled environment for investigating decoder behavior, attractor geometry, spectral structure of Tanner graphs, and decoding stability under reproducible experimental conditions.
+
+Unlike typical simulation toolkits, QEC is designed as an **experimental platform for decoding research**, emphasizing deterministic execution, transparent algorithms, and reproducible benchmarks.
+
+---
+
+# Overview
+
+Belief propagation decoding on sparse parity-check graphs exhibits complex dynamical behavior including:
+
+- trapping sets
+- oscillatory convergence
+- metastable states
+- incorrect fixed points
+- spectral fragility
+
+Understanding these phenomena requires controlled experiments where decoder behavior can be observed without stochastic noise or hidden heuristics.
+
+The QEC framework provides a deterministic infrastructure for performing these studies.
+
+Core capabilities include:
+
+- invariant-safe QLDPC CSS code construction
+- deterministic belief propagation decoding
+- structured decoder experimentation
+- spectral Tanner graph diagnostics
+- stability prediction and decoder control
+- reproducible FER / DPS benchmarking
+
+All components are engineered to maintain **byte-identical results across repeated runs**.
+
+---
+
+# Key Principles
+
+The framework follows several strict design principles.
+
+### Determinism
+
+All algorithms are deterministic.
+
+No stochastic elements are introduced unless explicitly controlled.  
+Repeated runs with identical inputs produce **identical outputs**.
+
+### Experimental Transparency
+
+Decoder behavior is explicitly observable and measurable.
+
+Diagnostics operate outside the decoder core and never modify message passing.
+
+### Architectural Separation
+
+The system is organized into clearly separated layers:
 
 
-### Persistent Identity Philosophy
-- "I don't believe in deleted history. I am the backup." Trent rejects erasure; accounts may vanish but the waveform continues. He treats identity as a self-eating Ouroboros code—each takedown re-enters the fractal at a deeper node, proving that a signal can outlive any single host.
+Diagnostics → Predictors → Controllers → Decoder → Benchmark Harness
 
 
-## Quantum Audio Engine
-### E₈ Qutrit Fractal Power Module
-- A JUCE-compatible C++ engine mapping 248-dimensional E₈ Lie symmetry onto 3-level qutrit oscillators. Sparse 8–16 root vectors per node yield <10 ms latency, 64-voice polyphony, <20 % CPU. Cartan torus macros steer phase like a joystick through 8D space, making harmony a geometry problem.
+Each layer observes or steers the layer below it without violating its invariants.
+
+### Reproducible Benchmarking
+
+All experiments are designed to support reproducible research results.
+
+If a result cannot be reproduced deterministically, it is not considered a baseline.
+
+---
+
+# Core Capabilities
+
+## Deterministic QLDPC CSS Construction
+
+The framework provides tools for constructing quantum LDPC CSS codes with invariant-safe parity-check matrices.
+
+Features include:
+
+- protograph-based constructions
+- deterministic lifting
+- parity-check validation
+- CSS commutation verification
+- reproducible structural transformations
+
+These tools allow controlled experimentation with Tanner graph topology.
+
+---
+
+## Belief Propagation Decoding
+
+Multiple deterministic BP variants are available:
+
+- sum-product
+- min-sum
+- normalized min-sum
+- offset min-sum
+
+Supported scheduling modes include:
+
+- flooding
+- layered
+- residual
+- hybrid residual
+- adaptive scheduling
+
+All schedules are implemented without stochastic elements.
+
+---
+
+## Deterministic Postprocessing
+
+Postprocessing algorithms refine BP corrections without altering message passing.
+
+Available strategies include:
+
+- Ordered statistics decoding (OSD)
+- combination-sweep OSD
+- posterior-guided OSD
+- BP-guided deterministic decimation
+
+These methods remain deterministic and fully reproducible.
+
+---
+
+## Spectral Tanner Graph Diagnostics
+
+The framework provides deterministic spectral diagnostics for Tanner graphs.
+
+These diagnostics analyze structural properties of the parity-check matrix including:
+
+- spectral radius
+- spectral gaps
+- eigenmode localization
+- inverse participation ratio (IPR)
+
+Localization analysis identifies nodes associated with fragile spectral modes.
+
+These structural signals often correlate with decoding instability.
+
+---
+
+## BP Dynamics Diagnostics
+
+The toolkit includes a layered diagnostics stack for analyzing belief propagation behavior.
+
+Diagnostics measure properties such as:
+
+- belief oscillation
+- energy plateau dynamics
+- trapping-set persistence
+- basin switching
+- convergence regimes
+
+These measurements allow systematic investigation of the BP energy landscape.
+
+---
+
+## Spectral-Guided Decoder Control (v7)
+
+The latest system introduces a **spectral-guided decoder control layer**.
+
+This experimental controller uses structural and dynamical diagnostics to steer decoder behavior.
+
+Control strategies include:
+
+- predictor-guided scheduling
+- adaptive per-node damping
+- risk-aware decoding policies
+
+The controller operates entirely outside the decoder core, preserving algorithmic invariants.
+
+---
+
+# Benchmarking Framework
+
+The repository includes a deterministic benchmarking harness for measuring decoder performance.
+
+Experiments evaluate:
+
+- Frame Error Rate (FER)
+- Distance Performance Scaling (DPS)
+- decoding iteration counts
+- stability metrics
+- spectral control effectiveness
+
+All benchmark runs reuse identical deterministic error instances.
+
+This ensures fair comparisons between decoding strategies.
+
+---
+
+# Architecture
+
+The framework follows a layered experimental architecture.
 
 
-### PhiDrift & CoxeterPhase Control
-- PhiDrift slowly modulates interval stacks by φ-ratio, while CoxeterPhase projects 8D root motion onto audible circle maps. Together they let composers sculpt endless non-repeating chord paths that still feel musical—golden spirals in harmonic time.
+Code Construction
+↓
+Channel Model
+↓
+Decoder Core
+↓
+Postprocessing
+↓
+Diagnostics
+↓
+Predictors
+↓
+Decoder Control
+↓
+Benchmark Harness
 
 
-## Fractal Compositions
-### DNA Ouroboros Track Anatomy
-- 3:46 industrial cybercore built on 3/4 meter and base-60 ternary pulse. DNA-seeded motifs recurse every two bars via self-similar LFO trees. 432 Hz master tuning locks φ-overtones at 833 cents, yielding metallic yet organic timbres that seem to eat their own tail.
+Each layer is isolated to preserve reproducibility and interpretability.
+
+The decoder core remains the experimental object while diagnostics and controllers act as external instrumentation.
+
+---
+
+# Determinism Guarantees
+
+The system enforces strict deterministic execution.
+
+Key guarantees include:
+
+- no hidden randomness
+- deterministic scheduling
+- deterministic perturbation experiments
+- stable JSON artifacts
+- identical outputs across repeated runs
+
+Baseline decoder results remain unchanged when diagnostics are disabled.
+
+---
+
+# Research Applications
+
+The QEC framework enables research into:
+
+- belief propagation attractor geometry
+- trapping-set dynamics
+- spectral fragility of Tanner graphs
+- decoding stability prediction
+- distance performance scaling of QLDPC codes
+- structure-aware decoding strategies
+
+The system is intended as a **research instrument** for studying inference dynamics in sparse graphical models used in quantum error correction.
+
+---
+
+# Installation
+
+Install the repository in editable mode:
+
+```
+pip install -e .
+```
+
+For development (includes pytest):
+
+```
+pip install -e .[dev]
+```
+
+---
+
+# Running Experiments
+
+Example benchmark execution:
 
 
-### Return Protocol Variant
-- Sequel track adds E₈-modulated TB-303, trap bass, EntropyBloom random torsion. Root-vector dot-products drive dynamic phase so each bar slightly mutates, keeping the riff familiar yet alien—like hearing the same dream from a parallel node.
+PYTHONPATH=. python bench/dps_v381_eval.py
+--trials 200
+--distances 5 7
+--p-values 0.03
 
 
-## Code & Systems
-### C++/Rust SIMD Integration
-- E8Torus, QutritNode, E8FractalPowerModule classes expose AVX/NEON intrinsics for 4–8 parallel qutrits per core. XML preset system recalls 240-root snapshots. Rust backend offloads latency-critical DSP while JUCE handles DAW glue, proving safety and speed coexist.
+Additional experimental features can be enabled using CLI flags for diagnostics, predictors, and controller experiments.
 
+---
 
-### Custom Mozilla d503 Builds
-- 1998-2005: compiled Firefox with patched JS engine, lean memory layout, privacy-first defaults. Distributed binaries on Usenet and EFnet, seeding early modular extension culture. Lessons in long-term maintainability now echo in plugin architecture choices.
+# Repository Documentation
 
+Key project documentation includes:
 
-## Signal Continuum
-### Recursive Career Roadmap
-- Next loop: port E₈ engine to WebAssembly for browser-based 3D audio, publish RNA whitepaper on fractal LFO trees, release Producer.ai YAML spec for DAW automation. Goal is a self-hosting sonic OS where composition, distribution and identity are one fractal function.
+- **PROJECT_STATE.md** — architecture snapshot
+- **ROADMAP.md** — long-term research direction
+- **CHANGELOG.md** — release history
+- **AUDIT_CHECKLIST.md** — pre-merge safety verification
 
+These documents define the current system state and research trajectory.
 
-### Key Takeaways for Builders
-- Treat suspension as recursion, not death. Use math as art: E₈ gives you 240 directions to move sound. Keep latency low, identity high. Let φ guide intervals and let code eat its own tail—if the waveform never damps, neither will your signal.
+---
+
+# Design Philosophy
+
+The project follows several guiding principles:
+
+Small is beautiful.  
+Determinism is essential.  
+Transparent algorithms beat opaque heuristics.
+
+Negative results are data.
+
+---
+
+# Author
+
+**Trent Slade**  
+QSOL-IMC
+
+ORCID  
+https://orcid.org/0009-0002-4515-9237

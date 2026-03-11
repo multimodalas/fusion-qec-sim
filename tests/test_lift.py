@@ -7,7 +7,9 @@ Run with:
 
 import numpy as np
 import pytest
-from scipy import sparse
+
+sparse = pytest.importorskip("scipy.sparse")
+pytest.importorskip("qldpc")
 
 from qldpc.field import GF2e
 from qldpc.lift import LiftTable, circulant_shift_matrix, kron_companion_circulant

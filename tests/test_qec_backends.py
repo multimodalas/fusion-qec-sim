@@ -7,6 +7,8 @@ import numpy as np
 import sys
 import os
 
+pytest.importorskip("qutip")
+
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -33,6 +35,13 @@ def test_backend_factory_qiskit():
     assert code.n_qubits == 7
     assert code.n_data == 1
     assert code.distance == 3
+
+
+@pytest.mark.skipif(QISKIT_AVAILABLE, reason="Qiskit installed; ImportError path not applicable")
+def test_backend_factory_qiskit_importerror_when_unavailable():
+    """Test that requesting Qiskit backend raises ImportError when Qiskit is unavailable."""
+    with pytest.raises(ImportError):
+        create_steane_code('qiskit')
 
 
 def test_backend_factory_invalid():

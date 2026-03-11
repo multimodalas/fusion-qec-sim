@@ -1,3 +1,44 @@
+## v2.8.0 — Deterministic Scheduling & State-Aware Enhancements
+
+Belief Propagation decoder enhancements for QLDPC codes.
+
+### `improved_norm` / `improved_offset` modes
+
+- Extended min-sum variants with dual scaling parameters `alpha1` and `alpha2`.
+- Deterministic, invariant-preserving check-node update modifications.
+- Fully backward-compatible with existing min-sum modes.
+
+### `hybrid_residual` schedule
+
+- Deterministic even/odd check-node partitioning.
+- Within each layer, checks are ordered by descending residual.
+- Optional `hybrid_residual_threshold` prioritizes high-residual checks within each layer.
+- No randomness; stable tie-breaking by ascending check index.
+
+### Deterministic ensemble decoding (`ensemble_k`)
+
+- Runs K independent BP passes with deterministic, zero-mean alternating LLR perturbations.
+- Member 0 uses exact baseline LLR.
+- Selection criteria:
+  - Converged solutions preferred.
+  - Lowest syndrome weight.
+  - Deterministic member index tie-break.
+- No RNG usage; fully reproducible.
+
+### State-aware residual weighting (`state_aware_residual`)
+
+- Residual ordering can be modulated by per-check state weights:
+  - `weight = s_by_state[label] * |cos(phi_by_state[label])|`
+- Applied multiplicatively to raw residuals.
+- Strict validation of state labels (non-negative, in-range, length `m`).
+- Disabled by default — baseline behavior unchanged when off.
+
+### Test Boundary Stabilization
+
+- Added `pytest.ini` to scope test discovery to `tests/`.
+- Full regression: 339 passed, 7 skipped, 0 failed.
+- Determinism verified across repeated runs.
+
 ## v0.3 – Qiskit Backend Integration
 
 - **NEW: Dual backend support** - Choose between QuTiP or Qiskit for quantum simulations

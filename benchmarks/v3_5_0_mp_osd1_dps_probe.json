@@ -1,0 +1,50 @@
+{
+  "schema_version": "3.0.1",
+  "seed": 42,
+  "distances": [5, 7],
+  "p_values": [0.015],
+  "trials": 150,
+  "max_iters": 50,
+  "decoders": [
+    {
+      "adapter": "bp",
+      "params": {
+        "mode": "min_sum",
+        "schedule": "flooding"
+      }
+    },
+    {
+      "adapter": "bp",
+      "params": {
+        "mode": "min_sum",
+        "schedule": "flooding",
+        "postprocess": "osd1"
+      }
+    },
+    {
+      "adapter": "bp",
+      "params": {
+        "mode": "min_sum",
+        "schedule": "flooding",
+        "postprocess": "mp_osd1"
+      }
+    },
+    {
+      "adapter": "bp",
+      "params": {
+        "mode": "min_sum",
+        "schedule": "flooding",
+        "postprocess": "guided_decimation"
+      }
+    }
+  ],
+  "runtime_mode": "off",
+  "runtime": {
+    "warmup": 1,
+    "runs": 1,
+    "measure_memory": false
+  },
+  "collect_iter_hist": false,
+  "deterministic_metadata": true,
+  "channel_model": "bsc_syndrome"
+}
