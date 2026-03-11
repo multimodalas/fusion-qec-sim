@@ -60,3 +60,7 @@ from .sensitivity_map import (
     compute_measured_instability_deltas,
     compute_sensitivity_map,
 )
+from .spectral_nb import (
+    compute_nb_spectrum,
+    compute_edge_sensitivity_ranking,
+)

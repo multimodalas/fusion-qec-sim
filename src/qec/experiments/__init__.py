@@ -31,3 +31,11 @@ from .sensitivity_preconditioner import (
     run_sensitivity_preconditioned_optimization,
     run_sensitivity_preconditioner_experiment,
 )
+from .spectral_validation import (
+    run_spectral_validation_experiment,
+    serialize_artifact,
+)
+from .eeec_anomaly_scan import (
+    detect_eeec_anomaly,
+    run_eeec_anomaly_scan,
+)
