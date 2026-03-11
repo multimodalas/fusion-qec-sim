@@ -44,6 +44,10 @@ from src.qec.discovery.cycle_pressure import compute_cycle_pressure
 from src.qec.discovery.spectral_bad_edge import detect_bad_edges
 from src.qec.discovery.ace_filter import ace_gate_mutation, compute_local_ace_score
 from src.qec.discovery.incremental_metrics import update_metrics_incrementally
+from src.qec.discovery.diversity import (
+    compute_structure_signature,
+    compute_diversity_penalty,
+)
 from src.qec.generation.tanner_graph_generator import generate_tanner_graph_candidates
 
 
@@ -153,6 +157,7 @@ def run_structure_discovery(
     archive = create_archive(top_k=archive_top_k)
     elite_history: list[dict[str, Any]] = []
     generation_summaries: list[dict[str, Any]] = []
+    signature_archive: list[tuple[float, ...]] = []
 
     # Build initial population as search states
     population: list[dict[str, Any]] = []
@@ -174,6 +179,11 @@ def run_structure_discovery(
             is_feasible=validation["is_valid"],
         )
         population.append(state)
+
+    # Seed signature archive with initial population
+    for state in population:
+        sig = compute_structure_signature(state["H"])
+        signature_archive.append(sig)
 
     # Initial ranking
     population = _rank_candidates(population)
@@ -286,6 +296,17 @@ def run_structure_discovery(
                 H_repaired, seed=repair_obj_seed,
             )
 
+            # Diversity penalty
+            child_sig = compute_structure_signature(H_repaired)
+            diversity_penalty = compute_diversity_penalty(
+                child_sig, signature_archive,
+            )
+            repaired_objectives["composite_score"] = (
+                repaired_objectives.get("composite_score", 0.0)
+                + diversity_penalty
+            )
+            signature_archive.append(child_sig)
+
             # Novelty
             archive_features = get_archive_features(archive)
             fv = extract_feature_vector(repaired_objectives)
@@ -332,6 +353,7 @@ def run_structure_discovery(
 
     return {
         "best_candidate": _serialize_candidate(best_candidate) if best_candidate else None,
+        "best_H": best_candidate["H"] if best_candidate else None,
         "elite_history": elite_history,
         "archive_summary": archive_summary,
         "generation_summaries": generation_summaries,

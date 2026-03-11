@@ -15,6 +15,11 @@ import os
 from typing import Any
 
 from src.qec.discovery.discovery_engine import run_structure_discovery
+from src.qec.io.export_graph import (
+    export_matrix_market,
+    export_parity_check,
+    export_json_adjacency,
+)
 from src.qec.utils.reproducibility import collect_environment_metadata
 from src.utils.canonicalize import canonicalize
 
@@ -64,6 +69,14 @@ def run_discovery_experiment(
         generation_count=num_generations,
         population_size=population_size,
     )
+
+    # Export best graph in standard formats
+    best_H = result.get("best_H")
+    if best_H is not None:
+        artifact_dir = os.path.dirname(output_path) or "artifacts"
+        export_matrix_market(best_H, os.path.join(artifact_dir, "best_graph.mtx"))
+        export_parity_check(best_H, os.path.join(artifact_dir, "best_graph.txt"))
+        export_json_adjacency(best_H, os.path.join(artifact_dir, "best_graph.json"))
 
     artifact = {
         "metadata": metadata,
