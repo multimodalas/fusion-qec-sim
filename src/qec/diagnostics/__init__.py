@@ -78,3 +78,6 @@ from .spectral_incremental import (
     identify_affected_nb_edges,
     score_repair_candidate_incremental,
 )
+from .nb_localization_detector import detect_nb_eigenvector_localization
+from .nb_energy_heatmap import compute_nb_energy_heatmap
+from .nb_sign_pattern_detector import detect_nb_sign_pattern_trapping_sets

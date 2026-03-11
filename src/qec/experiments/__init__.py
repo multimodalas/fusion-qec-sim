@@ -47,3 +47,12 @@ from .incremental_spectral_benchmark import (
     run_incremental_spectral_benchmark,
     serialize_benchmark_artifact,
 )
+from .stability_phase_diagram import (
+    run_stability_phase_diagram_experiment,
+    serialize_phase_diagram_artifact,
+    detect_metastable_bp_oscillation,
+    estimate_bp_stability_boundary,
+    predict_spectral_stability_boundary,
+    log_most_unstable_subgraph,
+    track_repair_boundary_shift,
+)
