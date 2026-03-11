@@ -1,23 +1,23 @@
 [build-system]
-requires = ["setuptools>=64"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "qec"
-version = "4.8.0"
-requires-python = ">=3.9"
+version = "9.1.0"
+description = "Deterministic Tanner graph generation and QLDPC structure discovery engine"
+readme = "README.md"
+requires-python = ">=3.10"
+
 dependencies = [
     "numpy>=1.24",
+    "scipy>=1.10"
 ]
 
 [project.optional-dependencies]
-science = [
-    "scipy>=1.10",
-    "qutip>=4.7",
-    "matplotlib>=3.7",
-]
 dev = [
-    "pytest>=7.0",
-    "scipy>=1.10",
-    "qutip>=4.7",
+    "pytest>=7.0"
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

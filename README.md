@@ -255,6 +255,22 @@ The system is intended as a **research instrument** for studying inference dynam
 
 ---
 
+# Installation
+
+Install the repository in editable mode:
+
+```
+pip install -e .
+```
+
+For development (includes pytest):
+
+```
+pip install -e .[dev]
+```
+
+---
+
 # Running Experiments
 
 Example benchmark execution:
