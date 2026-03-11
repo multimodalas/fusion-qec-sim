@@ -1,7 +1,7 @@
 """
-v10.1.0 — Guided Mutation Operators.
+v11.0.0 — Guided Mutation Operators.
 
-Six deterministic mutation operators guided by spectral and structural
+Seven deterministic mutation operators guided by spectral and structural
 analysis of the Tanner graph.
 
 Operators:
@@ -11,6 +11,7 @@ Operators:
   4. girth_preserving_rewire — rewire without decreasing girth
   5. expansion_driven_rewire — improve neighbourhood expansion
   6. ipr_trapping_pressure — rewire high-IPR variable nodes (proto-trapping sets)
+  7. trapping_set_pressure — break detected elementary trapping sets (v11.0.0)
 
 Layer 3 — Discovery.
 Does not import or modify the decoder (Layer 1).
@@ -30,6 +31,7 @@ from src.qec.fitness.spectral_metrics import (
     compute_girth_spectrum,
     compute_ace_spectrum,
 )
+from src.qec.analysis.trapping_sets import TrappingSetDetector
 
 
 _ROUND = 12
@@ -41,6 +43,7 @@ _OPERATORS = [
     "girth_preserving_rewire",
     "expansion_driven_rewire",
     "ipr_trapping_pressure",
+    "trapping_set_pressure",
 ]
 
 
@@ -621,6 +624,90 @@ def ipr_trapping_pressure_mutation(
 
 
 # -----------------------------------------------------------
+# 7. Trapping Set Pressure (v11.0.0)
+# -----------------------------------------------------------
+
+
+def trapping_set_pressure_mutation(
+    H: np.ndarray,
+    *,
+    seed: int = 0,
+) -> np.ndarray:
+    """Break detected elementary trapping sets.
+
+    Runs the trapping set detector, identifies variable nodes inside
+    the smallest trapping sets, removes one edge from those variables,
+    and reconnects to a variable outside the trapping set region.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Binary parity-check matrix, shape (m, n).
+    seed : int
+        Deterministic seed.
+
+    Returns
+    -------
+    np.ndarray
+        Mutated parity-check matrix.
+    """
+    H_arr = np.asarray(H, dtype=np.float64)
+    m, n = H_arr.shape
+    H_out = H_arr.copy()
+
+    if m == 0 or n == 0:
+        return H_out
+
+    detector = TrappingSetDetector(max_a=6, max_b=4)
+    ts_result = detector.detect(H_arr)
+
+    participation = ts_result["variable_participation"]
+    if sum(participation) == 0:
+        return H_out
+
+    rng = np.random.RandomState(seed)
+
+    # Target variable with highest trapping-set participation
+    ranked = sorted(range(n), key=lambda vi: (-participation[vi], vi))
+    ts_vars = set(vi for vi in range(n) if participation[vi] > 0)
+
+    for vi_target in ranked:
+        if participation[vi_target] == 0:
+            break
+
+        checks = sorted(ci for ci in range(m) if H_out[ci, vi_target] != 0)
+        if not checks or H_out[:, vi_target].sum() <= 1:
+            continue
+
+        ci_remove = checks[rng.randint(0, len(checks))]
+        if H_out[ci_remove].sum() <= 1:
+            continue
+
+        H_out[ci_remove, vi_target] = 0.0
+
+        # Reconnect to a variable outside the trapping set region
+        outside = sorted(
+            vi for vi in range(n)
+            if vi not in ts_vars and H_out[ci_remove, vi] == 0.0
+        )
+        if outside:
+            new_vi = outside[rng.randint(0, min(5, len(outside)))]
+            H_out[ci_remove, new_vi] = 1.0
+        else:
+            # Fallback: any non-edge
+            available = sorted(
+                vi for vi in range(n) if H_out[ci_remove, vi] == 0.0
+            )
+            if available:
+                H_out[ci_remove, available[rng.randint(0, len(available))]] = 1.0
+            else:
+                H_out[ci_remove, vi_target] = 1.0
+        return H_out
+
+    return H_out
+
+
+# -----------------------------------------------------------
 # Dispatcher
 # -----------------------------------------------------------
 
@@ -632,6 +719,7 @@ _OPERATOR_FUNCTIONS = {
     "girth_preserving_rewire": girth_preserving_rewire,
     "expansion_driven_rewire": expansion_driven_rewire,
     "ipr_trapping_pressure": ipr_trapping_pressure_mutation,
+    "trapping_set_pressure": trapping_set_pressure_mutation,
 }
 
 

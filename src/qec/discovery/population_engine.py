@@ -1,9 +1,12 @@
 """
-v10.0.0 — Population Discovery Engine.
+v11.0.0 — Population Discovery Engine.
 
 Deterministic evolutionary search for high-performance LDPC/QLDPC
 parity-check matrices.  Uses tournament selection, elitism, and
 guided mutations with spectral fitness evaluation.
+
+v11.0.0 adds decoder-aware evaluation: trapping set detection,
+BP instability probing, and combined decoder-aware fitness scoring.
 
 Layer 3 — Discovery.
 Does not import or modify the decoder (Layer 1).
@@ -56,6 +59,12 @@ class DiscoveryEngine:
         Base seed for all deterministic derivation.
     archive_path : str
         Path for persistent archive storage.
+    decoder_aware : bool
+        Enable decoder-aware fitness evaluation (default False).
+    bp_trials : int
+        Number of BP probe trials when decoder_aware is True (default 50).
+    bp_iterations : int
+        Max BP iterations per probe trial (default 10).
     """
 
     def __init__(
@@ -64,12 +73,21 @@ class DiscoveryEngine:
         generations: int = 500,
         seed: int = 42,
         archive_path: str = "./discovery_archive",
+        decoder_aware: bool = False,
+        bp_trials: int = 50,
+        bp_iterations: int = 10,
     ) -> None:
         self.population_size = population_size
         self.generations = generations
         self.seed = seed
         self.archive_path = archive_path
-        self._fitness_engine = FitnessEngine()
+        self.decoder_aware = decoder_aware
+        self._fitness_engine = FitnessEngine(
+            decoder_aware=decoder_aware,
+            bp_trials=bp_trials,
+            bp_iterations=bp_iterations,
+            bp_seed=seed,
+        )
         self._population: list[dict[str, Any]] = []
         self._archive: list[dict[str, Any]] = []
         self._generation: int = 0
@@ -255,14 +273,25 @@ class DiscoveryEngine:
 
         for i, parent in enumerate(parents):
             mut_seed = _derive_seed(gen_seed, f"mutate_{i}")
-            operator_idx = (self._generation + i) % 5
-            operators = [
-                "spectral_edge_pressure",
-                "cycle_pressure",
-                "ace_repair",
-                "girth_preserving_rewire",
-                "expansion_driven_rewire",
-            ]
+            if self.decoder_aware:
+                operators = [
+                    "spectral_edge_pressure",
+                    "cycle_pressure",
+                    "ace_repair",
+                    "girth_preserving_rewire",
+                    "expansion_driven_rewire",
+                    "ipr_trapping_pressure",
+                    "trapping_set_pressure",
+                ]
+            else:
+                operators = [
+                    "spectral_edge_pressure",
+                    "cycle_pressure",
+                    "ace_repair",
+                    "girth_preserving_rewire",
+                    "expansion_driven_rewire",
+                ]
+            operator_idx = (self._generation + i) % len(operators)
             operator = operators[operator_idx]
 
             H_mutated = apply_guided_mutation(

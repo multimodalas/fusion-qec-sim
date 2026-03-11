@@ -1,8 +1,13 @@
 """
-v10.0.0 — Fitness Engine.
+v11.0.0 — Fitness Engine.
 
 Computes weighted composite fitness scores from spectral metrics for
 LDPC/QLDPC parity-check matrices.  Supports caching by matrix hash.
+
+v11.0.0 adds decoder-aware fitness components:
+- trapping_set_penalty (from TrappingSetDetector)
+- bp_stability_score (from BPStabilityProbe)
+- jacobian_instability_penalty (from estimate_bp_instability)
 
 Layer 3 — Fitness.
 Does not import or modify the decoder (Layer 1).
@@ -22,6 +27,8 @@ from src.qec.fitness.spectral_metrics import (
     compute_ace_spectrum,
     estimate_eigenvector_ipr,
 )
+from src.qec.analysis.trapping_sets import TrappingSetDetector
+from src.qec.decoder.stability_probe import BPStabilityProbe, estimate_bp_instability
 
 
 _ROUND = 12
@@ -44,23 +51,64 @@ class FitnessEngine:
     - cycle density (minimize)
     - sparsity (maintain)
 
+    v11.0.0 decoder-aware mode adds:
+    - bp_stability_score (maximize)
+    - trapping_set_penalty (minimize)
+    - jacobian_stability (maximize, derived from 1 - instability)
+
     Parameters
     ----------
     weights : dict[str, float] or None
         Optional custom weights for fitness components.
         Default weights are used if not provided.
+    decoder_aware : bool
+        Enable decoder-aware fitness evaluation (default False).
+    bp_trials : int
+        Number of BP probe trials when decoder_aware is True (default 50).
+    bp_iterations : int
+        Max BP iterations per probe trial (default 10).
+    bp_seed : int
+        Base seed for BP stability probe (default 0).
     """
 
-    def __init__(self, weights: dict[str, float] | None = None) -> None:
-        self._weights = weights or {
-            "girth": 3.0,
-            "nbt_spectral_radius": -2.0,
-            "ace_variance": -1.5,
-            "expansion": 2.0,
-            "cycle_density": -1.0,
-            "sparsity": 0.5,
-        }
+    def __init__(
+        self,
+        weights: dict[str, float] | None = None,
+        decoder_aware: bool = False,
+        bp_trials: int = 50,
+        bp_iterations: int = 10,
+        bp_seed: int = 0,
+    ) -> None:
+        self._decoder_aware = decoder_aware
+        if weights is not None:
+            self._weights = weights
+        elif decoder_aware:
+            self._weights = {
+                "girth": 1.65,
+                "nbt_spectral_radius": -1.1,
+                "ace_variance": -0.825,
+                "expansion": 1.1,
+                "cycle_density": -0.55,
+                "sparsity": 0.275,
+                "bp_stability_score": 2.5,
+                "trapping_set_penalty": -1.0,
+                "jacobian_stability": 1.0,
+            }
+        else:
+            self._weights = {
+                "girth": 3.0,
+                "nbt_spectral_radius": -2.0,
+                "ace_variance": -1.5,
+                "expansion": 2.0,
+                "cycle_density": -1.0,
+                "sparsity": 0.5,
+            }
         self._cache: dict[str, dict[str, Any]] = {}
+        self._trapping_detector = TrappingSetDetector() if decoder_aware else None
+        self._bp_probe = (
+            BPStabilityProbe(trials=bp_trials, iterations=bp_iterations, seed=bp_seed)
+            if decoder_aware else None
+        )
 
     def evaluate(self, H: np.ndarray) -> dict[str, Any]:
         """Compute composite fitness for a parity-check matrix.
@@ -133,7 +181,7 @@ class FitnessEngine:
         # ACE variance
         ace_var = float(np.var(ace)) if len(ace) > 0 else 0.0
 
-        return {
+        metrics = {
             "nbt_spectral_radius": nbt_radius,
             "girth": girth_result["girth"],
             "cycle_counts": girth_result["cycle_counts"],
@@ -147,6 +195,31 @@ class FitnessEngine:
             "max_ipr": ipr_result["max_ipr"],
         }
 
+        # v11.0.0 decoder-aware metrics
+        if self._decoder_aware:
+            # Trapping set detection
+            ts_result = self._trapping_detector.detect(H)
+            total_edges = float(H.sum())
+            ts_density = ts_result["total"] / max(total_edges, 1.0)
+            metrics["trapping_set_total"] = ts_result["total"]
+            metrics["trapping_set_min_size"] = ts_result["min_size"]
+            metrics["trapping_set_penalty"] = min(ts_density, 1.0)
+
+            # BP stability probe
+            bp_result = self._bp_probe.probe(H)
+            metrics["bp_stability_score"] = bp_result["bp_stability_score"]
+            metrics["bp_divergence_rate"] = bp_result["divergence_rate"]
+            metrics["bp_stagnation_rate"] = bp_result["stagnation_rate"]
+            metrics["bp_oscillation_score"] = bp_result["oscillation_score"]
+
+            # Jacobian instability estimate
+            jac_result = estimate_bp_instability(H)
+            rho = jac_result["jacobian_spectral_radius_est"]
+            metrics["jacobian_spectral_radius"] = rho
+            metrics["jacobian_stability"] = max(0.0, 1.0 - rho)
+
+        return metrics
+
     def _compute_components(self, metrics: dict[str, Any]) -> dict[str, float]:
         """Compute weighted component scores from metrics."""
         w = self._weights
@@ -159,6 +232,18 @@ class FitnessEngine:
             "cycle_density": w.get("cycle_density", 0.0) * metrics["cycle_density"],
             "sparsity": w.get("sparsity", 0.0) * metrics["sparsity"],
         }
+
+        # v11.0.0 decoder-aware components
+        if self._decoder_aware:
+            components["bp_stability_score"] = (
+                w.get("bp_stability_score", 0.0) * metrics.get("bp_stability_score", 0.0)
+            )
+            components["trapping_set_penalty"] = (
+                w.get("trapping_set_penalty", 0.0) * metrics.get("trapping_set_penalty", 0.0)
+            )
+            components["jacobian_stability"] = (
+                w.get("jacobian_stability", 0.0) * metrics.get("jacobian_stability", 0.0)
+            )
 
         return components
 
