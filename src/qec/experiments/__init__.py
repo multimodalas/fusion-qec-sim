@@ -43,3 +43,7 @@ from .spectral_heatmap_experiment import (
     run_spectral_heatmap_experiment,
     serialize_heatmap_artifact,
 )
+from .incremental_spectral_benchmark import (
+    run_incremental_spectral_benchmark,
+    serialize_benchmark_artifact,
+)
