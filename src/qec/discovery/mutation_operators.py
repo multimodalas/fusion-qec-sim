@@ -31,6 +31,9 @@ import numpy as np
 from src.qec.discovery.cycle_guided_mutation import (
     cycle_pressure_guided_mutation,
 )
+from src.qec.discovery.spectral_guided_mutation import (
+    spectral_pressure_guided_mutation,
+)
 
 
 _OPERATORS = [
@@ -40,6 +43,7 @@ _OPERATORS = [
     "degree_preserving_rotation",
     "seeded_reconstruction",
     "cycle_guided_mutation",
+    "spectral_pressure_guided_mutation",
 ]
 
 
@@ -407,6 +411,7 @@ _OPERATOR_FUNCTIONS = {
     "degree_preserving_rotation": degree_preserving_rotation,
     "seeded_reconstruction": seeded_reconstruction,
     "cycle_guided_mutation": cycle_pressure_guided_mutation,
+    "spectral_pressure_guided_mutation": spectral_pressure_guided_mutation,
 }
 
 

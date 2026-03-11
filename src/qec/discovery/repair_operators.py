@@ -16,6 +16,8 @@ from typing import Any
 
 import numpy as np
 
+from src.qec.discovery.ace_repair import repair_graph_with_ace_constraint
+
 
 _ROUND = 12
 
@@ -244,6 +246,7 @@ def repair_tanner_graph(
         target_check_degree=target_check_degree,
     )
     H_arr = repair_local_cycle_pressure(H_arr, max_repairs=max_cycle_repairs)
+    H_arr = repair_graph_with_ace_constraint(H_arr)
 
     validation = validate_tanner_graph(H_arr)
 
