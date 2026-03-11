@@ -1,83 +1,8 @@
 """
-Layer 1a — BP diagnostics (opt-in, additive).
+Layer 3 — Diagnostics public API.
 
-Provides energy-landscape analysis, basin-switching detection,
-iteration-trace diagnostics, BP dynamics regime analysis,
-regime transition analysis, phase diagram aggregation,
-freeze detection, fixed-point trap analysis, basin-of-attraction
-analysis, attractor landscape mapping, free-energy barrier
-estimation, pseudocodeword boundary estimation,
-Tanner spectral fragility diagnostics,
-spectral–boundary alignment diagnostics,
-spectral trapping-set diagnostics,
-BP phase-space exploration,
-ternary decoder topology classification,
-decoder phase diagram aggregation,
-phase boundary analysis,
-non-backtracking spectrum diagnostics,
-Bethe Hessian spectral analysis,
-BP stability proxy metrics,
-BP Jacobian spectral radius estimation,
-spectral trapping-set candidate detection,
-spectral–BP attractor alignment diagnostics,
-spectral failure risk scoring,
-BP stability prediction,
-instability sensitivity maps,
-and ASCII phase heatmap output
-for BP convergence traces.
+All public diagnostics are re-exported from ``api``.
 Does not modify decoder internals.
 """
 
-from .bp_dynamics import compute_bp_dynamics_metrics, classify_bp_regime
-from .bp_regime_trace import compute_bp_regime_trace
-from .bp_phase_diagram import compute_bp_phase_diagram
-from .bp_freeze_detection import compute_bp_freeze_detection
-from .bp_fixed_point_analysis import compute_bp_fixed_point_analysis
-from .bp_basin_analysis import compute_bp_basin_analysis
-from .bp_landscape_mapping import compute_bp_landscape_map
-from .bp_barrier_analysis import compute_bp_barrier_analysis
-from .bp_boundary_analysis import compute_bp_boundary_analysis
-from .tanner_spectral_analysis import compute_tanner_spectral_analysis
-from .spectral_boundary_alignment import compute_spectral_boundary_alignment
-from .spectral_trapping_sets import compute_spectral_trapping_sets
-from .bp_phase_space import compute_bp_phase_space, compute_metastability_score
-from .ternary_decoder_topology import compute_ternary_decoder_topology
-from .basin_probe import probe_local_ternary_basin
-from .phase_diagram import build_decoder_phase_diagram, make_phase_grid
-from .phase_boundary_analysis import analyze_phase_boundaries
-from .non_backtracking_spectrum import compute_non_backtracking_spectrum
-from .bethe_hessian import compute_bethe_hessian
-from .bp_stability_proxy import estimate_bp_stability
-from .bp_jacobian_estimator import estimate_bp_jacobian_spectral_radius
-from .nb_localization import compute_nb_localization_metrics
-from .nb_trapping_candidates import compute_nb_trapping_candidates
-from .spectral_bp_alignment import compute_spectral_bp_alignment
-from .spectral_failure_risk import compute_spectral_failure_risk
-from .phase_heatmap import print_phase_heatmap
-from .bp_stability_predictor import compute_bp_stability_prediction
-from .sensitivity_map import (
-    compute_proxy_sensitivity_scores,
-    compute_measured_instability_deltas,
-    compute_sensitivity_map,
-)
-from .spectral_nb import (
-    SPECTRAL_SCHEMA_VERSION,
-    compute_nb_spectrum,
-    compute_edge_sensitivity_ranking,
-)
-from .spectral_heatmaps import (
-    compute_spectral_heatmaps,
-    rank_variable_nodes_by_heat,
-    rank_check_nodes_by_heat,
-    rank_edges_by_heat,
-)
-from .spectral_incremental import (
-    update_nb_eigenpair_incremental,
-    update_nb_eigenpair_localized,
-    detect_edge_swap,
-    identify_affected_nb_edges,
-    score_repair_candidate_incremental,
-)
-from .nb_localization_detector import detect_nb_eigenvector_localization
-from .nb_energy_heatmap import compute_nb_energy_heatmap
-from .nb_sign_pattern_detector import detect_nb_sign_pattern_trapping_sets
+from .api import *  # noqa: F401,F403
