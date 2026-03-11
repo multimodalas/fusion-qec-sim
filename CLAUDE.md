@@ -1,482 +1,413 @@
-# CLAUDE.md — QEC Architectural Constitution (v7 Hardened)
+CLAUDE.md
 
-This document governs all AI-assisted code activity inside the QSOL QEC repository.
+QSOL QEC Architectural Constitution (v8 Hardened)
 
-It applies to all actions performed by Claude, including:
+This document governs all AI-assisted activity inside the QSOL QEC repository.
 
-- code generation
-- code modification
-- refactoring
-- testing
-- release preparation
-- commits and pushes
+It applies to Claude when performing:
+
+code generation
+
+refactoring
+
+testing
+
+experiments
+
+commits
+
+release preparation
 
 This document is not guidance.
 
-It is the **architectural constitution** of the repository.
+It is the architectural constitution of the repository.
 
 Claude must obey these rules when operating inside this codebase.
 
----
+Core Values
 
-# Core Values
+The QEC framework is governed by six non-negotiable principles.
 
-The QEC framework is governed by the following non-negotiable principles:
+Determinism
 
-**Determinism**  
 All experiments must be reproducible byte-for-byte.
 
-**Decoder Stability**  
-The decoding algorithms are protected infrastructure.
+Decoder Stability
 
-**Strict Layering**  
-Architecture must remain clean and directional.
+The decoder core is protected infrastructure.
 
-**Schema Governance**  
-Artifacts and identities must remain stable.
+Architectural Layering
 
-**Minimal Dependencies**  
-Avoid unnecessary complexity.
+The repository follows strict dependency layers.
 
-**Reproducibility Guarantees**  
-Experiments must produce identical outputs across runs.
+Minimal Complexity
 
----
+Prefer simple deterministic algorithms.
 
-# 1. Architectural Layer Model (Non-Negotiable)
+Scientific Transparency
 
-The repository follows a strict dependency hierarchy.
+Algorithms must remain explainable.
 
-Dependencies may only flow **downward**.
+Reproducibility Guarantees
 
-| Layer | Path | Role |
-|------|------|------|
-| 1 | `src/qec/decoder/` | Decoder core (protected) |
-| 2 | `src/qec/channel/` | Channel and noise models |
-| 3 | `src/qec/diagnostics/` | Deterministic diagnostics |
-| 4 | `src/qec/predictors/` | Structural instability predictors |
-| 5 | `src/qec/experiments/` | Experimental policies & controllers |
-| 6 | `src/bench/` | Benchmark harness & experiment orchestration |
+Artifacts must remain stable across runs and releases.
 
-Dependency rules:
+1. Architectural Layer Model (Non-Negotiable)
 
-- Lower layers must **never import from higher layers**.
-- `src/qec/decoder/` must **never import from experiments or benchmarking**.
-- `src/qec/` must **never import from `src/bench/`**.
-- Predictors must not depend on experiment code.
-- Experiments may depend on predictors, diagnostics, and decoder APIs only.
+The repository follows strict directional layering.
 
-Layer boundaries are **architectural invariants**.
+Dependencies may only flow downward.
 
-Violating layer boundaries is forbidden without explicit architectural approval.
+Layer	Path	Role
+1	src/qec/decoder/	Decoder core (protected)
+2	src/qec/channel/	Channel and noise models
+3	src/qec/diagnostics/	Deterministic diagnostics
+4	src/qec/predictors/	Structural instability predictors
+5	src/qec/experiments/	Experimental policies
+6	src/bench/	Benchmark harness
 
----
+Rules:
 
-# 2. Determinism is Architecture
+Lower layers must never import higher layers
 
-Determinism is not a feature.
+decoder must never import experiments
 
-It is a structural requirement.
+src/qec/ must never import src/bench/
+
+predictors must not depend on experiments
+
+Layer boundaries are architectural invariants.
+
+Violating them is forbidden without explicit approval.
+
+2. Determinism is Architecture
+
+Determinism is a structural requirement.
 
 All code must preserve deterministic execution.
 
 Required invariants:
 
-- No hidden randomness
-- No global RNG state
-- Explicit seed injection at call site
-- No use of Python `hash()` for deterministic operations
-- Deterministic ordering of collections
-- No unordered reductions introducing floating drift
+no hidden randomness
+
+no implicit RNG state
+
+explicit seed injection
+
+deterministic collection ordering
+
+no use of Python hash()
+
+no floating-point drift due to unordered reductions
 
 Sub-seed derivation must use:
 
+SHA-256 deterministic hashing
 
-SHA-256 or equivalent deterministic hashing
-
-
-Canonical JSON serialization must remain centralized.
-
-Sweep hashes must derive strictly from configuration state.
+Artifact serialization must be canonical.
 
 When:
 
-
 runtime_mode = "off"
 
+outputs must be byte-identical across runs.
 
-Artifacts must be **byte-identical across repeated runs**.
-
-If a function is deterministic today, it must remain deterministic tomorrow.
-
----
-
-# 3. Artifact & Identity Stability
+3. Artifact & Identity Stability
 
 Artifacts represent immutable experiment records.
 
 Rules:
 
-- Artifact hashes must reflect **final canonical state only**
-- No mutation after hashing
-- Serialization order must remain canonical
-- Decoder identity must be stable across identical configs
-- Identity must not depend on object memory layout
+artifacts must not mutate after hashing
 
-Baseline identity must **not include opt-in parameters** unless explicitly enabled.
+serialization order must remain canonical
+
+decoder identity must be stable across identical configs
+
+identity must not depend on memory layout
 
 Identity drift without version bump is forbidden.
 
----
+4. Decoder Core Protection
 
-# 4. Decoder Core Protection
-
-The decoder is the most protected subsystem in the repository.
-
-Default rule:
-
-**Do not modify the decoder core.**
+The decoder is the most protected subsystem.
 
 Protected path:
 
-
 src/qec/decoder/
 
+Default rule:
+
+Do not modify the decoder core.
 
 Prohibited without explicit instruction:
 
-- modifying BP message passing
-- altering scheduling semantics
-- changing iteration order
-- performance "optimizations"
-- refactoring for style
-- altering function signatures
-- introducing new internal code paths
+modifying BP message updates
 
-The decoder must remain stable across minor releases.
+altering scheduling semantics
 
----
+changing iteration ordering
 
-# 4a. Opt-In Structural Extensions
+refactoring decoder internals
 
-Structural interventions may exist only if:
+introducing adaptive behaviour
 
-- explicitly enabled via configuration
-- default behavior remains bit-identical
-- BP loops remain untouched
-- no randomness is introduced
-- baseline identity does not change
-- execution remains deterministic
+The decoder must remain bit-stable across minor releases.
 
-Structural extensions must be **additive**, not invasive.
+5. Spectral Research Model
 
----
+The QEC framework studies belief-propagation instability on Tanner graphs.
 
-# 4b. Diagnostics Layer Protection
+The research pipeline is:
 
-Diagnostics are **observational instruments**.
+Tanner graph
+↓
+spectral diagnostics
+↓
+instability localization
+↓
+graph repair
+↓
+decoder experiments
+
+Spectral signals include:
+
+non-backtracking spectral radius
+
+dominant NB eigenvector
+
+inverse participation ratio (IPR)
+
+spectral trapping-set indicators
+
+Claude must implement research features in the order:
+
+measure → localize → repair → accelerate → map → mitigate
+
+Corresponding roadmap releases:
+
+v7.6.1 validation
+v7.7.0 heatmaps
+v7.8.0 graph repair
+v7.9.0 incremental spectra
+v8.0.0 phase diagrams
+v8.1.0 ternary mitigation
+
+Claude must not skip steps in this research sequence.
+
+6. Diagnostics Layer Protection
+
+Diagnostics are observational instruments.
 
 They must never influence decoder behaviour.
 
 Diagnostics must be:
 
-- deterministic
-- side-effect free
-- opt-in
-- isolated from decoding loops
+deterministic
 
-Diagnostics must **not**:
+side-effect free
 
-- modify BP message values
-- alter LLR vectors passed to the decoder
-- change iteration ordering
-- modify scheduling logic
-- inject hooks into BP loops
-- introduce conditional behaviour inside decoder internals
-- mutate input arrays in-place
+opt-in
 
-Diagnostics may run additional decodes, but only using:
+Diagnostics must not:
 
-- explicit input copies
-- deterministic perturbations
-- no shared mutable state
+modify BP messages
 
-The decoder must behave as though diagnostics do not exist.
+alter decoder inputs
 
----
+change iteration ordering
 
-# 4c. Predictor Layer Protection
+mutate arrays in-place
 
-Predictors estimate decoding instability.
+Diagnostics may run additional decoding experiments using copied inputs only.
 
-They must **not influence decoder behaviour directly**.
+7. Predictor Layer Protection
+
+Predictors estimate instability before decoding runs.
 
 Predictors must:
 
-- operate only on diagnostic outputs
-- remain deterministic
-- produce structural risk signals
+operate only on diagnostics outputs
 
-Predictors must not:
+remain deterministic
 
-- modify decoder inputs
-- change scheduling behaviour
-- inject heuristics into decoding loops
-- cache decoder state across runs
-- introduce stochastic estimation
+produce informational signals only
 
-Predictors generate signals such as:
-
+Example signals:
 
 bp_failure_risk
 predicted_instability
 spectral_instability_ratio
 
+Predictors must not modify decoder inputs.
 
-Predictors produce **information only**.
+8. Controller Layer Protection
 
----
+Controllers run controlled decoding experiments.
 
-# 4d. Controller Layer Protection
+Controllers may:
 
-Controllers are experimental policy layers.
+alter experiment configuration
 
-They translate predictor signals into controlled experiments.
+modify input LLR vectors
 
-Controllers must:
-
-- remain deterministic
-- remain opt-in
-- leave baseline decoding unchanged when disabled
+run multiple decode passes
 
 Controllers must not:
 
-- modify decoder implementation
-- alter BP message passing
-- patch decoder functions
-- introduce randomness
+modify decoder implementation
 
-Controllers operate as **wrappers around decoder calls**.
+patch decoder functions
 
----
+introduce stochastic behaviour
 
-# 5. Channel Layer Discipline
+Controllers wrap decoder calls externally.
 
-Channel models simulate noise.
+9. Sparse Linear Algebra Rules
 
-They are consumers of decoder functionality.
+Spectral algorithms must scale to large QLDPC graphs.
 
-Channel code must:
+Forbidden:
 
-- not mutate decoder state
-- remain deterministic under fixed seeds
-- maintain backward compatibility
+dense Hashimoto matrix construction
 
-Supported baseline channels include:
+numpy.linalg.eig on NB matrices
 
+Required approach:
 
-oracle
-bsc_syndrome
+sparse operators
 
+Krylov eigensolvers
 
-Channel realism must never destabilize decoder invariants.
+scipy.sparse.linalg.eigs
 
----
+linear operator interfaces
 
-# 6. Schema Governance
+Memory must scale with |E|, not |E|².
 
-Schema changes are high-risk.
+10. Tanner Graph Constraint Protection
 
-Rules:
+QLDPC graphs obey strict commutativity constraints:
 
-- Do not bump `SCHEMA_VERSION` without instruction
-- Minor releases may add fields only
-- No type changes
-- No field removals
-- Validation must remain strict
+H_X H_Z^T = 0
 
-Canonicalization must use centralized serialization logic only.
+Graph repair algorithms must preserve these constraints.
 
-Duplicate serialization pathways are forbidden.
+Edge swaps must be rejected if they break stabilizer commutativity.
 
----
+11. Minimal Diff Discipline
 
-# 7. Forbidden Code Regions (AI Agent Safety Map)
-
-Certain repository regions are **protected from AI modification**.
-
-Claude must never modify these paths without explicit instruction.
-
-Protected regions:
-
-
-src/qec/decoder/
-src/qec/schema/
-src/qec/serialization/
-src/qec/hash/
-
-
-These components define:
-
-- decoder behaviour
-- artifact identity
-- schema structure
-- reproducibility guarantees
-
-Edits to these files require **explicit user authorization**.
-
-If a requested change touches these regions, Claude must:
-
-1. Stop
-2. Explain the risk
-3. Request confirmation
-
----
-
-# 8. Minimal Diff Discipline
-
-Every changed line must justify itself.
+Changes must be minimal and targeted.
 
 Forbidden without instruction:
 
-- large refactors
-- renaming functions or variables
-- style-only edits
-- import reordering
-- file-wide formatting
-- abstraction reshuffling
-- moving code between modules
+large refactors
+
+renaming identifiers
+
+style-only edits
+
+import reordering
+
+file-wide formatting
+
+moving code between modules
 
 Commits must be small and single-purpose.
 
----
-
-# 9. Dependency Policy
+12. Dependency Policy
 
 Dependency surface must remain minimal.
 
 Rules:
 
-- prefer stdlib
-- prefer NumPy
-- no new dependencies without approval
-- no dependency upgrades without instruction
-- no convenience frameworks
+prefer stdlib
 
-All dependencies must be version-bounded.
+prefer NumPy / SciPy
+
+no new dependencies without approval
+
+no framework introduction
 
 Architectural bloat is forbidden.
 
----
-
-# 10. Versioning Discipline
-
-The repository follows Semantic Versioning:
-
-
-vMajor.Minor.Patch
-
-
-Meaning:
-
-Major  
-Architectural or semantic changes
-
-Minor  
-Additive features
-
-Patch  
-Bug fixes and stability improvements
-
-Minor releases must preserve:
-
-- baseline decoder outputs
-- identity stability
-- determinism guarantees
-
-Any default behavior change requires a **major version bump**.
-
----
-
-# 11. Performance Stability
-
-Performance is correctness for minor releases.
-
-Rules:
-
-- no measurable slowdown without approval
-- no algorithmic complexity changes
-- no silent regressions
-
-Benchmark comparison against the previous release must be performed before tagging.
-
----
-
-# 12. Test Discipline
+13. Test Discipline
 
 Untested code is unshipped code.
 
 Required:
 
-- unit tests for all new features
-- determinism tests
-- regression tests
-- schema validation tests
+unit tests
 
-Tests must not:
+determinism tests
 
-- weaken assertions
-- broaden tolerances
-- hide drift with approximate comparisons
+regression tests
+
+artifact validation tests
+
+Tests must not hide drift by widening tolerances.
 
 Correct code makes tests pass.
 
 Tests do not adapt to drift.
 
----
+14. Commit & Push Discipline
 
-# 13. Commit & Push Escalation
+Claude may commit only when:
 
-Claude may commit or push only if:
+determinism preserved
 
-- all invariants are preserved
-- protected subsystems remain untouched
-- determinism is intact
-- schema remains unchanged
-- identity remains stable
+decoder untouched
+
+schema unchanged
+
+identity stable
+
+tests passing
 
 Push escalation is required for changes touching:
 
-- decoder internals
-- scheduling logic
-- serialization or hashing
-- schema validation
-- artifact identity
-- determinism guarantees
+decoder
+
+schema
+
+serialization
+
+hashing
+
+determinism guarantees
 
 Passing tests alone are insufficient.
 
----
-
-# 14. Escalation Rule
+15. Escalation Rule
 
 If a proposed change affects:
 
-- decoder semantics
-- scheduling
-- schema
-- serialization
-- hashing
-- artifact identity
-- determinism guarantees
+decoder semantics
 
-Claude must **pause and request explicit instruction**.
+scheduling
+
+schema
+
+serialization
+
+hashing
+
+artifact identity
+
+determinism guarantees
+
+Claude must:
+
+Stop
+
+Explain the risk
+
+Request explicit instruction
 
 Silence is not consent.
 
----
-
-# 15. Governing Principle
+16. Governing Principle
 
 When uncertain:
 
@@ -491,7 +422,6 @@ Read before writing.
 Maintain invariants.
 
 Capability grows.
-
 Stability does not regress.
 
 If a result cannot be reproduced byte-for-byte, it is not a baseline.
