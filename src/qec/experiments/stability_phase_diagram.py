@@ -549,6 +549,78 @@ def highlight_bp_critical_line(
     return diagram
 
 
+def render_ascii_stability_boundary(
+    grid_results: list[dict[str, Any]],
+    grid_resolution: int,
+    critical_radius: float,
+) -> str:
+    """Render ASCII phase diagram with estimated critical radius marked.
+
+    Marks the column corresponding to the critical spectral radius
+    with '|' characters in the grid.
+
+    Parameters
+    ----------
+    grid_results : list[dict]
+        Grid cell results from phase diagram experiment.
+    grid_resolution : int
+        Number of bins along each axis.
+    critical_radius : float
+        Estimated critical spectral radius.
+
+    Returns
+    -------
+    str
+        ASCII phase diagram with stability boundary marked.
+    """
+    cell_map: dict[tuple[int, int], dict] = {}
+    sr_centers: list[float] = []
+    for r in grid_results:
+        key = (r["spectral_radius_bin"], r["sis_bin"])
+        cell_map[key] = r
+        sr_centers.append(r.get("spectral_radius_center", 0.0))
+
+    # Find the SR bin closest to critical_radius
+    critical_bin = 0
+    min_dist = float("inf")
+    for r in grid_results:
+        dist = abs(r.get("spectral_radius_center", 0.0) - critical_radius)
+        if dist < min_dist:
+            min_dist = dist
+            critical_bin = r["spectral_radius_bin"]
+
+    lines = []
+    lines.append("Stability Phase Diagram (with critical boundary)")
+    lines.append(f"Grid: {grid_resolution}x{grid_resolution}")
+    lines.append("Legend: + converged  - failed  | boundary")
+    lines.append("")
+
+    header = "SR\\SIS "
+    for j in range(grid_resolution):
+        header += f"{j:2d}"
+    lines.append(header)
+
+    for i in range(grid_resolution):
+        row = f"  {i:2d}   "
+        for j in range(grid_resolution):
+            key = (i, j)
+            cell = cell_map.get(key)
+            if i == critical_bin:
+                row += " |"
+            elif cell is None:
+                row += " ."
+            elif cell["convergence_rate"] >= 0.5:
+                row += " +"
+            else:
+                row += " -"
+        lines.append(row)
+
+    lines.append("")
+    lines.append(f"Critical radius: {critical_radius:.6f}")
+
+    return "\n".join(lines)
+
+
 # ── Spectral trajectory tracking ──────────────────────────────────
 
 
