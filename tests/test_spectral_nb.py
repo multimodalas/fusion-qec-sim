@@ -25,6 +25,7 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 from src.qec.diagnostics.spectral_nb import (
+    SPECTRAL_SCHEMA_VERSION,
     _TannerGraph,
     _compute_eeec,
     _compute_sis,
@@ -314,6 +315,7 @@ class TestSpectralValidation:
         H = _small_H()
         artifact = run_spectral_validation_experiment(H, trial_seeds=[0, 1])
         required_keys = {
+            "schema_version",
             "nb_spectral_radius",
             "nb_ipr",
             "nb_eeec",
@@ -323,6 +325,7 @@ class TestSpectralValidation:
             "mean_random_precision_at_k",
             "bp_failed",
             "bp_iterations",
+            "eeec_anomaly_detected",
             "num_edges",
         }
         assert required_keys == set(artifact.keys())
@@ -330,6 +333,7 @@ class TestSpectralValidation:
     def test_artifact_types(self):
         H = _small_H()
         artifact = run_spectral_validation_experiment(H, trial_seeds=[0])
+        assert isinstance(artifact["schema_version"], int)
         assert isinstance(artifact["nb_spectral_radius"], float)
         assert isinstance(artifact["nb_ipr"], float)
         assert isinstance(artifact["nb_eeec"], float)
@@ -339,6 +343,7 @@ class TestSpectralValidation:
         assert isinstance(artifact["mean_random_precision_at_k"], float)
         assert isinstance(artifact["bp_failed"], bool)
         assert isinstance(artifact["bp_iterations"], int)
+        assert isinstance(artifact["eeec_anomaly_detected"], bool)
         assert isinstance(artifact["num_edges"], int)
 
     def test_serialization_deterministic(self):
@@ -397,3 +402,18 @@ class TestSpectralValidation:
         H = _small_H()
         artifact = run_spectral_validation_experiment(H, trial_seeds=[0])
         assert np.isfinite(artifact["nb_sis"])
+
+    def test_spectral_schema_version_present(self):
+        """Schema version field must exist and equal SPECTRAL_SCHEMA_VERSION."""
+        H = _small_H()
+        artifact = run_spectral_validation_experiment(H, trial_seeds=[0])
+        assert "schema_version" in artifact
+        assert artifact["schema_version"] == SPECTRAL_SCHEMA_VERSION
+        assert artifact["schema_version"] == 1
+
+    def test_eeec_anomaly_detected_present(self):
+        """eeec_anomaly_detected field must exist and be a bool."""
+        H = _small_H()
+        artifact = run_spectral_validation_experiment(H, trial_seeds=[0])
+        assert "eeec_anomaly_detected" in artifact
+        assert isinstance(artifact["eeec_anomaly_detected"], bool)

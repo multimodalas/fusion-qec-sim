@@ -34,6 +34,8 @@ from src.qec.diagnostics._spectral_utils import (
 )
 
 
+SPECTRAL_SCHEMA_VERSION = 1
+
 _ROUND = 12
 
 

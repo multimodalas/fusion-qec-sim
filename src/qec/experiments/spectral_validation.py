@@ -25,10 +25,16 @@ from scipy import stats
 
 from src.qec.decoder.bp_decoder_reference import bp_decode
 from src.qec.diagnostics.spectral_nb import (
+    SPECTRAL_SCHEMA_VERSION,
     _TannerGraph,
     compute_nb_spectrum,
 )
 from src.qec.diagnostics._spectral_utils import build_directed_edges
+from src.qec.experiments.eeec_anomaly_scan import (
+    DEFAULT_EEEC_THRESHOLD,
+    DEFAULT_IPR_THRESHOLD,
+    DEFAULT_RADIUS_THRESHOLD,
+)
 
 
 _ROUND = 12
@@ -328,9 +334,17 @@ def run_spectral_validation_experiment(
         _ROUND,
     )
 
+    # EEEC anomaly detection (inline threshold check)
+    eeec_anomaly_detected = (
+        spectral_radius < DEFAULT_RADIUS_THRESHOLD
+        and eeec > DEFAULT_EEEC_THRESHOLD
+        and ipr > DEFAULT_IPR_THRESHOLD
+    )
+
     artifact = {
         "bp_failed": bp_failed_any,
         "bp_iterations": bp_iterations_last,
+        "eeec_anomaly_detected": bool(eeec_anomaly_detected),
         "mean_precision_at_k": mean_precision,
         "mean_random_precision_at_k": mean_random_precision,
         "mean_spearman_correlation": mean_spearman,
@@ -339,6 +353,7 @@ def run_spectral_validation_experiment(
         "nb_sis": sis,
         "nb_spectral_radius": spectral_radius,
         "num_edges": num_edges,
+        "schema_version": SPECTRAL_SCHEMA_VERSION,
     }
 
     return artifact

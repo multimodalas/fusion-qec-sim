@@ -61,6 +61,7 @@ from .sensitivity_map import (
     compute_sensitivity_map,
 )
 from .spectral_nb import (
+    SPECTRAL_SCHEMA_VERSION,
     compute_nb_spectrum,
     compute_edge_sensitivity_ranking,
 )
