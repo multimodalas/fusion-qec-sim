@@ -425,3 +425,166 @@ Capability grows.
 Stability does not regress.
 
 If a result cannot be reproduced byte-for-byte, it is not a baseline.
+
+CLAUDE.md Addition — Autonomous Safe PR Workflow
+
+Add a section like this to CLAUDE.md.
+
+## Autonomous PR Workflow
+
+When modifying the repository, Claude Code must follow this workflow.
+
+### 1. Branch Creation
+
+Create a new branch for each task.
+
+Example:
+
+
+git checkout -b claude/<task-name>
+
+
+Branches should be small and focused.
+
+Examples:
+
+
+claude/add-spectral-entropy
+claude/fix-nb-localization
+claude/refactor-diagnostics-api
+
+
+---
+
+### 2. Pre-Commit Validation
+
+Before committing changes, Claude must run:
+
+
+pytest
+
+
+If tests fail, Claude must fix the issue before committing.
+
+No commits should be pushed with failing tests.
+
+---
+
+### 3. Pull Latest Main
+
+Before pushing a branch, Claude must update the branch with the latest
+`main`.
+
+Preferred method:
+
+
+git fetch origin
+git rebase origin/main
+
+
+If conflicts occur:
+
+- resolve conflicts
+- remove conflict markers
+- run tests again
+
+---
+
+### 4. Commit Style
+
+Commits should be concise and scoped.
+
+Example:
+
+
+git commit -m "diagnostics: add spectral entropy metric"
+
+
+---
+
+### 5. Push Branch
+
+Push the branch to origin.
+
+
+git push origin claude/<task-name>
+
+
+---
+
+### 6. Pull Request Rules
+
+Claude should open a PR with:
+
+Title format:
+
+
+module: short description
+
+
+Example:
+
+
+diagnostics: add spectral entropy metric
+
+
+PR description should include:
+
+- purpose
+- files modified
+- tests added
+
+---
+
+### 7. Merge Safety Rules
+
+Claude must **not merge PRs automatically** unless:
+
+- tests pass
+- no merge conflicts exist
+- changes are limited to diagnostics or experiments layers
+
+Never merge changes that modify:
+
+- decoder core
+- BP algorithm
+- parity check generation
+
+These require human review.
+
+---
+
+### 8. Merge Strategy
+
+Preferred merge strategy:
+
+
+Squash and merge
+
+
+This keeps the history clean.
+
+---
+
+### 9. Post-Merge Cleanup
+
+After merging:
+
+
+git branch -d claude/<task-name>
+
+
+---
+
+### 10. Conflict Marker Safety Check
+
+Before committing, Claude must verify the repository does not contain
+merge markers.
+
+Search for:
+
+<<<<<<<
+
+If any markers exist, resolve them before committing.
+
+Never modify `src/qec/decoder/` without explicit human instruction.
