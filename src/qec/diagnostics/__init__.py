@@ -71,3 +71,10 @@ from .spectral_heatmaps import (
     rank_check_nodes_by_heat,
     rank_edges_by_heat,
 )
+from .spectral_incremental import (
+    update_nb_eigenpair_incremental,
+    update_nb_eigenpair_localized,
+    detect_edge_swap,
+    identify_affected_nb_edges,
+    score_repair_candidate_incremental,
+)
