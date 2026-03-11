@@ -20,6 +20,10 @@ from typing import Any
 
 import numpy as np
 
+from src.qec.generation.deterministic_construction import (
+    construct_deterministic_tanner_graph,
+)
+
 
 _ROUND = 12
 
@@ -229,13 +233,37 @@ def generate_tanner_graph_candidates(
                 candidate_seed,
             )
         else:
-            H = _build_regular_H(
-                num_checks,
-                num_variables,
-                variable_degree,
-                check_degree,
-                candidate_seed,
+            # v8.5.0: deterministic cycle-avoidant construction with
+            # candidate diversity via construction-order variants.
+            variant = candidate_seed % 3
+            if variant == 0:
+                # Natural variable order
+                var_order = list(range(num_variables))
+            elif variant == 1:
+                # Reversed variable order
+                var_order = list(range(num_variables - 1, -1, -1))
+            else:
+                # Interleaved: even indices first, then odd
+                var_order = (
+                    list(range(0, num_variables, 2))
+                    + list(range(1, num_variables, 2))
+                )
+
+            chk_shift = candidate_seed % num_checks
+            chk_order = (
+                list(range(chk_shift, num_checks))
+                + list(range(0, chk_shift))
             )
+
+            construction_spec = {
+                "num_variables": num_variables,
+                "num_checks": num_checks,
+                "variable_degree": variable_degree,
+                "check_degree": check_degree,
+                "_variable_order": var_order,
+                "_check_order": chk_order,
+            }
+            H = construct_deterministic_tanner_graph(construction_spec)
 
         candidates.append({
             "candidate_id": candidate_id,
