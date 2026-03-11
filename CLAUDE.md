@@ -586,3 +586,5 @@ Search for:
 <<<<<<<
 
 If any markers exist, resolve them before committing.
+
+Never modify `src/qec/decoder/` without explicit human instruction.
