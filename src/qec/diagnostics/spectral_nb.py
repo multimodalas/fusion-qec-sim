@@ -102,10 +102,22 @@ def compute_nb_spectrum(
         compute_nb_dominant_eigenpair(graph)
     )
 
-    # Normalize eigenvector
+    # Normalize eigenvector and canonicalize sign.
+    # Eigenvectors are defined up to sign; enforce deterministic
+    # orientation by requiring the largest-magnitude component to
+    # be positive (ties broken by lowest index).
     norm = np.linalg.norm(eigenvector)
     if norm > 0:
         eigenvector = eigenvector / norm
+    max_idx = int(np.argmax(np.abs(eigenvector)))
+    if eigenvector[max_idx] < 0:
+        eigenvector = -eigenvector
+
+    # Verify eigenvector is aligned with directed edge ordering
+    assert len(eigenvector) == len(directed_edges), (
+        f"eigenvector length {len(eigenvector)} != "
+        f"directed edge count {len(directed_edges)}"
+    )
 
     # IPR
     ipr = compute_ipr(eigenvector)
@@ -135,10 +147,16 @@ def compute_nb_spectrum(
 def _compute_eeec(edge_energy: np.ndarray) -> float:
     """Compute eigenvector edge energy concentration.
 
-    EEEC = (sum of top-k edge energies) / (total edge energy)
-    where k = ceil(sqrt(|E|)).
+    Normalizes the edge energy distribution to sum to 1, then
+    computes EEEC as the sum of the top-k normalized energies:
 
-    Edge energy is normalized before concentration calculation.
+        normalized = edge_energy / sum(edge_energy)
+        EEEC = sum(top k normalized energies)
+
+    where k = max(1, ceil(sqrt(|E|))).
+
+    After normalization the total is 1, so EEEC equals the
+    fraction of energy concentrated in the top-k edges.
     """
     num_edges = len(edge_energy)
     if num_edges == 0:
@@ -148,10 +166,10 @@ def _compute_eeec(edge_energy: np.ndarray) -> float:
     if total == 0.0:
         return 0.0
 
-    # Normalize distribution
+    # Normalize distribution (sum becomes 1)
     normalized = edge_energy / total
 
-    k = math.ceil(math.sqrt(num_edges))
+    k = max(1, math.ceil(math.sqrt(num_edges)))
 
     # Deterministic sort: descending by value, ascending by index for ties
     indices = np.argsort(-normalized, kind="stable")
@@ -166,9 +184,12 @@ def _compute_eeec(edge_energy: np.ndarray) -> float:
 def _compute_sis(spectral_radius: float, ipr: float, eeec: float) -> float:
     """Compute spectral instability score.
 
-    SIS = log1p(spectral_radius) * ipr * eeec
+    SIS = log1p(max(0, spectral_radius)) * ipr * eeec
+
+    Clamps spectral_radius to non-negative to ensure SIS remains finite.
     """
-    return float(np.log1p(spectral_radius) * ipr * eeec)
+    clamped = max(0.0, spectral_radius)
+    return float(np.log1p(clamped) * ipr * eeec)
 
 
 # ── Edge sensitivity ranking ─────────────────────────────────────

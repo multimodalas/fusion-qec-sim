@@ -256,7 +256,7 @@ def run_spectral_validation_experiment(
     graph = _TannerGraph(H_arr)
     directed_edges = build_directed_edges(graph)
     num_edges = len(directed_edges)
-    k = math.ceil(math.sqrt(num_edges)) if num_edges > 0 else 0
+    k = max(1, math.ceil(math.sqrt(num_edges))) if num_edges > 0 else 0
 
     # Spectral ranking: sort by edge_energy descending, index ascending
     spectral_indices = np.argsort(

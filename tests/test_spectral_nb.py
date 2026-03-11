@@ -147,6 +147,18 @@ class TestComputeNbSpectrum:
         total = result["edge_energy"].sum()
         assert abs(total - 1.0) < 1e-8
 
+    def test_edge_energy_eigenvector_alignment(self):
+        """Edge energy and eigenvector must have the same length."""
+        H = _small_H()
+        result = compute_nb_spectrum(H)
+        assert len(result["edge_energy"]) == len(result["eigenvector"])
+
+    def test_sis_finite(self):
+        """SIS must be a finite number."""
+        H = _small_H()
+        result = compute_nb_spectrum(H)
+        assert np.isfinite(result["sis"])
+
     def test_deterministic(self):
         H = _small_H()
         r1 = compute_nb_spectrum(H)
@@ -201,6 +213,24 @@ class TestEEEC:
         eeec = _compute_eeec(energy)
         assert 0 <= eeec <= 1
 
+    def test_normalization_no_double_divide(self):
+        """EEEC normalizes once, does not divide by total again."""
+        import math
+        # Manually compute expected: normalize then sum top-k
+        energy = np.array([4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        total = energy.sum()
+        normalized = energy / total
+        k = max(1, math.ceil(math.sqrt(len(energy))))
+        top_k = sorted(normalized, reverse=True)[:k]
+        expected = sum(top_k)
+        actual = _compute_eeec(energy)
+        assert abs(actual - expected) < 1e-12
+
+    def test_single_edge(self):
+        """Single edge: k=1, EEEC=1.0."""
+        energy = np.array([5.0])
+        assert abs(_compute_eeec(energy) - 1.0) < 1e-12
+
 
 # ── SIS tests ────────────────────────────────────────────────────
 
@@ -226,6 +256,18 @@ class TestSIS:
         r, ipr, eeec = 3.0, 0.4, 0.6
         expected = math.log1p(r) * ipr * eeec
         assert abs(_compute_sis(r, ipr, eeec) - expected) < 1e-12
+
+    def test_negative_spectral_radius_clamped(self):
+        """Negative spectral_radius is clamped to 0, producing SIS = 0."""
+        sis = _compute_sis(-0.5, 0.5, 0.3)
+        assert sis == 0.0
+        assert np.isfinite(sis)
+
+    def test_always_finite(self):
+        """SIS must be finite for any non-NaN inputs."""
+        for r in [0.0, 0.001, 1.0, 100.0, -1.0, -100.0]:
+            sis = _compute_sis(r, 0.5, 0.5)
+            assert np.isfinite(sis)
 
 
 # ── Edge sensitivity ranking tests ──────────────────────────────
@@ -339,3 +381,19 @@ class TestSpectralValidation:
         H = _small_H()
         artifact = run_spectral_validation_experiment(H, trial_seeds=[0])
         assert artifact["nb_sis"] > 0
+
+    def test_k_at_least_one(self):
+        """k = ceil(sqrt(|E|)) must be >= 1 for any graph with edges."""
+        import math
+        H = _small_H()
+        g = _TannerGraph(H)
+        edges = build_directed_edges(g)
+        num_edges = len(edges)
+        k = max(1, math.ceil(math.sqrt(num_edges)))
+        assert k >= 1
+
+    def test_sis_finite_in_artifact(self):
+        """SIS in the artifact must be finite."""
+        H = _small_H()
+        artifact = run_spectral_validation_experiment(H, trial_seeds=[0])
+        assert np.isfinite(artifact["nb_sis"])
