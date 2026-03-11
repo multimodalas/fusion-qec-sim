@@ -35,7 +35,7 @@ from src.qec.utils.artifact_metadata import generate_run_metadata
 def main() -> None:
     """CLI entry point for the discovery engine."""
     parser = argparse.ArgumentParser(
-        description="QLDPC Deterministic Structure Discovery Engine v10.0.0",
+        description="QLDPC Deterministic Structure Discovery Engine v11.0.0",
     )
     parser.add_argument(
         "--population", type=int, default=50,
@@ -69,6 +69,22 @@ def main() -> None:
         "--check-degree", type=int, default=6,
         help="Target check node degree (default: 6)",
     )
+    parser.add_argument(
+        "--decoder-aware", action="store_true", default=True,
+        help="Enable decoder-aware fitness evaluation (default: true)",
+    )
+    parser.add_argument(
+        "--no-decoder-aware", action="store_false", dest="decoder_aware",
+        help="Disable decoder-aware fitness evaluation",
+    )
+    parser.add_argument(
+        "--bp-trials", type=int, default=50,
+        help="Number of BP probe trials for decoder-aware mode (default: 50)",
+    )
+    parser.add_argument(
+        "--bp-iterations", type=int, default=10,
+        help="Max BP iterations per probe trial (default: 10)",
+    )
 
     args = parser.parse_args()
 
@@ -79,12 +95,16 @@ def main() -> None:
         "check_degree": args.check_degree,
     }
 
-    print(f"QLDPC Discovery Engine v10.0.0")
+    print(f"QLDPC Discovery Engine v11.0.0")
     print(f"  Spec: {spec}")
     print(f"  Population: {args.population}")
     print(f"  Generations: {args.generations}")
     print(f"  Seed: {args.seed}")
     print(f"  Archive: {args.archive_path}")
+    print(f"  Decoder-aware: {args.decoder_aware}")
+    if args.decoder_aware:
+        print(f"  BP trials: {args.bp_trials}")
+        print(f"  BP iterations: {args.bp_iterations}")
     print()
 
     # Generate metadata
@@ -96,6 +116,9 @@ def main() -> None:
         generations=args.generations,
         seed=args.seed,
         archive_path=args.archive_path,
+        decoder_aware=args.decoder_aware,
+        bp_trials=args.bp_trials,
+        bp_iterations=args.bp_iterations,
     )
 
     result = engine.run(spec)
@@ -136,6 +159,10 @@ def main() -> None:
             print(f"  Girth: {metrics.get('girth', 'N/A')}")
             print(f"  NBT spectral radius: {metrics.get('nbt_spectral_radius', 'N/A')}")
             print(f"  Expansion: {metrics.get('expansion', 'N/A')}")
+            if args.decoder_aware:
+                print(f"  BP stability score: {metrics.get('bp_stability_score', 'N/A')}")
+                print(f"  Trapping set penalty: {metrics.get('trapping_set_penalty', 'N/A')}")
+                print(f"  Jacobian spectral radius: {metrics.get('jacobian_spectral_radius', 'N/A')}")
     print(f"  Archive location: {args.archive_path}")
     print(f"  Generations run: {args.generations}")
 
@@ -148,6 +175,9 @@ def main() -> None:
             "population": args.population,
             "generations": args.generations,
             "seed": args.seed,
+            "decoder_aware": args.decoder_aware,
+            "bp_trials": args.bp_trials,
+            "bp_iterations": args.bp_iterations,
         },
         "best": result["best"],
         "elite_history": result["elite_history"],
